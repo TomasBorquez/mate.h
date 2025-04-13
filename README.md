@@ -60,3 +60,4 @@ paresed into a `build.ninja` for performance reasons (like incremental builds) a
 - [ ] Add `TCC` support
 - [ ] Optimize String functions and add better names
 - [ ] Actually parse `mate-cache.json` lmao
+- [ ] Once stable add `git submodules` for dependencies
