@@ -362,24 +362,19 @@ typedef struct {
   String output;
   String flags;
   String linkerFlags;
-  StringVector sources;
   // TODO: add target
   // TODO: optimize
   // TODO: warnings
   // TODO: debugSymbols
   String includes;
   String libs;
+  StringVector sources;
 } Executable;
 
 typedef struct {
   char *output;
   char *flags;
   char *linkerFlags;
-  char *sources;
-  // TODO: add target
-  // TODO: optimize
-  // TODO: warnings
-  // TODO: debugSymbols
   char *includes;
   char *libs;
 } ExecutableOptions;
