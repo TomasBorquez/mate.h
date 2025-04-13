@@ -42,6 +42,7 @@ paresed into a `build.ninja` for performance reasons (like incremental builds) a
 # TODO:
 - [x] Return `errno_t` and `LogError` rather than asserting
 - [x] Create `AddLibrary`, `AddInclude` and `linkerFlags`
+- [x] Create the Strings under the hood with macros or `s()`
 - [ ] Create enums of errors:
     - [x] `GeneralError`
     - [x] `FileStatsError`
