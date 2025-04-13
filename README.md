@@ -12,15 +12,15 @@ i32 main() {
   StartBuild();
   {
     // Sets the output name and different flags
-    CreateExecutable((Executable){.output = S("main"), .flags = S("-Wall -ggdb")});
+    CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall -ggdb"});
 
     // Files to compile
-    AddFile(S("./src/main.c"));
+    AddFile("./src/main.c");
 
     // Libraries and includes
-    AddIncludePaths(S("C:/raylib/include"), S("./src"));
-    AddLibraryPaths(S("C:/raylib/lib"));
-    LinkSystemLibraries(S("raylib"), S("opengl32"), S("gdi32"), S("winmm"));
+    AddIncludePaths("C:/raylib/include", "./src");
+    AddLibraryPaths("C:/raylib/lib");
+    LinkSystemLibraries("raylib", "opengl32", "gdi32", "winmm");
 
     // Compiles all files parallely with ninja
     String exePath = InstallExecutable();
@@ -60,4 +60,5 @@ paresed into a `build.ninja` for performance reasons (like incremental builds) a
 - [ ] Add `TCC` support
 - [ ] Optimize String functions and add better names
 - [ ] Actually parse `mate-cache.json` lmao
+- [ ] Properly clean the state and malloc operations
 - [ ] Once stable add `git submodules` for dependencies

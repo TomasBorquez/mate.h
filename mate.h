@@ -1,7 +1,7 @@
 /* MIT License
 
   mate.h - A single-header library for compiling your C code in C
-  Version - 2025-04-11 (0.1.0):
+  Version - 2025-04-13 (0.1.1):
   https://github.com/TomasBorquez/mate.h
 
   Guide on the `README.md`
@@ -229,6 +229,7 @@ void ArenaReset(Arena *arena);
 #define ENSURE_STRING_LITERAL(x) ("" x "")
 // Note: If an error led you here, it's because `S` can only be used with string literals, i.e. S("SomeString") and not S(yourString)
 #define S(string) (TYPE_INIT(String){.length = STRING_LENGTH(ENSURE_STRING_LITERAL(string)), .data = (string)})
+static String s(char *msg);
 
 // * This is to have printf like warnings on format
 #ifdef COMPILER_CLANG
@@ -242,10 +243,10 @@ String F(Arena *arena, const char *format, ...) FORMAT_CHECK(2, 3);
 VEC_TYPE(StringVector, String);
 #define StringVectorPushMany(vector, ...)                                                                                                                                                                                                      \
   ({                                                                                                                                                                                                                                           \
-    String values[] = {__VA_ARGS__};                                                                                                                                                                                                           \
+    char *values[] = {__VA_ARGS__};                                                                                                                                                                                                            \
     size_t count = sizeof(values) / sizeof(values[0]);                                                                                                                                                                                         \
     for (size_t i = 0; i < count; i++) {                                                                                                                                                                                                       \
-      VecPush(vector, values[i]);                                                                                                                                                                                                              \
+      VecPush(vector, s(values[i]));                                                                                                                                                                                                           \
     }                                                                                                                                                                                                                                          \
   })
 
@@ -370,10 +371,23 @@ typedef struct {
   String libs;
 } Executable;
 
+typedef struct {
+  char *output;
+  char *flags;
+  char *linkerFlags;
+  char *sources;
+  // TODO: add target
+  // TODO: optimize
+  // TODO: warnings
+  // TODO: debugSymbols
+  char *includes;
+  char *libs;
+} ExecutableOptions;
+
 void CreateConfig(MateConfig config);
 void StartBuild();
 void reBuild();
-void CreateExecutable(Executable options);
+void CreateExecutable(ExecutableOptions executableOptions);
 
 #define AddLibraryPaths(...)                                                                                                                                                                                                                   \
   ({                                                                                                                                                                                                                                           \
@@ -399,7 +413,8 @@ static void addIncludePaths(StringVector *vector);
   })
 static void linkSystemLibraries(StringVector *vector);
 
-void AddFile(String source);
+#define AddFile(source) addFile(S(source));
+static void addFile(String source);
 String InstallExecutable();
 i32 RunCommand(String command);
 void EndBuild();
@@ -515,7 +530,9 @@ Arena ArenaInit(size_t size) {
 static size_t maxStringSize = 10000;
 
 static size_t strLength(char *str, size_t maxSize) {
-  assert(str != NULL && "string should never be NULL");
+  if (str == NULL) {
+    return 0;
+  }
 
   size_t len = 0;
   while (len < maxSize && str[len] != '\0') {
@@ -548,12 +565,22 @@ String StrNewSize(Arena *arena, char *str, size_t len) {
 
 String StrNew(Arena *arena, char *str) {
   const size_t len = strLength(str, maxStringSize);
+  if (len == 0) {
+    return (String){0, NULL};
+  }
   const size_t memorySize = sizeof(char) * len + 1; // * Includes null terminator
   char *allocatedString = ArenaAlloc(arena, memorySize);
 
   memcpy(allocatedString, str, memorySize);
   addNullTerminator(allocatedString, len);
   return (String){len, allocatedString};
+}
+
+static String s(char *msg) {
+  return (String){
+      .length = strlen(msg),
+      .data = msg,
+  };
 }
 
 String StrConcat(Arena *arena, String *string1, String *string2) {
@@ -1364,11 +1391,11 @@ void reBuild() {
   mateExeOld = FixPathExe(&mateExeOld);
 
 #if defined(COMPILER_GCC)
-  String compileCommand = F(&state.arena, "gcc -o \"%s\" \"%s\"", mateExeNew.data, state.mateSource.data);
+  String compileCommand = F(&state.arena, "gcc -o \"%s\" -Wall -g \"%s\"", mateExeNew.data, state.mateSource.data);
 #elif defined(COMPILER_CLANG)
-  String compileCommand = F(&state.arena, "clang -o \"%s\" \"%s\"", mateExeNew.data, state.mateSource.data);
+  String compileCommand = F(&state.arena, "clang -o \"%s\" -Wall -g \"%s\"", mateExeNew.data, state.mateSource.data);
 #elif defined(COMPILER_MSVC)
-  String compileCommand = F(&state.arena, "cl.exe /Fe:\"%s\" \"%s\"", mateExeNew.data, state.mateSource.data);
+  String compileCommand = F(&state.arena, "cl.exe /Fe:\"%s\" /W4 /Zi \"%s\"", mateExeNew.data, state.mateSource.data);
 #endif
 
   LogWarn("%s changed rebuilding...", state.mateSource.data);
@@ -1405,8 +1432,19 @@ void defaultExecutable() {
   executable.libs = S("");
 }
 
-void CreateExecutable(Executable options) {
+static Executable parseExecutableOptions(ExecutableOptions options) {
+  Executable result;
+  result.output = StrNew(&state.arena, options.output);
+  result.flags = StrNew(&state.arena, options.flags);
+  result.linkerFlags = StrNew(&state.arena, options.linkerFlags);
+  result.includes = StrNew(&state.arena, options.includes);
+  result.libs = StrNew(&state.arena, options.libs);
+  return result;
+}
+
+void CreateExecutable(ExecutableOptions executableOptions) {
   defaultExecutable();
+  Executable options = parseExecutableOptions(executableOptions);
 
   if (!StrIsNull(&options.output)) {
     String executableOutput = ConvertExe(&state.arena, options.output);
@@ -1471,7 +1509,7 @@ errno_t CreateCompileCommands() {
   return SUCCESS;
 }
 
-void AddFile(String source) {
+static void addFile(String source) {
   VecPush(executable.sources, source);
 }
 
