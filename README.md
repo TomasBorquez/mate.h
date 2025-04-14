@@ -51,6 +51,7 @@ paresed into a `build.ninja` for performance reasons (like incremental builds) a
     - [ ] `FileDeleteError`
     - [ ] `FileRenameError`
     - [ ] `CreateCompileCommands`
+- [ ] Clearer comments of when implementation of stuff happens
 - [ ] Add equivalent FileSystem implementation for linux
 - [ ] Assert `Malloc` and `ArenaAlloc`, use `Malloc` and `Free`
 - [ ] Add version at the top of the file and add proper license
