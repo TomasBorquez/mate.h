@@ -36,8 +36,10 @@ i32 main() {
 ```
 
 All you need is `mate.h` on the same folder you have `mate.c` example file and run `gcc ./mate.c -o ./mate.exe && ./mate.exe`, after running once
-it will detect if you need to rebuild based on `./build/mate-cache.json`. You also need ninja installed and available in your `PATH` since everything is 
-paresed into a `build.ninja` for performance reasons (like incremental builds) and for making it easier to cross platform.
+it will detect if you need to rebuild based on `./build/mate-cache.json`. 
+
+You also need ninja installed and available in your `PATH` since everything is parsed into a `build.ninja` for performance reasons (like incremental builds, parallel compilation, ...) 
+and for making it easier to cross platform.
 
 # TODO:
 - [x] Return `errno_t` and `LogError` rather than asserting
