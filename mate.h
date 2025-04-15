@@ -1,18 +1,13 @@
 /* MIT License
 
   mate.h - A single-header library for compiling your C code in C
-  Version - 2025-04-14 (0.1.2):
+  Version - 2025-04-14 (0.1.3):
   https://github.com/TomasBorquez/mate.h
 
   Guide on the `README.md`
 */
 
 #pragma once
-#include <assert.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 // NOTE: Only define BASE_IMPLEMENTATION if MATE_IMPLEMENTATION
 #ifdef MATE_IMPLEMENTATION
@@ -24,7 +19,7 @@
 /* MIT License
 
   base.h - Better cross-platform std
-  Version - 2025-04-14 (0.1.2):
+  Version - 2025-04-14 (0.1.3):
   https://github.com/TomasBorquez/base.h
 
   Usage:
@@ -42,7 +37,7 @@
 #elif defined(__GNUC__)
 #define COMPILER_GCC
 #else
-#error "The codebase only supports Clang, MSVC and GCC"
+#error "The codebase only supports Clang, MSVC and GCC, TCC soon"
 #endif
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
@@ -50,10 +45,10 @@
 #elif defined(__linux__) || defined(__gnu_linux__)
 #define PLATFORM_LINUX
 #else
-#error "The codebase only supports windows and linux"
+#error "The codebase only supports windows and linux, macos soon"
 #endif
 
-#if defined(COMPILER_CLANG)
+#ifdef COMPILER_CLANG
 #define FILE_NAME __FILE_NAME__
 #else
 #define FILE_NAME __FILE__
@@ -61,16 +56,16 @@
 
 #ifdef PLATFORM_WIN
 #define WIN32_LEAN_AND_MEAN
-#include <errno.h>
-#include <limits.h>
-#include <string.h>
 #include <windows.h>
 #elif def PLATFORM_LINUX
-#include <errno.h>
-#include <limits.h>
-#include <string.h>
 #include <unistd.h>
 #endif
+
+#include <assert.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 /* --- Types and MACRO types --- */
 // Unsigned int types
@@ -323,9 +318,7 @@ void SetCwd(char *destination);
 FileData *GetDirFiles();
 FileData *NewFileData();
 
-enum FileStatsError {
-  FILE_GET_ATTRIBUTES_FAILED = 1,
-};
+enum FileStatsError { FILE_GET_ATTRIBUTES_FAILED = 1 };
 errno_t FileStats(String *path, File *file);
 
 enum FileReadError { FILE_NOT_EXIST = 1, FILE_OPEN_FAILED, FILE_GET_SIZE_FAILED, FILE_READ_FAILED };
@@ -344,7 +337,7 @@ bool Mkdir(String path); // NOTE: Mkdir if not exist
 
 /* --- Logger --- */
 #define RESET "\x1b[0m"
-#define GRAY "\x1b[38;2;192;192;192m" // Light gray
+#define GRAY "\x1b[38;2;192;192;192m"
 #define RED "\x1b[0;31m"
 #define GREEN "\x1b[0;32m"
 #define ORANGE "\x1b[0;33m"
