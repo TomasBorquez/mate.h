@@ -1,3 +1,6 @@
+> [!WARNING]
+> This is still very experimental :D
+
 # About:
 Inspired from `build.zig`, `nob.h` and `CMake` I created my own build system with the goal to reivent the wheel
 and use my own build system for my projects, for now it has limited support multiple platforms, the main one is 
