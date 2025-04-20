@@ -1,5 +1,5 @@
 > [!WARNING]
-> This is still very experimental :D
+> This is still very experimental
 
 # About:
 Inspired from `build.zig`, `nob.h` and `CMake` I created my own build system with the goal to reivent the wheel
@@ -68,3 +68,4 @@ and for making it easier to cross platform.
 - [ ] Optimize String functions and add better names
 - [ ] Actually parse `mate-cache.json` lmao
 - [ ] Properly clean the state and malloc operations
+- [ ] Add better error messages, eg. if someone doesnt use `StartBuild` before creating executable.
