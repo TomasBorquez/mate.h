@@ -111,7 +111,6 @@
 #define pclose _pclose
 
 /* File I/O functions */
-#define fileno _fileno
 #define fdopen _fdopen
 #define access _access
 #define unlink _unlink
@@ -487,7 +486,7 @@ static inline void __df_cb(__df_t *__fp) {
   https://github.com/TomasBorquez/base.h
 */
 #ifdef BASE_IMPLEMENTATION
-
+#define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
 // --- Platform specific functions ---
 #if !defined(PLATFORM_WIN) && !defined(C_STANDARD_C11)
 #ifndef EINVAL
@@ -1480,6 +1479,10 @@ static void linkSystemLibraries(StringVector *vector);
 
 #define AddFile(source) addFile(S(source));
 static void addFile(String source);
+
+#define AddDirectory(source) addDirectory(S(source));
+static void addDirectory(String source);
+
 String InstallExecutable();
 i32 RunCommand(String command);
 void EndBuild();
@@ -1751,6 +1754,45 @@ errno_t CreateCompileCommands() {
 
 static void addFile(String source) {
   VecPush(executable.sources, source);
+}
+
+static void addDirectory(String directory) {
+  FILE* fp;
+  char command[512];
+  char line[1024];
+  
+  if (directory.data[directory.length] != '/') {
+    directory = StrConcat(&state.arena, &directory, &S("/"));
+  }
+  String fixed_directory = ConvertPath(&state.arena, directory);
+#ifdef PLATFORM_WIN
+  sprintf(command, "dir /b %s", fixed_directory.data);  // /b gives bare format (just names)
+#else
+  sprintf(command, "ls %s", fixed_directory.data);
+#endif
+
+  fp = popen(command, "rt");
+  if (fp == NULL) {
+    LogError("Couldn't open directory: %s", directory.data);
+    abort();
+  }  
+
+  while (fgets(line, sizeof(line), fp) != NULL) {
+    size_t filename_length = strlen(line);
+    char *filename = (char *)malloc(filename_length + fixed_directory.length + 1);
+    if (filename == NULL) {
+      LogError("Couldn't allocate memory for filename");
+      pclose(fp);
+      abort();
+    }
+    strncpy(filename, fixed_directory.data, fixed_directory.length);
+    strncpy(filename + fixed_directory.length, line, filename_length + 1);
+    filename[strcspn(filename, "\r\n")] = 0;
+    addFile(s(filename));
+    LogInfo("Added file %s", filename);
+  }
+
+  pclose(fp);
 }
 
 static StringVector outputTransformer(StringVector vector) {
