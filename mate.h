@@ -111,6 +111,7 @@
 #define pclose _pclose
 
 /* File I/O functions */
+#define fileno _fileno
 #define fdopen _fdopen
 #define access _access
 #define unlink _unlink
