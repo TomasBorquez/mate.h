@@ -1757,43 +1757,108 @@ static void addFile(String source) {
   VecPush(executable.sources, source);
 }
 
-static void addDirectory(String directory) {
+#ifdef PLATFORM_WIN
+
+static StringVector listDirWindows(String path) {
+  WIN32_FIND_DATAA findFileData;
+  HANDLE hFind;
+  char searchPath[MAX_PATH];
+  StringVector fileList = {0};
+
+  snprintf(searchPath, MAX_PATH, "%s\\*.c", path.data);
+
+  hFind = FindFirstFileA(searchPath, &findFileData);
+
+  if (hFind == INVALID_HANDLE_VALUE) {
+    printf("Error: Unable to open directory: %s\n", path);
+    return;
+  }
+
+  do {
+    const char* filename = findFileData.cFileName;
+
+    if (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0) {
+      continue;
+    }
+
+    size_t filenameLength = strlen(filename);
+    char *allocatedFilename = (char *)malloc(filenameLength + path.length + 1);
+
+    if (allocatedFilename == NULL) {
+      LogError("Couldn't allocate memory for filename");
+      abort();
+    }
+
+    strncpy(allocatedFilename, path.data, path.length);
+    strncpy(allocatedFilename + path.length, filename, filenameLength + 1);
+
+    VecPush(fileList, s(allocatedFilename));
+    LogInfo("Added File %s", allocatedFilename);
+  } while (FindNextFileA(hFind, &findFileData) != 0);
+
+  FindClose(hFind);
+  return fileList;
+}
+
+#else
+
+static StringVector listDirUnix(String path) {
   FILE* fp;
   char command[512];
   char line[1024];
-  
-  if (directory.data[directory.length] != '/') {
-    directory = StrConcat(&state.arena, &directory, &S("/"));
-  }
-  String fixed_directory = ConvertPath(&state.arena, directory);
-#ifdef PLATFORM_WIN
-  sprintf(command, "dir /b %s", fixed_directory.data);  // /b gives bare format (just names)
-#else
-  sprintf(command, "ls %s", fixed_directory.data);
-#endif
+  StringVector result = {0};
+
+  sprintf(command, "ls %s", path.data);
 
   fp = popen(command, "rt");
+  
   if (fp == NULL) {
-    LogError("Couldn't open directory: %s", directory.data);
+    LogError("Couldn't open directory: %s", path.data);
     abort();
   }  
 
   while (fgets(line, sizeof(line), fp) != NULL) {
     size_t filename_length = strlen(line);
-    char *filename = (char *)malloc(filename_length + fixed_directory.length + 1);
+    char *filename = (char *)malloc(filename_length + path.length + 1);
     if (filename == NULL) {
       LogError("Couldn't allocate memory for filename");
       pclose(fp);
       abort();
     }
-    strncpy(filename, fixed_directory.data, fixed_directory.length);
-    strncpy(filename + fixed_directory.length, line, filename_length + 1);
+    strncpy(filename, path.data, path.length);
+    strncpy(filename + path.length, line, filename_length + 1);
     filename[strcspn(filename, "\r\n")] = 0;
-    addFile(s(filename));
+    VecPush(result, s(filename));
     LogInfo("Added file %s", filename);
   }
 
   pclose(fp);
+
+  return result;
+}
+
+#endif
+
+
+static void addDirectory(String directory) {
+  StringVector files;
+
+  if (directory.data[directory.length] != '/') {
+    directory = StrConcat(&state.arena, &directory, &S("/"));
+  }
+
+  String fixed_directory = ConvertPath(&state.arena, directory);
+
+#ifdef PLATFORM_WIN
+  files = listDirWindows(fixed_directory);
+#else
+  files = listDirUnix(fixed_directory);
+#endif
+
+  for (int i = 0; i < files.length; i++) {
+    String *filename = VecAt(files, i);
+    addFile(*filename);
+  }
 }
 
 static StringVector outputTransformer(StringVector vector) {
