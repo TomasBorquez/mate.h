@@ -6,20 +6,17 @@
 
   Guide on the `README.md`
 */
-
 #pragma once
 
-// NOTE: Only define BASE_IMPLEMENTATION if MATE_IMPLEMENTATION
 #ifdef MATE_IMPLEMENTATION
 #define BASE_IMPLEMENTATION
 #endif
 
 // --- BASE.H START ---
-
 /* MIT License
 
   base.h - Better cross-platform std
-  Version - 2025-04-15 (0.1.4):
+  Version - 2025-05-02 (0.1.7):
   https://github.com/TomasBorquez/base.h
 
   Usage:
@@ -219,6 +216,8 @@ typedef struct {
 
 /* --- Vector Macros --- */
 // TODO: Add MSVC like vector macros
+// TODO: `VecInit` for adding an initial capacity at the beginning
+// TODO: `VecSort` implement some sorting algorithm for sorting the vector
 #define VEC_TYPE(typeName, valueType)                                                                                                                                                                                                          \
   typedef struct {                                                                                                                                                                                                                             \
     valueType *data;                                                                                                                                                                                                                           \
@@ -226,8 +225,10 @@ typedef struct {
     i32 capacity;                                                                                                                                                                                                                              \
   } typeName;
 
+// WARNING: Vector must always be initialized to zero `Vector vector = {0}`
 #define VecPush(vector, value)                                                                                                                                                                                                                 \
   ({                                                                                                                                                                                                                                           \
+    assert(vector.length <= vector.capacity && "Possible memory corruption or vector not initialized");                                                                                                                                        \
     if (vector.length >= vector.capacity) {                                                                                                                                                                                                    \
       if (vector.capacity == 0) vector.capacity = 128;                                                                                                                                                                                         \
       else vector.capacity *= 2;                                                                                                                                                                                                               \
@@ -365,7 +366,7 @@ void StrToUpper(String *string1);
 void StrToLower(String *string1);
 bool StrIsNull(String *string);
 void StrTrim(String *string);
-String StrSlice(Arena *arena, String *str, i32 start, i32 end);
+String StrSlice(Arena *arena, String *str, size_t start, size_t end);
 String ConvertExe(Arena *arena, String path);
 String ConvertPath(Arena *arena, String path);
 
@@ -420,6 +421,9 @@ errno_t FileRead(Arena *arena, String *path, String *result);
 // TODO: enum FileWriteError {};
 errno_t FileWrite(String *path, String *data);
 
+// TODO: enum FileWriteAdd {};
+errno_t FileAdd(String *path, String *data); // NOTE: Adds `\n` at the end always
+
 // TODO: enum FileDeleteError {};
 errno_t FileDelete(String *path);
 
@@ -429,17 +433,28 @@ errno_t FileRename(String *oldPath, String *newPath);
 bool Mkdir(String path); // NOTE: Mkdir if not exist
 
 /* --- Logger --- */
-#define RESET "\x1b[0m"
-#define GRAY "\x1b[38;2;192;192;192m"
-#define RED "\x1b[0;31m"
-#define GREEN "\x1b[0;32m"
-#define ORANGE "\x1b[0;33m"
+#define _RESET "\x1b[0m"
+#define _GRAY "\x1b[38;2;192;192;192m"
+#define _RED "\x1b[0;31m"
+#define _GREEN "\x1b[0;32m"
+#define _ORANGE "\x1b[0;33m"
 
 void LogInfo(const char *format, ...) FORMAT_CHECK(1, 2);
 void LogWarn(const char *format, ...) FORMAT_CHECK(1, 2);
 void LogError(const char *format, ...) FORMAT_CHECK(1, 2);
 void LogSuccess(const char *format, ...) FORMAT_CHECK(1, 2);
 void LogInit();
+
+/* --- Math --- */
+#define Min(a, b) (((a) < (b)) ? (a) : (b))
+#define Max(a, b) (((a) > (b)) ? (a) : (b))
+#define Clamp(a, x, b) (((x) < (a)) ? (a) : ((b) < (x)) ? (b) : (x))
+#define Swap(a, b)                                                                                                                                                                                                                             \
+  ({                                                                                                                                                                                                                                           \
+    typeof(a) temp = a;                                                                                                                                                                                                                        \
+    a = b;                                                                                                                                                                                                                                     \
+    b = temp;                                                                                                                                                                                                                                  \
+  })
 
 /* --- Defer Macros --- */
 #ifdef DEFER_MACRO // NOTE: Optional since not all compilers support it and not all C versions do either
@@ -483,7 +498,7 @@ static inline void __df_cb(__df_t *__fp) {
 
 /*
   Implementation of base.h
-  Version - 2025-04-12 (0.1.1):
+  Version - 2025-05-02 (0.1.7):
   https://github.com/TomasBorquez/base.h
 */
 #ifdef BASE_IMPLEMENTATION
@@ -638,6 +653,7 @@ void ArenaFree(Arena *arena) {
 
 void ArenaReset(Arena *arena) {
   arena->currOffset = 0;
+  arena->prevOffset = 0;
 }
 
 Arena ArenaInit(size_t size) {
@@ -785,14 +801,14 @@ StringVector StrSplit(Arena *arena, String *str, String *delimiter) {
 }
 
 void StringToUpper(String *str) {
-  for (int i = 0; i < str->length; ++i) {
+  for (size_t i = 0; i < str->length; ++i) {
     char currChar = str->data[i];
     str->data[i] = toupper(currChar);
   }
 }
 
 void StrToLower(String *str) {
-  for (int i = 0; i < str->length; ++i) {
+  for (size_t i = 0; i < str->length; ++i) {
     char currChar = str->data[i];
     str->data[i] = tolower(currChar);
   }
@@ -817,7 +833,7 @@ void StrTrim(String *str) {
     return;
   }
 
-  for (int i = 0; i < str->length; ++i) {
+  for (size_t i = 0; i < str->length; ++i) {
     char *currChar = &str->data[i];
     if (isSpace(*currChar)) {
       continue;
@@ -842,7 +858,7 @@ void StrTrim(String *str) {
   addNullTerminator(str->data, len);
 }
 
-String StrSlice(Arena *arena, String *str, i32 start, i32 end) {
+String StrSlice(Arena *arena, String *str, size_t start, size_t end) {
   assert(start >= 0 && "start index must be non-negative");
   assert(start <= str->length && "start index out of bounds");
 
@@ -1195,15 +1211,8 @@ errno_t FileRead(Arena *arena, String *path, String *result) {
     return FILE_GET_SIZE_FAILED;
   }
 
-  char *buffer = (char *)ArenaAlloc(arena, fileSize.QuadPart);
-  if (!buffer) {
-    LogError("Memory allocation failed");
-    CloseHandle(hFile);
-    free(pathStr);
-    return MEMORY_ALLOCATION_FAILED;
-  }
-
   DWORD bytesRead;
+  char *buffer = (char *)ArenaAlloc(arena, fileSize.QuadPart);
   if (!ReadFile(hFile, buffer, (DWORD)fileSize.QuadPart, &bytesRead, NULL) || bytesRead != fileSize.QuadPart) {
     LogError("Failed to read file: %lu", GetLastError());
     CloseHandle(hFile);
@@ -1211,14 +1220,14 @@ errno_t FileRead(Arena *arena, String *path, String *result) {
     return FILE_READ_FAILED;
   }
 
-  *result = StrNewSize(arena, buffer, (size_t)bytesRead);
+  *result = (String){.length = bytesRead, .data = buffer};
 
   CloseHandle(hFile);
   free(pathStr);
   return SUCCESS;
 }
 
-errno_t FileWrite(String *path, String *result) {
+errno_t FileWrite(String *path, String *data) {
   HANDLE hFile = INVALID_HANDLE_VALUE;
 
   char *pathStr = malloc(path->length + 1);
@@ -1250,7 +1259,7 @@ errno_t FileWrite(String *path, String *result) {
   }
 
   DWORD bytesWritten;
-  if (!WriteFile(hFile, result->data, (DWORD)result->length, &bytesWritten, NULL) || bytesWritten != result->length) {
+  if (!WriteFile(hFile, data->data, (DWORD)data->length, &bytesWritten, NULL) || bytesWritten != data->length) {
     DWORD error = GetLastError();
     CloseHandle(hFile);
     free(pathStr);
@@ -1269,6 +1278,74 @@ errno_t FileWrite(String *path, String *result) {
   CloseHandle(hFile);
   free(pathStr);
 
+  return SUCCESS;
+}
+
+errno_t FileAdd(String *path, String *data) {
+  HANDLE hFile = INVALID_HANDLE_VALUE;
+  char *pathStr = malloc(path->length + 1);
+  if (!pathStr) {
+    LogError("Memory allocation failed");
+    return ENOMEM;
+  }
+  memcpy(pathStr, path->data, path->length);
+  pathStr[path->length] = '\0';
+
+  hFile = CreateFileA(pathStr, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+  if (hFile == INVALID_HANDLE_VALUE) {
+    DWORD error = GetLastError();
+    free(pathStr);
+    switch (error) {
+    case ERROR_ACCESS_DENIED:
+      return EACCES;
+    case ERROR_NOT_ENOUGH_MEMORY:
+    case ERROR_OUTOFMEMORY:
+      return ENOMEM;
+    case ERROR_FILE_NOT_FOUND:
+      return ENOENT;
+    default:
+      return EIO;
+    }
+  }
+
+  if (SetFilePointer(hFile, 0, NULL, FILE_END) == INVALID_SET_FILE_POINTER) {
+    DWORD error = GetLastError();
+    CloseHandle(hFile);
+    free(pathStr);
+    return EIO;
+  }
+
+  char *newData = malloc(data->length + 1); // NOTE: +1 for \n
+  if (!newData) {
+    CloseHandle(hFile);
+    free(pathStr);
+    LogError("Memory allocation failed");
+    return ENOMEM;
+  }
+
+  memcpy(newData, data->data, data->length);
+  newData[data->length] = '\n';
+  DWORD newLength = (DWORD)data->length + 1;
+  DWORD bytesWritten;
+  if (!WriteFile(hFile, newData, newLength, &bytesWritten, NULL) || bytesWritten != newLength) {
+    DWORD error = GetLastError();
+    CloseHandle(hFile);
+    free(pathStr);
+    free(newData);
+    switch (error) {
+    case ERROR_DISK_FULL:
+      return ENOSPC;
+    case ERROR_NOT_ENOUGH_MEMORY:
+    case ERROR_OUTOFMEMORY:
+      return ENOMEM;
+    default:
+      return EIO;
+    }
+  }
+
+  CloseHandle(hFile);
+  free(pathStr);
+  free(newData);
   return SUCCESS;
 }
 
@@ -1344,39 +1421,39 @@ void SetCwd(char *destination) {
 
 /* Logger Implemenation */
 void LogInfo(const char *format, ...) {
-  printf("%s[INFO]: ", GRAY);
+  printf("%s[INFO]: ", _GRAY);
   va_list args;
   va_start(args, format);
   vprintf(format, args);
   va_end(args);
-  printf("%s\n", RESET);
+  printf("%s\n", _RESET);
 }
 
 void LogWarn(const char *format, ...) {
-  printf("%s[WARN]: ", ORANGE);
+  printf("%s[WARN]: ", _ORANGE);
   va_list args;
   va_start(args, format);
   vprintf(format, args);
   va_end(args);
-  printf("%s\n", RESET);
+  printf("%s\n", _RESET);
 }
 
 void LogError(const char *format, ...) {
-  printf("%s[ERROR]: ", RED);
+  printf("%s[ERROR]: ", _RED);
   va_list args;
   va_start(args, format);
   vprintf(format, args);
   va_end(args);
-  printf("%s\n", RESET);
+  printf("%s\n", _RESET);
 }
 
 void LogSuccess(const char *format, ...) {
-  printf("%s[SUCCESS]: ", GREEN);
+  printf("%s[SUCCESS]: ", _GREEN);
   va_list args;
   va_start(args, format);
   vprintf(format, args);
   va_end(args);
-  printf("%s\n", RESET);
+  printf("%s\n", _RESET);
 }
 
 void LogInit() {
@@ -1388,6 +1465,7 @@ void LogInit() {
   SetConsoleMode(hOut, dwMode);
 #endif
 }
+
 #endif
 // --- BASE.H END ---
 
@@ -1487,11 +1565,12 @@ void EndBuild();
 static bool needRebuild();
 static void setDefaultState();
 
+#ifdef MATE_IMPLEMENTATION
 /* MIT License
    mate.h - Mate Implementations start here
    Guide on the `README.md`
 */
-#ifdef MATE_IMPLEMENTATION
+
 static MateConfig state = {0};
 static Executable executable = {0};
 
