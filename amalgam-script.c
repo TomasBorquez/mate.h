@@ -38,11 +38,7 @@ void resetAmalgamFile() {
 }
 
 static StringVector splitNewLine(Arena *arena, String *str) {
-#if defined(PLATFORM_LINUX)
   return StrSplit(arena, str, &S("\n"));
-#elif defined(PLATFORM_WIN)
-  return StrSplit(arena, str, &S("\r\n"));
-#endif
 }
 
 i32 main() {
