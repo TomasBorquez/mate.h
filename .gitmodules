@@ -1,0 +1,3 @@
+[submodule "vendor/base"]
+	path = vendor/base
+	url = https://github.com/TomasBorquez/base.h.git
