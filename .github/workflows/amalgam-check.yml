@@ -1,0 +1,23 @@
+name: Amalgam Script Check
+
+on:
+  push:
+    branches: [ main, master ]  
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Install GCC
+      run: sudo apt-get update && sudo apt-get install -y gcc
+    
+    - name: Build and run amalgam script
+      run: |
+        gcc amalgam-script.c -o amalgam-script
+        ./amalgam-script
