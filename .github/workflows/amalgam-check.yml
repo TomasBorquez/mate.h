@@ -2,7 +2,7 @@ name: Amalgam Script Check
 
 on:
   push:
-    branches: [ main, master ]  
+    branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
 
@@ -13,6 +13,11 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
+    
+    - name: Initialize and fetch submodules
+      run: |
+        git submodule init
+        git submodule update
     
     - name: Install GCC
       run: sudo apt-get update && sudo apt-get install -y gcc
