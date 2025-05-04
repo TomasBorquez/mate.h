@@ -43,29 +43,3 @@ it will detect if you need to rebuild based on `./build/mate-cache.json`.
 
 You also need ninja installed and available in your `PATH` since everything is parsed into a `build.ninja` for performance reasons (like incremental builds, parallel compilation, ...) 
 and for making it easier to cross platform.
-
-# TODO:
-- [x] Return `errno_t` and `LogError` rather than asserting
-- [x] Create `AddLibrary`, `AddInclude` and `linkerFlags`
-- [x] Create the Strings under the hood with macros or `s()`
-- [x] Clearer comments of when implementation of stuff happens
-- [x] Create a new repo for `base.h`
-- [ ] Create enums of errors:
-    - [x] `GeneralError`
-    - [x] `FileStatsError`
-    - [x] `FileReadError`
-    - [ ] `FileWriteError`
-    - [ ] `FileDeleteError`
-    - [ ] `FileRenameError`
-    - [ ] `CreateCompileCommands`
-- [ ] Add equivalent FileSystem implementation for linux
-- [ ] Assert `Malloc` and `ArenaAlloc`, use `Malloc` and `Free`
-- [ ] Add version at the top of the file and add proper license
-- [ ] Make GNU extensions work in both MSVC and Clang (ex: Vectors)
-- [ ] Test on `Clang`, `GCC` and `MSVC` on windows
-- [ ] Test on `Clang` and `GCC` on linux
-- [ ] Add `TCC` support
-- [ ] Optimize String functions and add better names
-- [ ] Actually parse `mate-cache.json` lmao
-- [ ] Properly clean the state and malloc operations
-- [ ] Add better error messages, eg. if someone doesnt use `StartBuild` before creating executable.
