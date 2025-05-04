@@ -25,7 +25,6 @@
 
   More on the the `README.md`
 */
-#pragma once
 
 /* --- Platform MACROS and includes --- */
 #if defined(__clang__)
@@ -1838,20 +1837,20 @@ static Executable executable = {0};
 
 String FixPathExe(String *str) {
   String path = ConvertPath(&state.arena, ConvertExe(&state.arena, *str));
-#if defined(PLATFORM_WIN)
+#  if defined(PLATFORM_WIN)
   return F(&state.arena, "%s\\%s", GetCwd(), path.data);
-#elif defined(PLATFORM_LINUX)
+#  elif defined(PLATFORM_LINUX)
   return F(&state.arena, "%s/%s", GetCwd(), path.data);
-#endif
+#  endif
 }
 
 String FixPath(String *str) {
   String path = ConvertPath(&state.arena, *str);
-#if defined(PLATFORM_WIN)
+#  if defined(PLATFORM_WIN)
   return F(&state.arena, "%s\\%s", GetCwd(), path.data);
-#elif defined(PLATFORM_LINUX)
+#  elif defined(PLATFORM_LINUX)
   return F(&state.arena, "%s/%s", GetCwd(), path.data);
-#endif
+#  endif
 }
 
 String ConvertNinjaPath(String str) {
