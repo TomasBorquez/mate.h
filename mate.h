@@ -25,6 +25,7 @@
 
   More on the the `README.md`
 */
+#pragma once
 
 /* --- Platform MACROS and includes --- */
 #if defined(__clang__)
