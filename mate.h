@@ -371,6 +371,7 @@ String StrNew(Arena *arena, char *str);
 String StrNewSize(Arena *arena, char *str, size_t len); // Without null terminator
 void StrCopy(String *destination, String *source);
 StringVector StrSplit(Arena *arena, String *string, String *delimiter);
+StringVector StrSplitNewLine(Arena *arena, String *str);
 bool StrEqual(String *string1, String *string2);
 String StrConcat(Arena *arena, String *string1, String *string2);
 void StrToUpper(String *string1);
@@ -823,6 +824,39 @@ StringVector StrSplit(Arena *arena, String *str, String *delimiter) {
     VecPush(result, currString);
 
     curr = match + delimiter->length;
+  }
+
+  return result;
+}
+
+StringVector StrSplitNewLine(Arena *arena, String *str) {
+  assert(!StrIsNull(str) && "SplitNewLine: str should never be NULL");
+  char *start = str->data;
+  const char *end = str->data + str->length;
+  char *curr = start;
+  StringVector result = {0};
+
+  while (curr < end) {
+    char *pos = curr;
+
+    while (pos < end && *pos != '\n') {
+      pos++;
+    }
+
+    size_t len = pos - curr;
+
+    if (pos < end && pos > curr && *(pos - 1) == '\r') {
+      len--;
+    }
+
+    String currString = StrNewSize(arena, curr, len);
+    VecPush(result, currString);
+
+    if (pos < end) {
+      curr = pos + 1;
+    } else {
+      break;
+    }
   }
 
   return result;
