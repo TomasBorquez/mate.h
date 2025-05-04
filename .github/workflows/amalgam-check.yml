@@ -1,4 +1,4 @@
-name: Amalgam Script Check
+name: Amalgam Script 
 
 on:
   push:
@@ -44,4 +44,3 @@ jobs:
         git add .
         git commit -m "Update amalgamated files [skip ci]"
         git push
-      continue-on-error: false
