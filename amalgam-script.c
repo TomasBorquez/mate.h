@@ -37,10 +37,6 @@ void resetAmalgamFile() {
   }
 }
 
-static StringVector splitNewLine(Arena *arena, String *str) {
-  return StrSplit(arena, str, &S("\n"));
-}
-
 i32 main() {
   resetAmalgamFile();
 
@@ -51,9 +47,9 @@ i32 main() {
 
   Arena arena = ArenaInit((apiHeader.stats.size * 2) + (apiImp.stats.size * 2) + (vendorBase.stats.size * 2));
 
-  StringVector apiHeaderSplit = splitNewLine(&arena, &apiHeader.buffer);
-  StringVector apiImpSplit = splitNewLine(&arena, &apiImp.buffer);
-  StringVector vendorBaseSplit = splitNewLine(&arena, &vendorBase.buffer);
+  StringVector apiHeaderSplit = StrSplitNewLine(&arena, &apiHeader.buffer);
+  StringVector apiImpSplit = StrSplitNewLine(&arena, &apiImp.buffer);
+  StringVector vendorBaseSplit = StrSplitNewLine(&arena, &vendorBase.buffer);
 
   String delimiterBase = S("#include \"../vendor/base/base.h\"");
   String delimiterMate = S("// NOTE: Here goes MATE_IMPLEMENTATION");
