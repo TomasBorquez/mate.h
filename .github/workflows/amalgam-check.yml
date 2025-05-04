@@ -2,10 +2,10 @@ name: Amalgam Script Check
 
 on:
   push:
-  pull_request:
 
 permissions:
   contents: write 
+  actions: read
 
 jobs:
   build-and-run:
