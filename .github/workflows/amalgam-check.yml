@@ -2,22 +2,18 @@ name: Amalgam Script Check
 
 on:
   push:
-    branches: [ main, master ]
   pull_request:
-    branches: [ main, master ]
 
 jobs:
   build-and-run:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout code
+    - name: Checkout code with submodules
       uses: actions/checkout@v3
-    
-    - name: Initialize and fetch submodules
-      run: |
-        git submodule init
-        git submodule update
+      with:
+        submodules: recursive
+        fetch-depth: 0  # Fetch all history for proper git operations
     
     - name: Install GCC
       run: sudo apt-get update && sudo apt-get install -y gcc
@@ -26,3 +22,22 @@ jobs:
       run: |
         gcc amalgam-script.c -o amalgam-script
         ./amalgam-script
+    
+    - name: Configure Git
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+    
+    - name: Check for changes
+      id: git-check
+      run: |
+        git status
+        echo "changed=$(git status --porcelain | wc -l)" >> $GITHUB_OUTPUT
+    
+    - name: Commit and push if changed
+      if: steps.git-check.outputs.changed != '0'
+      run: |
+        git add .
+        git commit -m "Update amalgamated files [skip ci]"
+        git push
+      continue-on-error: true  # Don't fail the workflow if push fails (e.g., on PR from fork)
