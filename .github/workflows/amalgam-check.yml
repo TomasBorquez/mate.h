@@ -19,6 +19,12 @@ jobs:
         fetch-depth: 0  
         token: ${{ secrets.GITHUB_TOKEN }}
     
+    - name: Install dos2unix
+      run: sudo apt-get update && sudo apt-get install -y dos2unix
+
+    - name: Normalize line endings
+      run: find . -type f \( -name "*.c" -o -name "*.h" \) | xargs dos2unix
+
     - name: Install GCC
       run: sudo apt-get update && sudo apt-get install -y gcc
     
