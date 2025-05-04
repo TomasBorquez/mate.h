@@ -1,7 +1,7 @@
 // NOTE: Run simply with `gcc amalgam-script.c -o amalgam-script && ./amalgam-script`
 
 #define BASE_IMPLEMENTATION
-#include "./vendor/base/base.h"
+#include "vendor/base/base.h"
 
 typedef struct {
   Arena arena;
