@@ -1,7 +1,3 @@
-/* MIT License
-   mate.h - Mate Implementations start here
-   Guide on the `README.md`
-*/
 #include "api.h"
 
 static MateConfig state = {0};

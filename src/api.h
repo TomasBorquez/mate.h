@@ -9,7 +9,7 @@
 #pragma once
 
 #ifdef MATE_IMPLEMENTATION
-#define BASE_IMPLEMENTATION
+#  define BASE_IMPLEMENTATION
 #endif
 
 #include "../vendor/base/base.h"
@@ -77,27 +77,27 @@ void StartBuild();
 void reBuild();
 void CreateExecutable(ExecutableOptions executableOptions);
 
-#define AddLibraryPaths(...)                                                                                                                                                                                                                   \
-  ({                                                                                                                                                                                                                                           \
-    StringVector vector = {0};                                                                                                                                                                                                                 \
-    StringVectorPushMany(vector, __VA_ARGS__);                                                                                                                                                                                                 \
-    addLibraryPaths(&vector);                                                                                                                                                                                                                  \
+#define AddLibraryPaths(...)                   \
+  ({                                           \
+    StringVector vector = {0};                 \
+    StringVectorPushMany(vector, __VA_ARGS__); \
+    addLibraryPaths(&vector);                  \
   })
 static void addLibraryPaths(StringVector *vector);
 
-#define AddIncludePaths(...)                                                                                                                                                                                                                   \
-  ({                                                                                                                                                                                                                                           \
-    StringVector vector = {0};                                                                                                                                                                                                                 \
-    StringVectorPushMany(vector, __VA_ARGS__);                                                                                                                                                                                                 \
-    addIncludePaths(&vector);                                                                                                                                                                                                                  \
+#define AddIncludePaths(...)                   \
+  ({                                           \
+    StringVector vector = {0};                 \
+    StringVectorPushMany(vector, __VA_ARGS__); \
+    addIncludePaths(&vector);                  \
   })
 static void addIncludePaths(StringVector *vector);
 
-#define LinkSystemLibraries(...)                                                                                                                                                                                                               \
-  ({                                                                                                                                                                                                                                           \
-    StringVector vector = {0};                                                                                                                                                                                                                 \
-    StringVectorPushMany(vector, __VA_ARGS__);                                                                                                                                                                                                 \
-    linkSystemLibraries(&vector);                                                                                                                                                                                                              \
+#define LinkSystemLibraries(...)               \
+  ({                                           \
+    StringVector vector = {0};                 \
+    StringVectorPushMany(vector, __VA_ARGS__); \
+    linkSystemLibraries(&vector);              \
   })
 static void linkSystemLibraries(StringVector *vector);
 

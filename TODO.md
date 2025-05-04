@@ -1,5 +1,7 @@
 # [TODO](https://github.com/TomasBorquez/mate.h/issues/9)
-- [ ] Create `amalgam-script.c` as well as `pre-commit hook`
+- [x] Create `amalgam-script.c` as well as `pre-commit hook`
+- [ ] Full Linux support
+- [ ] Full MSVC support
 - [ ] `FLAG_DEBUG` -g3 rather than -g *when supported* since -g3 generates more information.
 - [ ] Switch to samurai instead of ninja files.
 - [ ] Different targets apart from `executables` such as objs, libs, dlls, etc.
