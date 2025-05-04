@@ -78,15 +78,16 @@ i32 main() {
     }
 
     if (StrEqual(currLine, &delimiterMate)) {
+      String implementationComment = S("/* MIT License\n"
+                                       "   mate.h - Mate Implementations start here\n"
+                                       "   Guide on the `README.md`\n"
+                                       "*/");
       String mateImplementationStart = S("#ifdef MATE_IMPLEMENTATION");
+      FileAdd(&resultPath, &implementationComment);
       FileAdd(&resultPath, &mateImplementationStart);
 
-      String apiInclude = S("#include \"api.h\"");
-      for (size_t j = 0; j < apiImpSplit.length; j++) {
+      for (size_t j = 2; j < apiImpSplit.length; j++) {
         currLine = VecAt(apiImpSplit, j);
-        if (StrEqual(currLine, &apiInclude)) {
-          continue;
-        }
         FileAdd(&resultPath, currLine);
       }
 
