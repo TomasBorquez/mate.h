@@ -1,0 +1,66 @@
+name: Run Examples
+on:
+  push:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  test-examples:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code with submodules
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+        fetch-depth: 0  
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Install GCC
+      run: sudo apt-get update && sudo apt-get install -y gcc
+    
+    - name: Test example 01-basic-build
+      working-directory: ./examples/01-basic-build
+      run: |
+        gcc mate.c -o mate
+        ./mate
+        if [ $? -ne 0 ]; then
+          echo "Example 01-basic-build failed"
+          exit 1
+        fi
+    
+    - name: Test example 02-custom-config
+      working-directory: ./examples/02-custom-config
+      run: |
+        gcc mate.c -o mate
+        ./mate
+        if [ $? -ne 0 ]; then
+          echo "Example 02-custom-config failed"
+          exit 1
+        fi
+    
+    - name: Test example 03-generic-flags
+      working-directory: ./examples/03-generic-flags
+      run: |
+        gcc mate.c -o mate
+        ./mate
+        if [ $? -ne 0 ]; then
+          echo "Example 03-generic-flags failed"
+          exit 1
+        fi
+    
+    - name: Test example 04-raylib-build
+      working-directory: ./examples/04-raylib-build
+      run: |
+        gcc mate.c -o mate
+        ./mate
+        if [ $? -ne 0 ]; then
+          echo "Example 04-raylib-build failed"
+          exit 1
+        fi
+    
+    # - name: Test example 05-lua-source-code #NOTE: not yet implemented static libs
+    #   working-directory: ./examples/05-lua-source-code
+    #   run: |
+    #     gcc mate.c -o mate
+    #     ./mate
