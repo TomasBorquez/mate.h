@@ -3,48 +3,50 @@
 static MateConfig state = {0};
 static Executable executable = {0};
 
-String FixPathExe(String *str) {
-  String path = ConvertPath(&state.arena, ConvertExe(&state.arena, *str));
+String FixPathExe(String str) {
+  String path = ConvertPath(state.arena, ConvertExe(state.arena, str));
 #if defined(PLATFORM_WIN)
-  return F(&state.arena, "%s\\%s", GetCwd(), path.data);
+  return F(state.arena, "%s\\%s", GetCwd(), path.data);
 #elif defined(PLATFORM_LINUX)
-  return F(&state.arena, "%s/%s", GetCwd(), path.data);
+  return F(state.arena, "%s/%s", GetCwd(), path.data);
 #endif
 }
 
-String FixPath(String *str) {
-  String path = ConvertPath(&state.arena, *str);
+String FixPath(String str) {
+  String path = ConvertPath(state.arena, str);
 #if defined(PLATFORM_WIN)
-  return F(&state.arena, "%s\\%s", GetCwd(), path.data);
+  return F(state.arena, "%s\\%s", GetCwd(), path.data);
 #elif defined(PLATFORM_LINUX)
-  return F(&state.arena, "%s/%s", GetCwd(), path.data);
+  return F(state.arena, "%s/%s", GetCwd(), path.data);
 #endif
 }
 
 String ConvertNinjaPath(String str) {
-  String copy = StrNewSize(&state.arena, str.data, str.length + 1);
+#if defined(PLATFORM_WIN)
+  String copy = StrNewSize(state.arena, str.data, str.length + 1);
   memmove(&copy.data[2], &copy.data[1], str.length - 1);
   copy.data[1] = '$';
   copy.data[2] = ':';
   return copy;
+#elif defined(PLATFORM_LINUX)
+  return str;
+#endif
 }
 
 static void setDefaultState() {
-  state.arena = ArenaInit(12000 * sizeof(String));
-  state.mateExe = FixPath(&S("./mate"));
+  state.arena = ArenaCreate(20000 * sizeof(String));
+  state.mateExe = FixPath(S("./mate"));
   state.compiler = GetCompiler();
-  state.mateSource = FixPath(&S("./mate.c"));
-  state.mateCachePath = FixPath(&S("./build/mate-cache.json"));
-  state.buildDirectory = ConvertPath(&state.arena, S("./build"));
+  state.mateSource = FixPath(S("./mate.c"));
+  state.buildDirectory = FixPath(S("./build"));
 }
 
 static MateConfig parseMateConfig(MateOptions options) {
   MateConfig result;
-  result.mateExe = StrNew(&state.arena, options.mateExe);
-  result.compiler = StrNew(&state.arena, options.compiler);
-  result.mateSource = StrNew(&state.arena, options.mateSource);
-  result.mateCachePath = StrNew(&state.arena, options.mateCachePath);
-  result.buildDirectory = StrNew(&state.arena, options.buildDirectory);
+  result.mateExe = StrNew(state.arena, options.mateExe);
+  result.compiler = StrNew(state.arena, options.compiler);
+  result.mateSource = StrNew(state.arena, options.mateSource);
+  result.buildDirectory = StrNew(state.arena, options.buildDirectory);
   return result;
 }
 
@@ -53,19 +55,15 @@ void CreateConfig(MateOptions options) {
   MateConfig config = parseMateConfig(options);
 
   if (!StrIsNull(&config.mateSource)) {
-    state.mateSource = FixPath(&config.mateSource);
-  }
-
-  if (!StrIsNull(&config.mateCachePath)) {
-    state.mateCachePath = FixPath(&config.mateCachePath);
+    state.mateSource = FixPath(config.mateSource);
   }
 
   if (!StrIsNull(&config.mateExe)) {
-    state.mateExe = FixPath(&config.mateExe);
+    state.mateExe = FixPath(config.mateExe);
   }
 
   if (!StrIsNull(&config.buildDirectory)) {
-    state.buildDirectory = ConvertPath(&state.arena, config.buildDirectory);
+    state.buildDirectory = FixPath(config.buildDirectory);
   }
 
   if (!StrIsNull(&config.compiler)) {
@@ -77,11 +75,12 @@ void CreateConfig(MateOptions options) {
 
 errno_t readCache() {
   String cache = {0};
-  errno_t err = FileRead(&state.arena, &state.mateCachePath, &cache);
+  String mateCachePath = F(state.arena, "%s/mate-cache.json", state.buildDirectory.data);
+  errno_t err = FileRead(state.arena, &mateCachePath, &cache);
 
   if (err == FILE_NOT_EXIST) {
-    String modifyTime = F(&state.arena, "%llu", TimeNow() / 1000);
-    FileWrite(&state.mateCachePath, &modifyTime);
+    String modifyTime = F(state.arena, "%llu", TimeNow() / 1000);
+    FileWrite(&mateCachePath, &modifyTime);
     state.mateCache.firstBuild = true;
     cache = modifyTime;
   } else if (err != SUCCESS) {
@@ -115,8 +114,9 @@ static bool needRebuild() {
   }
 
   if (stats.modifyTime > state.mateCache.lastBuild) {
-    String modifyTime = F(&state.arena, "%llu", stats.modifyTime);
-    FileWrite(&state.mateCachePath, &modifyTime);
+    String mateCachePath = F(state.arena, "%s/mate-cache.json", state.buildDirectory.data);
+    String modifyTime = F(state.arena, "%llu", stats.modifyTime);
+    FileWrite(&mateCachePath, &modifyTime);
     return true;
   }
 
@@ -128,23 +128,21 @@ void reBuild() {
     return;
   }
 
-  String mateExeNew = F(&state.arena, "%s/mate-new", state.buildDirectory.data);
-  String mateExeOld = F(&state.arena, "%s/mate-old", state.buildDirectory.data);
-  String mateExe = ConvertExe(&state.arena, state.mateExe);
-  mateExeNew = FixPathExe(&mateExeNew);
-  mateExeOld = FixPathExe(&mateExeOld);
+  String mateExeNew = ConvertExe(state.arena, F(state.arena, "%s/mate-new", state.buildDirectory.data));
+  String mateExeOld = ConvertExe(state.arena, F(state.arena, "%s/mate-old", state.buildDirectory.data));
+  String mateExe = ConvertExe(state.arena, state.mateExe);
 
   String compileCommand;
   if (StrEqual(&state.compiler, &S("gcc"))) {
-    compileCommand = F(&state.arena, "gcc -o \"%s\" -Wall -g \"%s\"", mateExeNew.data, state.mateSource.data);
+    compileCommand = F(state.arena, "gcc -o \"%s\" -Wall -g \"%s\"", mateExeNew.data, state.mateSource.data);
   }
 
   if (StrEqual(&state.compiler, &S("clang"))) {
-    compileCommand = F(&state.arena, "clang -o \"%s\" -Wall -g \"%s\"", mateExeNew.data, state.mateSource.data);
+    compileCommand = F(state.arena, "clang -o \"%s\" -Wall -g \"%s\"", mateExeNew.data, state.mateSource.data);
   }
 
   if (StrEqual(&state.compiler, &S("MSVC"))) {
-    compileCommand = F(&state.arena, "cl.exe /Fe:\"%s\" /W4 /Zi \"%s\"", mateExeNew.data, state.mateSource.data);
+    compileCommand = F(state.arena, "cl.exe /Fe:\"%s\" /W4 /Zi \"%s\"", mateExeNew.data, state.mateSource.data);
   }
 
   LogWarn("%s changed rebuilding...", state.mateSource.data);
@@ -173,9 +171,9 @@ void reBuild() {
 }
 
 void defaultExecutable() {
-  String executableOutput = ConvertExe(&state.arena, S("main"));
-  executable.output = ConvertPath(&state.arena, executableOutput);
-  executable.flags = S("-Wall -g");
+  String executableOutput = ConvertExe(state.arena, S("main"));
+  executable.output = ConvertPath(state.arena, executableOutput);
+  executable.flags = S("");
   executable.linkerFlags = S("");
   executable.includes = S("");
   executable.libs = S("");
@@ -183,41 +181,173 @@ void defaultExecutable() {
 
 static Executable parseExecutableOptions(ExecutableOptions options) {
   Executable result;
-  result.output = StrNew(&state.arena, options.output);
-  result.flags = StrNew(&state.arena, options.flags);
-  result.linkerFlags = StrNew(&state.arena, options.linkerFlags);
-  result.includes = StrNew(&state.arena, options.includes);
-  result.libs = StrNew(&state.arena, options.libs);
+  result.output = StrNew(state.arena, options.output);
+  result.flags = StrNew(state.arena, options.flags);
+  result.linkerFlags = StrNew(state.arena, options.linkerFlags);
+  result.includes = StrNew(state.arena, options.includes);
+  result.libs = StrNew(state.arena, options.libs);
   return result;
 }
 
 void CreateExecutable(ExecutableOptions executableOptions) {
   defaultExecutable();
   Executable options = parseExecutableOptions(executableOptions);
-
   if (!StrIsNull(&options.output)) {
-    String executableOutput = ConvertExe(&state.arena, options.output);
-    executable.output = ConvertPath(&state.arena, executableOutput);
+    String executableOutput = ConvertExe(state.arena, options.output);
+    executable.output = ConvertPath(state.arena, executableOutput);
   }
 
-  if (!StrIsNull(&options.flags)) {
-    executable.flags = options.flags;
+  String flagsStr = options.flags;
+  if (flagsStr.data == NULL) {
+    flagsStr = S("");
+  }
+
+  if (executableOptions.warnings != 0) {
+#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
+    switch (executableOptions.warnings) {
+    case FLAG_WARNINGS_MINIMAL:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-Wall");
+      break;
+    case FLAG_WARNINGS:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-Wall -Wextra");
+      break;
+    case FLAG_WARNINGS_VERBOSE:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-Wall -Wextra -Wpedantic");
+      break;
+    }
+#elif defined(COMPILER_MSVC)
+    switch (executableOptions.warnings) {
+    case FLAG_WARNINGS_MINIMAL:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/W3");
+      break;
+    case FLAG_WARNINGS:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/W4");
+      break;
+    case FLAG_WARNINGS_VERBOSE:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/Wall");
+      break;
+    }
+#endif
+  }
+
+  if (executableOptions.debug != 0) {
+#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
+    switch (executableOptions.debug) {
+    case FLAG_DEBUG_MINIMAL:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-g1");
+      break;
+    case FLAG_DEBUG_MEDIUM:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-g2");
+      break;
+    case FLAG_DEBUG:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-g3");
+      break;
+    }
+#elif defined(COMPILER_MSVC)
+    switch (executableOptions.debug) {
+    case FLAG_DEBUG_MINIMAL:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/Zi");
+      break;
+    case FLAG_DEBUG_MEDIUM:
+    case FLAG_DEBUG:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/ZI");
+      break;
+    }
+#endif
+  }
+
+  if (executableOptions.optimization != 0) {
+#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
+    switch (executableOptions.optimization) {
+    case FLAG_OPTIMIZATION_NONE:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-O0");
+      break;
+    case FLAG_OPTIMIZATION_BASIC:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-O1");
+      break;
+    case FLAG_OPTIMIZATION:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-O2");
+      break;
+    case FLAG_OPTIMIZATION_SIZE:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-Os");
+      break;
+    case FLAG_OPTIMIZATION_AGGRESSIVE:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-O3");
+      break;
+    }
+#elif defined(COMPILER_MSVC)
+    switch (executableOptions.optimization) {
+    case FLAG_OPTIMIZATION_NONE:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/Od");
+      break;
+    case FLAG_OPTIMIZATION_BASIC:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/O1");
+      break;
+    case FLAG_OPTIMIZATION:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/O2");
+      break;
+    case FLAG_OPTIMIZATION_SIZE:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/O1");
+      break;
+    case FLAG_OPTIMIZATION_AGGRESSIVE:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/Ox");
+      break;
+    }
+#endif
+  }
+
+  if (executableOptions.std != 0) {
+#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
+    switch (executableOptions.std) {
+    case FLAG_STD_C99:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-std=c99");
+      break;
+    case FLAG_STD_C11:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-std=c11");
+      break;
+    case FLAG_STD_C17:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-std=c17");
+      break;
+    case FLAG_STD_C23:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-std=c2x");
+      break;
+    case FLAG_STD_C2X:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-std=c2x");
+      break;
+    }
+#elif defined(COMPILER_MSVC)
+    switch (executableOptions.std) {
+    case FLAG_STD_C99:
+    case FLAG_STD_C11:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/std:c11");
+      break;
+    case FLAG_STD_C17:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/std:c17");
+      break;
+    case FLAG_STD_C23:
+    case FLAG_STD_C2X:
+      // MSVC doesn't have C23 yet
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/std:clatest");
+      break;
+    }
+#endif
+  }
+
+  if (!StrIsNull(&flagsStr)) {
+    executable.flags = flagsStr;
   }
 
   if (!StrIsNull(&options.linkerFlags)) {
     executable.linkerFlags = options.linkerFlags;
   }
-
   if (!StrIsNull(&options.includes)) {
     executable.includes = options.includes;
   }
-
   if (!StrIsNull(&options.libs)) {
     executable.libs = options.libs;
   }
 }
 
-// TODO: Implement for linux
 // TODO: Add error enum
 errno_t CreateCompileCommands() {
   FILE *ninjaPipe;
@@ -225,8 +355,7 @@ errno_t CreateCompileCommands() {
   char buffer[4096];
   size_t bytes_read;
 
-  String buildPath = StrNew(&state.arena, F(&state.arena, "%s\\%s", GetCwd(), ParsePath(&state.arena, state.buildDirectory).data).data);
-  String compileCommandsPath = ConvertPath(&state.arena, F(&state.arena, "%s/compile_commands.json", buildPath.data));
+  String compileCommandsPath = ConvertPath(state.arena, F(state.arena, "%s/compile_commands.json", state.buildDirectory.data));
 
   errno_t err = fopen_s(&outputFile, compileCommandsPath.data, "w");
   if (err != 0 || outputFile == NULL) {
@@ -234,7 +363,7 @@ errno_t CreateCompileCommands() {
     return 1;
   }
 
-  String compdbCommand = ConvertPath(&state.arena, F(&state.arena, "ninja -f %s/build.ninja -t compdb", buildPath.data));
+  String compdbCommand = ConvertPath(state.arena, F(state.arena, "ninja -f %s/build.ninja -t compdb", state.buildDirectory.data));
 
   ninjaPipe = popen(compdbCommand.data, "r");
   if (ninjaPipe == NULL) {
@@ -268,11 +397,11 @@ static StringVector outputTransformer(StringVector vector) {
     String *currentExecutable = VecAt(vector, i);
     String output = S("");
     for (size_t j = currentExecutable->length - 1; j > 0; j--) {
-      String currentChar = StrNewSize(&state.arena, &currentExecutable->data[j], 1);
+      String currentChar = StrNewSize(state.arena, &currentExecutable->data[j], 1);
       if (currentChar.data[0] == '/') {
         break;
       }
-      output = StrConcat(&state.arena, &currentChar, &output);
+      output = StrConcat(state.arena, &currentChar, &output);
     }
     output.data[output.length - 1] = 'o';
     VecPush(result, output);
@@ -281,7 +410,6 @@ static StringVector outputTransformer(StringVector vector) {
   return result;
 }
 
-// TODO: Make linux version
 String InstallExecutable() {
   if (executable.sources.length == 0) {
     LogError("Executable has zero sources, add at least one with AddFile(\"./main.c\")");
@@ -291,13 +419,13 @@ String InstallExecutable() {
   String linkCommand;
   String compileCommand;
   if (StrEqual(&state.compiler, &S("gcc"))) {
-    linkCommand = F(&state.arena, "rule link\n  command = $cc $flags $linker_flags -o $out $in $libs\n");
-    compileCommand = F(&state.arena, "rule compile\n  command = $cc $flags $includes -c $in -o $out\n");
+    linkCommand = F(state.arena, "rule link\n  command = $cc $flags $linker_flags -o $out $in $libs\n");
+    compileCommand = F(state.arena, "rule compile\n  command = $cc $flags $includes -c $in -o $out\n");
   }
 
   if (StrEqual(&state.compiler, &S("clang"))) {
-    linkCommand = F(&state.arena, "rule link\n  command = $cc $flags $linker_flags -o $out $in $libs\n");
-    compileCommand = F(&state.arena, "rule compile\n  command = $cc $flags $includes -c $in -o $out\n");
+    linkCommand = F(state.arena, "rule link\n  command = $cc $flags $linker_flags -o $out $in $libs\n");
+    compileCommand = F(state.arena, "rule compile\n  command = $cc $flags $includes -c $in -o $out\n");
   }
 
   if (StrEqual(&state.compiler, &S("MSVC"))) {
@@ -305,12 +433,12 @@ String InstallExecutable() {
     abort();
   }
 
-  String ninjaOutput = F(&state.arena,
+  String ninjaOutput = F(state.arena,
                          "cc = %s\n"
-                         "linker_flag = %s\n"
+                         "linker_flags = %s\n"
                          "flags = %s\n"
                          "cwd = %s\n"
-                         "builddir = $cwd/%s\n"
+                         "builddir = %s\n"
                          "target = $builddir/%s\n"
                          "includes = %s\n"
                          "libs = %s\n"
@@ -320,8 +448,8 @@ String InstallExecutable() {
                          state.compiler.data,
                          executable.linkerFlags.data,
                          executable.flags.data,
-                         ConvertNinjaPath(StrNew(&state.arena, GetCwd())).data,
-                         state.buildDirectory.data,
+                         ConvertNinjaPath(StrNew(state.arena, GetCwd())).data,
+                         ConvertNinjaPath(state.buildDirectory).data,
                          executable.output.data,
                          executable.includes.data,
                          executable.libs.data,
@@ -333,24 +461,24 @@ String InstallExecutable() {
 
   String outputString = S("");
   for (size_t i = 0; i < executable.sources.length; i++) {
-    String sourceFile = ParsePath(&state.arena, *VecAt(executable.sources, i));
+    String sourceFile = ParsePath(state.arena, *VecAt(executable.sources, i));
     String outputFile = *VecAt(outputFiles, i);
-    String source = F(&state.arena, "build $builddir/%s: compile $cwd/%s\n", outputFile.data, sourceFile.data);
-    ninjaOutput = StrConcat(&state.arena, &ninjaOutput, &source);
-    outputString = F(&state.arena, "%s $builddir/%s", outputString.data, outputFile.data);
+    String source = F(state.arena, "build $builddir/%s: compile $cwd/%s\n", outputFile.data, sourceFile.data);
+    ninjaOutput = StrConcat(state.arena, &ninjaOutput, &source);
+    outputString = F(state.arena, "%s $builddir/%s", outputString.data, outputFile.data);
   }
 
-  String target = F(&state.arena,
+  String target = F(state.arena,
                     "build $target: link%s\n"
                     "\n"
                     "default $target\n",
                     outputString.data);
-  ninjaOutput = StrConcat(&state.arena, &ninjaOutput, &target);
+  ninjaOutput = StrConcat(state.arena, &ninjaOutput, &target);
 
-  String buildNinjaPath = F(&state.arena, "%s\\build.ninja", FixPath(&state.buildDirectory).data);
+  String buildNinjaPath = F(state.arena, "%s/build.ninja", state.buildDirectory.data);
   FileWrite(&buildNinjaPath, &ninjaOutput);
 
-  errno_t result = RunCommand(F(&state.arena, "ninja -f %s", buildNinjaPath.data));
+  errno_t result = RunCommand(F(state.arena, "ninja -f %s", buildNinjaPath.data));
   if (result != 0) {
     LogError("Ninja file compilation failed with code: %d", result);
     abort();
@@ -358,7 +486,11 @@ String InstallExecutable() {
 
   LogSuccess("Ninja file compilation done");
   state.totalTime = TimeNow() - state.startTime;
-  return F(&state.arena, "%s\\%s", FixPath(&state.buildDirectory).data, executable.output.data);
+#if defined(PLATFORM_WIN)
+  return F(state.arena, "%s\\%s", state.buildDirectory.data, executable.output.data);
+#elif defined(PLATFORM_LINUX)
+  return F(state.arena, "%s/%s", state.buildDirectory.data, executable.output.data);
+#endif
 }
 
 errno_t RunCommand(String command) {
@@ -371,11 +503,11 @@ static void addLibraryPaths(StringVector *vector) {
   for (size_t i = 0; i < vector->length; i++) {
     String *currLib = VecAt((*vector), i);
     if (i == 0 && executable.libs.length == 0) {
-      executable.libs = F(&state.arena, "-L\"%s\"", currLib->data);
+      executable.libs = F(state.arena, "-L\"%s\"", currLib->data);
       continue;
     }
 
-    executable.libs = F(&state.arena, "%s -L\"%s\"", executable.libs.data, currLib->data);
+    executable.libs = F(state.arena, "%s -L\"%s\"", executable.libs.data, currLib->data);
   }
 }
 
@@ -384,11 +516,11 @@ static void addIncludePaths(StringVector *vector) {
   for (size_t i = 0; i < vector->length; i++) {
     String *currInclude = VecAt((*vector), i);
     if (i == 0 && executable.includes.length == 0) {
-      executable.includes = F(&state.arena, "-I\"%s\"", currInclude->data);
+      executable.includes = F(state.arena, "-I\"%s\"", currInclude->data);
       continue;
     }
 
-    executable.includes = F(&state.arena, "%s -I\"%s\"", executable.includes.data, currInclude->data);
+    executable.includes = F(state.arena, "%s -I\"%s\"", executable.includes.data, currInclude->data);
   }
 }
 
@@ -396,15 +528,15 @@ static void linkSystemLibraries(StringVector *vector) {
   for (size_t i = 0; i < vector->length; i++) {
     String *currLib = VecAt((*vector), i);
     if (i == 0 && executable.libs.length == 0) {
-      executable.libs = F(&state.arena, "-l%s", currLib->data);
+      executable.libs = F(state.arena, "-l%s", currLib->data);
       continue;
     }
 
-    executable.libs = F(&state.arena, "%s -l%s", executable.libs.data, currLib->data);
+    executable.libs = F(state.arena, "%s -l%s", executable.libs.data, currLib->data);
   }
 }
 
 void EndBuild() {
   LogInfo("Build took: %llums", state.totalTime);
-  ArenaFree(&state.arena);
+  ArenaFree(state.arena);
 }

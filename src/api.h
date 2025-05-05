@@ -1,7 +1,7 @@
 /* MIT License
 
   mate.h - A single-header library for compiling your C code in C
-  Version - 2025-05-03 (0.1.5):
+  Version - 2025-05-05 (0.1.7):
   https://github.com/TomasBorquez/mate.h
 
   Guide on the `README.md`
@@ -29,7 +29,6 @@ typedef struct {
   char *buildDirectory;
   char *mateSource;
   char *mateExe;
-  char *mateCachePath;
 } MateOptions;
 
 typedef struct {
@@ -39,13 +38,12 @@ typedef struct {
   String buildDirectory;
   String mateSource;
   String mateExe;
-  String mateCachePath;
 
   // Cache
   MateCache mateCache;
 
   // Misc
-  Arena arena;
+  Arena *arena;
   bool customConfig;
   i64 startTime;
   i64 totalTime;
@@ -64,12 +62,44 @@ typedef struct {
   StringVector sources;
 } Executable;
 
+enum WarningsFlags {
+  FLAG_WARNINGS_MINIMAL = 1, // -Wall
+  FLAG_WARNINGS,             // -Wall -Wextra
+  FLAG_WARNINGS_VERBOSE,     // -Wall -Wextra -Wpedantic
+};
+
+enum DebugFlags {
+  FLAG_DEBUG_MINIMAL = 1, // -g1
+  FLAG_DEBUG_MEDIUM,      // -g/g2
+  FLAG_DEBUG,             // -g3
+};
+
+enum OptimizationFlags {
+  FLAG_OPTIMIZATION_NONE = 1,  // -O0
+  FLAG_OPTIMIZATION_BASIC,     // -O1
+  FLAG_OPTIMIZATION,           // -O2
+  FLAG_OPTIMIZATION_SIZE,      // -Os
+  FLAG_OPTIMIZATION_AGGRESSIVE // -O3
+};
+
+enum StandardFlags {
+  FLAG_STD_C99 = 1, // -std=c99
+  FLAG_STD_C11,     // -std=c11
+  FLAG_STD_C17,     // -std=c17
+  FLAG_STD_C23,     // -std=c23
+  FLAG_STD_C2X      // -std=c2x
+};
+
 typedef struct {
   char *output;
   char *flags;
   char *linkerFlags;
   char *includes;
   char *libs;
+  u8 warnings;
+  u8 debug;
+  u8 optimization;
+  u8 std;
 } ExecutableOptions;
 
 void CreateConfig(MateOptions options);

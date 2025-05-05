@@ -4,7 +4,7 @@
 #include "vendor/base/base.h"
 
 typedef struct {
-  Arena arena;
+  Arena *arena;
   File stats;
   String buffer;
 } FileResult;
@@ -19,8 +19,8 @@ FileResult readSource(String path) {
     abort();
   }
 
-  result.arena = ArenaInit(result.stats.size);
-  err = FileRead(&result.arena, &path, &result.buffer);
+  result.arena = ArenaCreate(result.stats.size);
+  err = FileRead(result.arena, &path, &result.buffer);
   if (err != SUCCESS) {
     LogError("Error on FileRead: %d", err);
     abort();
@@ -45,24 +45,21 @@ i32 main() {
   FileResult apiImp = readSource(S("./src/api.c"));
   FileResult vendorBase = readSource(S("./vendor/base/base.h"));
 
-  Arena arena = ArenaInit((apiHeader.stats.size * 2) + (apiImp.stats.size * 2) + (vendorBase.stats.size * 2));
+  Arena *arena = ArenaCreate((apiHeader.stats.size * 2) + (apiImp.stats.size * 2) + (vendorBase.stats.size * 2));
 
-  StringVector apiHeaderSplit = StrSplitNewLine(&arena, &apiHeader.buffer);
-  StringVector apiImpSplit = StrSplitNewLine(&arena, &apiImp.buffer);
-  StringVector vendorBaseSplit = StrSplitNewLine(&arena, &vendorBase.buffer);
+  StringVector apiHeaderSplit = StrSplitNewLine(arena, &apiHeader.buffer);
+  StringVector apiImpSplit = StrSplitNewLine(arena, &apiImp.buffer);
+  StringVector vendorBaseSplit = StrSplitNewLine(arena, &vendorBase.buffer);
 
   String delimiterBase = S("#include \"../vendor/base/base.h\"");
   String delimiterMate = S("// NOTE: Here goes MATE_IMPLEMENTATION");
-  // TODO: Change to `VecForEach()`
-  for (size_t i = 0; i < apiHeaderSplit.length; i++) {
-    String *currLine = VecAt(apiHeaderSplit, i);
-
+  VecForEach(apiHeaderSplit, currLine) {
     if (StrEqual(currLine, &delimiterBase)) {
       FileAdd(&resultPath, &S("// --- BASE.H START ---"));
 
       String pragmaOnce = S("#pragma once");
       for (size_t j = 0; j < vendorBaseSplit.length; j++) {
-        currLine = VecAt(vendorBaseSplit, j);
+        String *currLine = VecAt(vendorBaseSplit, j);
         if (StrEqual(currLine, &pragmaOnce)) {
           continue;
         }
@@ -83,7 +80,7 @@ i32 main() {
       FileAdd(&resultPath, &mateImplementationStart);
 
       for (size_t j = 2; j < apiImpSplit.length; j++) {
-        currLine = VecAt(apiImpSplit, j);
+        String *currLine = VecAt(apiImpSplit, j);
         FileAdd(&resultPath, currLine);
       }
 
