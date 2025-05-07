@@ -1,5 +1,3 @@
-// --- INCLUDES START ---
-
 /* Based on musl's src/search/tsearch.c, by Szabolcs Nagy.
  * See LICENSE file for copyright details. */
 #include <stdlib.h>
