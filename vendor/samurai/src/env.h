@@ -1,17 +1,18 @@
+// --- INCLUDES END ---
 struct evalstring;
 struct string;
 
 struct rule {
-	char *name;
-	struct treenode *bindings;
+  char *name;
+  struct treenode *bindings;
 };
 
 struct pool {
-	char *name;
-	int numjobs, maxjobs;
+  char *name;
+  int numjobs, maxjobs;
 
-	/* a queue of ready edges blocked by the pool's capacity */
-	struct edge *work;
+  /* a queue of ready edges blocked by the pool's capacity */
+  struct edge *work;
 };
 
 void envinit(void);

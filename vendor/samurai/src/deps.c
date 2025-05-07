@@ -11,7 +11,7 @@
 #include "env.h"
 #include "graph.h"
 #include "util.h"
-// --- LOCAL INCLUDES END ---
+// --- INCLUDES END ---
 
 /* maximum record size (in bytes) */
 #define MAX_RECORD_SIZE (1 << 19)
