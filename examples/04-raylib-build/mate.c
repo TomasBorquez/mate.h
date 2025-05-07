@@ -9,16 +9,18 @@ i32 main() {
     AddFile("./src/main.c");
 
 #if defined(PLATFORM_LINUX)
-    // Includes are usually for vendor `.h` files, in this case `./include`
-    AddIncludePaths("./vendor/raylib/linux_amd64/include");
+    // `AddIncludePaths` are usually for vendor `.h` files, in this case `./include`
+    AddIncludePaths("./vendor/raylib/include");
+
     // Same with libraries, which contain the implementations of the includes
-    AddLibraryPaths("./vendor/raylib/linux_amd64/lib");
+    AddLibraryPaths("./vendor/raylib/lib/linux_amd64/");
+
     // System libraries needed by raylib
-    LinkSystemLibraries("raylib", "m", "X11");
+    LinkSystemLibraries("raylib", "m");
 #elif defined(PLATFORM_WIN)
     // Same thing but for windows
-    AddIncludePaths("./vendor/raylib/win64_mingw/include");
-    AddLibraryPaths("./vendor/raylib/win64_mingw/lib");
+    AddIncludePaths("./vendor/raylib/include");
+    AddLibraryPaths("./vendor/raylib/lib/win64_mingw/");
     LinkSystemLibraries("raylib", "gdi32", "winmm", "m");
 #endif
 
