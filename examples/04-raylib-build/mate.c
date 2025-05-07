@@ -14,7 +14,7 @@ i32 main() {
     // Same with libraries, which contain the implementations of the includes
     AddLibraryPaths("./vendor/raylib/linux_amd64/lib");
     // System libraries needed by raylib
-    LinkSystemLibraries("raylib", "m");
+    LinkSystemLibraries("raylib", "m", "X11");
 #elif defined(PLATFORM_WIN)
     // Same thing but for windows
     AddIncludePaths("./vendor/raylib/win64_mingw/include");
