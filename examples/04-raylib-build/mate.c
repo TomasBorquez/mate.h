@@ -27,7 +27,7 @@ i32 main() {
     String exePath = InstallExecutable();
     errno_t errExe = RunCommand(exePath);
     errno_t errCompileCmd = CreateCompileCommands();
-    result = errExe == 0 && errCompileCmd == 0;
+    result = (errExe == 0 && errCompileCmd == 0) ? 0 : 1; // 0 success, >1 error
   }
   EndBuild();
 
