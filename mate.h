@@ -16,7 +16,7 @@
 /* MIT License
 
   base.h - Better cross-platform STD
-  Version - 2025-05-05 (0.1.12):
+  Version - 2025-05-07 (0.1.13):
   https://github.com/TomasBorquez/base.h
 
   Usage:
@@ -1500,7 +1500,7 @@ StringVector ListDir(Arena *arena, String path) {
 
   DWORD error = GetLastError();
   if (error != ERROR_NO_MORE_FILES) {
-    LogError("Error reading directory %s, err: %lu", path.data, error);
+    LogError("ListDir: error reading directory %s, err: %d", path.data, error);
   }
 
   FindClose(hFind);
@@ -1829,24 +1829,26 @@ StringVector ListDir(Arena *arena, String path) {
   DIR *dir = opendir(path.data);
 
   if (dir == NULL) {
-    int error = errno;
+    errno_t error = errno;
     LogError("Directory listing failed for %s, err: %d", path.data, error);
     return result;
   }
 
+  errno = 0;
   struct dirent *entry;
   while ((entry = readdir(dir)) != NULL) {
     if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
       continue;
     }
-
     String entryStr = StrNew(arena, entry->d_name);
     VecPush(result, entryStr);
+
+    errno = 0;
   }
 
   if (errno != 0) {
-    int error = errno;
-    LogError("Error reading directory %s, err: %d", path.data, error);
+    errno_t error = errno;
+    LogError("ListDir: error reading directory %s, err: %d", path.data, error);
   }
 
   closedir(dir);
