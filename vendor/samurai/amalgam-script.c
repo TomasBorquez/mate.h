@@ -1,4 +1,4 @@
-// NOTE: Run simply with `gcc amalgam-script.c -o amalgam-script && ./amalgam-script`
+// NOTE: Run simply with `gcc amalgam-script.c -o amalgam && ./amalgam`
 // NOTE: Compile samurai.c `gcc samurai.c -o samurai -lrt`
 
 #define BASE_IMPLEMENTATION
