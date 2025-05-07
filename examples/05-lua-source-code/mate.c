@@ -1,7 +1,7 @@
 // WARNING: Still not finished
 
 #define MATE_IMPLEMENTATION
-#include "mate.h"
+#include "../../mate.h"
 
 i32 main() {
   StartBuild();

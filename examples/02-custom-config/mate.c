@@ -1,5 +1,5 @@
 #define MATE_IMPLEMENTATION
-#include "mate.h"
+#include "../../mate.h"
 
 i32 main() {
   // You can create a config that allows you to use different compilers as well as build directories

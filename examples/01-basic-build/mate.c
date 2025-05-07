@@ -1,5 +1,5 @@
 #define MATE_IMPLEMENTATION // Adds the implementation of functions for mate
-#include "mate.h"
+#include "../../mate.h"
 
 i32 main() {
   StartBuild();
