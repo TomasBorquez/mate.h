@@ -1,0 +1,15 @@
+# ninja log v5
+25	73	1746642931705724700	/mnt/c/Users/Lewboski/Desktop/Programming/learn/mate/examples/05-samurai-source-code/build/os-posix.o	48860a5015faca27
+29	76	1746642931706762100	/mnt/c/Users/Lewboski/Desktop/Programming/learn/mate/examples/05-samurai-source-code/build/tree.o	6f70021ca0d823ff
+23	82	1746642931714037000	/mnt/c/Users/Lewboski/Desktop/Programming/learn/mate/examples/05-samurai-source-code/build/htab.o	2cef2c16658036f7
+21	88	1746642931720103900	/mnt/c/Users/Lewboski/Desktop/Programming/learn/mate/examples/05-samurai-source-code/build/env.o	c0e4cd38cc6e3526
+24	90	1746642931722194700	/mnt/c/Users/Lewboski/Desktop/Programming/learn/mate/examples/05-samurai-source-code/build/log.o	edeb2ef24597ae4d
+22	91	1746642931723199300	/mnt/c/Users/Lewboski/Desktop/Programming/learn/mate/examples/05-samurai-source-code/build/graph.o	9dd62bb8f1a9343e
+30	92	1746642931724199800	/mnt/c/Users/Lewboski/Desktop/Programming/learn/mate/examples/05-samurai-source-code/build/util.o	3374aa66842a5686
+20	94	1746642931726253900	/mnt/c/Users/Lewboski/Desktop/Programming/learn/mate/examples/05-samurai-source-code/build/parse.o	a8ff193767dcdf95
+26	105	1746642931738343100	/mnt/c/Users/Lewboski/Desktop/Programming/learn/mate/examples/05-samurai-source-code/build/samu.o	9d185ebfac6e5f4e
+26	124	1746642931756592000	/mnt/c/Users/Lewboski/Desktop/Programming/learn/mate/examples/05-samurai-source-code/build/scan.o	a945457af84f59f2
+21	131	1746642931763146000	/mnt/c/Users/Lewboski/Desktop/Programming/learn/mate/examples/05-samurai-source-code/build/deps.o	f2df182de7e20b0c
+28	153	1746642931785169000	/mnt/c/Users/Lewboski/Desktop/Programming/learn/mate/examples/05-samurai-source-code/build/tool.o	cf9354859a5d548b
+19	160	1746642931792216800	/mnt/c/Users/Lewboski/Desktop/Programming/learn/mate/examples/05-samurai-source-code/build/build.o	a8a41c8e85f0b4d9
+161	517	1746642932142992800	/mnt/c/Users/Lewboski/Desktop/Programming/learn/mate/examples/05-samurai-source-code/build/samu	f62db6cbb77c8564
