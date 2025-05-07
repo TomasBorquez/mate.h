@@ -2,6 +2,8 @@
 #include "../../mate.h"
 
 i32 main() {
+  errno_t result;
+
   StartBuild();
   {
     // No matter the compiler (MSVC/GCC/CLANG), this would give "equivalent" flags
@@ -18,7 +20,9 @@ i32 main() {
     LinkSystemLibraries("m");
 
     String exePath = InstallExecutable();
-    RunCommand(exePath);
+    result = RunCommand(exePath);
   }
   EndBuild();
+
+  return result;
 }
