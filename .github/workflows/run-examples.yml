@@ -16,8 +16,8 @@ jobs:
         fetch-depth: 0  
         token: ${{ secrets.GITHUB_TOKEN }}
     
-    - name: Install GCC
-      run: sudo apt-get update && sudo apt-get install -y gcc
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get install -y gcc libx11-dev xorg-dev libglu1-mesa-dev # gcc, and the rest to run raylib
     
     - name: Test example 01-basic-build
       working-directory: ./examples/01-basic-build
