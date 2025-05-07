@@ -58,9 +58,14 @@ jobs:
           echo "Example 04-raylib-build failed"
           exit 1
         fi
-    
-    # - name: Test example 05-lua-source-code #NOTE: not yet implemented static libs
-    #   working-directory: ./examples/05-lua-source-code
-    #   run: |
-    #     gcc mate.c -o mate
-    #     ./mate
+
+    - name: Test example 05-samurai-source-code
+      working-directory: ./examples/05-samurai-source-code
+      run: |
+        gcc mate.c -o mate
+        ./mate
+        if [ $? -ne 0 ]; then
+          echo "Example 05-samurai-source-code"
+          exit 1
+        fi
+

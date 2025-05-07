@@ -387,14 +387,100 @@ errno_t CreateCompileCommands() {
   return SUCCESS;
 }
 
+static bool globMatch(String pattern, String text) {
+  if (pattern.length == 1 && pattern.data[0] == '*') {
+    return true;
+  }
+
+  i32 p = 0;
+  i32 t = 0;
+  i32 starP = -1;
+  i32 starT = -1;
+  while (t < text.length) {
+    if (p < pattern.length && pattern.data[p] == text.data[t]) {
+      p++;
+      t++;
+    } else if (p < pattern.length && pattern.data[p] == '*') {
+      starP = p;
+      starT = t;
+      p++;
+    } else if (starP != -1) {
+      p = starP + 1;
+      t = ++starT;
+    } else {
+      return false;
+    }
+  }
+
+  while (p < pattern.length && pattern.data[p] == '*') {
+    p++;
+  }
+
+  return p == pattern.length;
+}
+
 static void addFile(String source) {
-  VecPush(executable.sources, source);
+  bool isGlob = false;
+  for (int i = 0; i < source.length; i++) {
+    if (source.data[i] == '*') {
+      isGlob = true;
+      break;
+    }
+  }
+
+  if (source.length < 2 || source.data[0] != '.' || source.data[1] != '/') {
+    abort();
+  }
+
+  if (source.length > 0 && source.data[source.length - 1] == '/') {
+    abort();
+  }
+
+  if (!isGlob) {
+    VecPush(executable.sources, source);
+    return;
+  }
+
+  String directory = {0};
+  i32 lastSlash = -1;
+  for (int i = 0; i < source.length; i++) {
+    if (source.data[i] == '/') {
+      lastSlash = i;
+    }
+  }
+
+  directory = StrSlice(state.arena, &source, 0, lastSlash);
+  String pattern = StrSlice(state.arena, &source, lastSlash + 1, source.length);
+
+  StringVector files = ListDir(state.arena, directory);
+  for (int i = 0; i < files.length; i++) {
+    String *file = VecAt(files, i);
+
+    if (globMatch(pattern, *file)) {
+      String finalSource = F(state.arena, "%s/%s", directory.data, file->data);
+      VecPush(executable.sources, finalSource);
+    }
+  }
+}
+
+static bool removeFile(String source) {
+  for (size_t i = 0; i < executable.sources.length; i++) {
+    String *currValue = VecAt(executable.sources, i);
+    if (StrEqual(&source, currValue)) {
+      currValue->data = NULL;
+      currValue->length = 0;
+      return true;
+    }
+  }
+  return false;
 }
 
 static StringVector outputTransformer(StringVector vector) {
   StringVector result = {0};
   for (size_t i = 0; i < vector.length; i++) {
     String *currentExecutable = VecAt(vector, i);
+    if (StrIsNull(currentExecutable)) continue;
+
     String output = S("");
     for (size_t j = currentExecutable->length - 1; j > 0; j--) {
       String currentChar = StrNewSize(state.arena, &currentExecutable->data[j], 1);
@@ -457,11 +543,11 @@ String InstallExecutable() {
                          compileCommand.data);
   StringVector outputFiles = outputTransformer(executable.sources);
 
-  assert(outputFiles.length == executable.sources.length && "Something went wrong in the parsing");
-
   String outputString = S("");
   for (size_t i = 0; i < executable.sources.length; i++) {
-    String sourceFile = ParsePath(state.arena, *VecAt(executable.sources, i));
+    String *currSource = VecAt(executable.sources, i);
+    if (StrIsNull(currSource)) continue;
+    String sourceFile = ParsePath(state.arena, *currSource);
     String outputFile = *VecAt(outputFiles, i);
     String source = F(state.arena, "build $builddir/%s: compile $cwd/%s\n", outputFile.data, sourceFile.data);
     ninjaOutput = StrConcat(state.arena, &ninjaOutput, &source);

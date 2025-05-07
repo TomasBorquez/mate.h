@@ -1,5 +1,5 @@
 // NOTE: Run simply with `gcc amalgam-script.c -o amalgam && ./amalgam`
-// NOTE: Compile samurai.c `gcc samurai.c -o samurai -lrt`
+// NOTE: Compile samurai.c `gcc samurai.c -o samurai -lrt -std=c99 -O2`
 
 #define BASE_IMPLEMENTATION
 #include "../../vendor/base/base.h"

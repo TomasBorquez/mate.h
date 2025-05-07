@@ -53,10 +53,6 @@ typedef struct {
   String output;
   String flags;
   String linkerFlags;
-  // TODO: add target
-  // TODO: optimize
-  // TODO: warnings
-  // TODO: debugSymbols
   String includes;
   String libs;
   StringVector sources;
@@ -133,8 +129,12 @@ static void linkSystemLibraries(StringVector *vector);
 
 #define AddFile(source) addFile(S(source));
 static void addFile(String source);
+
+#define RemoveFile(source) removeFile(S(source));
+static bool removeFile(String source);
+
 String InstallExecutable();
-i32 RunCommand(String command);
+errno_t RunCommand(String command);
 void EndBuild();
 
 static bool needRebuild();

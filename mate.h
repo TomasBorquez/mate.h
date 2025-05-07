@@ -312,11 +312,12 @@ typedef struct {
     &vector.data[index];                                                         \
   })
 
-#define VecFree(vector)                                                         \
-  ({                                                                            \
-    assert(vector.data != NULL && "VecFree: Vector data should never be NULL"); \
-    Free(vector.data);                                                          \
-    vector.data = NULL;                                                         \
+#define VecFree(vector)        \
+  ({                           \
+    if (vector.data != NULL) { \
+      Free(vector.data);       \
+    }                          \
+    vector.data = NULL;        \
   })
 
 #define VecForEach(vector, it) for (typeof(*vector.data) *it = vector.data; it < vector.data + vector.length; it++)
@@ -463,6 +464,7 @@ enum FileRenameError { FILE_RENAME_ACCESS_DENIED = 1, FILE_RENAME_NOT_FOUND, FIL
 errno_t FileRename(String *oldPath, String *newPath);
 
 bool Mkdir(String path); // NOTE: Mkdir if not exist
+StringVector ListDir(Arena *arena, String path);
 
 /* --- Logger --- */
 #define _RESET "\x1b[0m"
@@ -525,6 +527,28 @@ static inline void __df_cb(__df_t *__fp) {
 #    error "Not available yet in MSVC, use `_try/_finally`"
 #  endif
 #endif
+/* --- INI Parser --- */
+typedef struct {
+  String key;
+  String value;
+} IniEntry;
+
+VEC_TYPE(IniEntryVector, IniEntry);
+
+typedef struct {
+  IniEntryVector data;
+  Arena *arena;
+} IniFile;
+
+IniFile IniParse(String *path);
+bool IniCreate(String *path, IniFile *iniFile); // NOTE: Updates/Creates .ini file
+void IniFree(IniFile *iniFile);
+
+String IniGet(IniFile *ini, String *key);
+String IniSet(IniFile *ini, String key, String value);
+i32 IniGetInt(IniFile *ini, String *key);
+f64 IniGetDouble(IniFile *ini, String *key);
+bool IniGetBool(IniFile *ini, String *key);
 
 /* MIT License
    base.h - Implementation of base.h
@@ -1448,6 +1472,40 @@ bool Mkdir(String path) {
   LogError("Error meanwhile Mkdir() %llu", error);
   return false;
 }
+
+StringVector ListDir(Arena *arena, String path) {
+  StringVector result = {0};
+  WIN32_FIND_DATA findData;
+  HANDLE hFind = INVALID_HANDLE_VALUE;
+  char searchPath[MAX_PATH];
+
+  snprintf(searchPath, MAX_PATH, "%s\\*", path.data);
+  hFind = FindFirstFile(searchPath, &findData);
+
+  if (hFind == INVALID_HANDLE_VALUE) {
+    DWORD error = GetLastError();
+    LogError("Directory listing failed for %s, err: %lu", path.data, error);
+    return result;
+  }
+
+  do {
+    if (strcmp(findData.cFileName, ".") == 0 || strcmp(findData.cFileName, "..") == 0) {
+      continue;
+    }
+
+    String entry = StrNew(arena, findData.cFileName);
+    VecPush(result, entry);
+
+  } while (FindNextFile(hFind, &findData) != 0);
+
+  DWORD error = GetLastError();
+  if (error != ERROR_NO_MORE_FILES) {
+    LogError("Error reading directory %s, err: %lu", path.data, error);
+  }
+
+  FindClose(hFind);
+  return result;
+}
 #  elif defined(PLATFORM_LINUX)
 char *GetCwd() {
   static _Thread_local char currentPath[PATH_MAX];
@@ -1765,6 +1823,35 @@ FileData *GetDirFiles() {
   closedir(dir);
   return data;
 }
+
+StringVector ListDir(Arena *arena, String path) {
+  StringVector result = {0};
+  DIR *dir = opendir(path.data);
+
+  if (dir == NULL) {
+    int error = errno;
+    LogError("Directory listing failed for %s, err: %d", path.data, error);
+    return result;
+  }
+
+  struct dirent *entry;
+  while ((entry = readdir(dir)) != NULL) {
+    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+      continue;
+    }
+
+    String entryStr = StrNew(arena, entry->d_name);
+    VecPush(result, entryStr);
+  }
+
+  if (errno != 0) {
+    int error = errno;
+    LogError("Error reading directory %s, err: %d", path.data, error);
+  }
+
+  closedir(dir);
+  return result;
+}
 #  endif
 
 /* Logger Implemenation */
@@ -1813,6 +1900,132 @@ void LogInit() {
   SetConsoleMode(hOut, dwMode);
 #  endif
 }
+
+/* --- INI Parser Implementation --- */
+IniFile IniParse(String *path) {
+  IniFile result = {0};
+
+  File stats = {0};
+  errno_t err = FileStats(path, &stats);
+  if (err != SUCCESS) {
+    LogError("Error on FileStats: %d", err);
+    abort();
+  }
+  String buffer;
+  result.arena = ArenaCreate(stats.size * 4);
+  err = FileRead(result.arena, path, &buffer);
+  if (err != SUCCESS) {
+    LogError("Error on FileRead: %d", err);
+    abort();
+  }
+
+  StringVector iniSplit = StrSplitNewLine(result.arena, &buffer);
+  for (size_t i = 0; i < iniSplit.length; i++) {
+    String *currLine = VecAt(iniSplit, i);
+
+    if (currLine->length == 0 || currLine->data[0] == ';') {
+      continue;
+    }
+
+    size_t equalPos = (size_t)-1;
+    for (size_t j = 0; j < currLine->length; j++) {
+      if (currLine->data[j] == '=') {
+        equalPos = j;
+        break;
+      }
+    }
+
+    if (equalPos == (size_t)-1) {
+      continue;
+    }
+
+    String key = StrSlice(result.arena, currLine, 0, equalPos);
+    String value = StrSlice(result.arena, currLine, equalPos + 1, currLine->length);
+
+    IniEntry entry = {.key = key, .value = value};
+    VecPush(result.data, entry);
+  }
+  VecFree(iniSplit);
+
+  return result;
+}
+
+void IniFree(IniFile *iniFile) {
+  ArenaFree(iniFile->arena);
+  VecFree(iniFile->data);
+}
+
+bool IniCreate(String *path, IniFile *iniFile) {
+  FileWrite(path, &S("")); // Reset/Create file
+
+  for (size_t i = 0; i < iniFile->data.length; i++) {
+    IniEntry *entry = VecAt(iniFile->data, i);
+    String value = F(iniFile->arena, "%s=%s", entry->key.data, entry->value.data);
+    FileAdd(path, &value);
+  }
+
+  return true;
+}
+
+String IniGet(IniFile *ini, String *key) {
+  for (size_t i = 0; i < ini->data.length; i++) {
+    IniEntry *entry = VecAt(ini->data, i);
+    if (StrEqual(&entry->key, key)) {
+      return entry->value;
+    }
+  }
+
+  String empty = {0};
+  return empty;
+}
+
+String IniSet(IniFile *ini, String key, String value) {
+  for (size_t i = 0; i < ini->data.length; i++) {
+    IniEntry *entry = VecAt(ini->data, i);
+    if (StrEqual(&entry->key, &key)) {
+      entry->value = value;
+      return entry->value;
+    }
+  }
+
+  IniEntry newEntry;
+  newEntry.key = key;
+  newEntry.value = value;
+  VecPush(ini->data, newEntry);
+
+  return newEntry.value;
+}
+
+i32 IniGetInt(IniFile *ini, String *key) {
+  String value = IniGet(ini, key);
+
+  char *endPtr;
+  i32 result = (i32)strtol(value.data, &endPtr, 10);
+  if (endPtr == value.data) {
+    LogWarn("Failed to convert key: %s, value: %s, to int", key->data, value.data);
+    return 0;
+  }
+
+  return result;
+}
+
+f64 IniGetDouble(IniFile *ini, String *key) {
+  String value = IniGet(ini, key);
+
+  char *endPtr;
+  f64 result = strtod(value.data, &endPtr);
+  if (endPtr == value.data) {
+    LogWarn("Failed to convert key: %s, value: %s, to double", key->data, value.data);
+    return 0.0;
+  }
+
+  return result;
+}
+
+bool IniGetBool(IniFile *ini, String *key) {
+  String value = IniGet(ini, key);
+  return StrEqual(&value, &S("true"));
+}
 #endif
 
 #ifdef __cplusplus
@@ -1859,10 +2072,6 @@ typedef struct {
   String output;
   String flags;
   String linkerFlags;
-  // TODO: add target
-  // TODO: optimize
-  // TODO: warnings
-  // TODO: debugSymbols
   String includes;
   String libs;
   StringVector sources;
@@ -1939,8 +2148,12 @@ static void linkSystemLibraries(StringVector *vector);
 
 #define AddFile(source) addFile(S(source));
 static void addFile(String source);
+
+#define RemoveFile(source) removeFile(S(source));
+static bool removeFile(String source);
+
 String InstallExecutable();
-i32 RunCommand(String command);
+errno_t RunCommand(String command);
 void EndBuild();
 
 static bool needRebuild();
@@ -2338,14 +2551,100 @@ errno_t CreateCompileCommands() {
   return SUCCESS;
 }
 
+static bool globMatch(String pattern, String text) {
+  if (pattern.length == 1 && pattern.data[0] == '*') {
+    return true;
+  }
+
+  i32 p = 0;
+  i32 t = 0;
+  i32 starP = -1;
+  i32 starT = -1;
+  while (t < text.length) {
+    if (p < pattern.length && pattern.data[p] == text.data[t]) {
+      p++;
+      t++;
+    } else if (p < pattern.length && pattern.data[p] == '*') {
+      starP = p;
+      starT = t;
+      p++;
+    } else if (starP != -1) {
+      p = starP + 1;
+      t = ++starT;
+    } else {
+      return false;
+    }
+  }
+
+  while (p < pattern.length && pattern.data[p] == '*') {
+    p++;
+  }
+
+  return p == pattern.length;
+}
+
 static void addFile(String source) {
-  VecPush(executable.sources, source);
+  bool isGlob = false;
+  for (int i = 0; i < source.length; i++) {
+    if (source.data[i] == '*') {
+      isGlob = true;
+      break;
+    }
+  }
+
+  if (source.length < 2 || source.data[0] != '.' || source.data[1] != '/') {
+    abort();
+  }
+
+  if (source.length > 0 && source.data[source.length - 1] == '/') {
+    abort();
+  }
+
+  if (!isGlob) {
+    VecPush(executable.sources, source);
+    return;
+  }
+
+  String directory = {0};
+  i32 lastSlash = -1;
+  for (int i = 0; i < source.length; i++) {
+    if (source.data[i] == '/') {
+      lastSlash = i;
+    }
+  }
+
+  directory = StrSlice(state.arena, &source, 0, lastSlash);
+  String pattern = StrSlice(state.arena, &source, lastSlash + 1, source.length);
+
+  StringVector files = ListDir(state.arena, directory);
+  for (int i = 0; i < files.length; i++) {
+    String *file = VecAt(files, i);
+
+    if (globMatch(pattern, *file)) {
+      String finalSource = F(state.arena, "%s/%s", directory.data, file->data);
+      VecPush(executable.sources, finalSource);
+    }
+  }
+}
+
+static bool removeFile(String source) {
+  for (size_t i = 0; i < executable.sources.length; i++) {
+    String *currValue = VecAt(executable.sources, i);
+    if (StrEqual(&source, currValue)) {
+      currValue->data = NULL;
+      currValue->length = 0;
+      return true;
+    }
+  }
+  return false;
 }
 
 static StringVector outputTransformer(StringVector vector) {
   StringVector result = {0};
   for (size_t i = 0; i < vector.length; i++) {
     String *currentExecutable = VecAt(vector, i);
+    if (StrIsNull(currentExecutable)) continue;
+
     String output = S("");
     for (size_t j = currentExecutable->length - 1; j > 0; j--) {
       String currentChar = StrNewSize(state.arena, &currentExecutable->data[j], 1);
@@ -2408,11 +2707,11 @@ String InstallExecutable() {
                          compileCommand.data);
   StringVector outputFiles = outputTransformer(executable.sources);
 
-  assert(outputFiles.length == executable.sources.length && "Something went wrong in the parsing");
-
   String outputString = S("");
   for (size_t i = 0; i < executable.sources.length; i++) {
-    String sourceFile = ParsePath(state.arena, *VecAt(executable.sources, i));
+    String *currSource = VecAt(executable.sources, i);
+    if (StrIsNull(currSource)) continue;
+    String sourceFile = ParsePath(state.arena, *currSource);
     String outputFile = *VecAt(outputFiles, i);
     String source = F(state.arena, "build $builddir/%s: compile $cwd/%s\n", outputFile.data, sourceFile.data);
     ninjaOutput = StrConcat(state.arena, &ninjaOutput, &source);
