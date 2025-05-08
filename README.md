@@ -1,3 +1,9 @@
+<div align="center">
+  <img src="https://img.shields.io/github/stars/TomasBorquez/mate.h?style=flat&color=blue&label=stars" alt="Stars">
+  <img src="https://img.shields.io/github/commit-activity/t/TomasBorquez/mate.h?style=flat&color=blue&label=total%20commits" alt="Commits">
+  <img src="https://img.shields.io/github/actions/workflow/status/TomasBorquez/mate.h/run-examples.yml?style=flat&label=pipeline" alt="Pipeline">
+</div>
+
 # About
 Mate is a build system for C in C and all you need to run it is a C compiler, if you want to learn more about it check out our [examples](./examples) which should
 teach you everything you need to know to use it, here is a simple example of a `mate.c`:
