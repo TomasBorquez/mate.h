@@ -62,7 +62,6 @@ static bool newline(struct scanner *s) {
   switch (s->chr) {
   case '\r':
     if (next(s) != '\n') scanerror(s, "expected '\\n' after '\\r'");
-    /* fallthrough */
   case '\n':
     next(s);
     return true;
@@ -112,7 +111,6 @@ static void name(struct scanner *s) {
 }
 
 int scankeyword(struct scanner *s, char **var) {
-  /* must stay in sorted order */
   static const struct {
     const char *name;
     int value;
@@ -226,7 +224,6 @@ struct evalstring *scanstring(struct scanner *s, bool path) {
     case '|':
     case ' ':
       if (path) goto out;
-      /* fallthrough */
     default:
       bufadd(&buf, s->chr);
       next(s);

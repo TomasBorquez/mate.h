@@ -57,11 +57,6 @@ int64_t osmtime(const char *name) {
   } else {
 #ifdef __APPLE__
     return (int64_t)st.st_mtime * 1000000000 + st.st_mtimensec;
-/*
-Illumos hides the members of st_mtim when you define _POSIX_C_SOURCE
-since it has not been updated to support POSIX.1-2008:
-https://www.illumos.org/issues/13327
-*/
 #elif defined(__sun)
     return (int64_t)st.st_mtim.__tv_sec * 1000000000 + st.st_mtim.__tv_nsec;
 #else

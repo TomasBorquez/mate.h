@@ -28,7 +28,6 @@ static void delrule(void *);
 void envinit(void) {
   struct environment *env;
 
-  /* free old environments and pools in case we rebuilt the manifest */
   while (allenvs) {
     env = allenvs;
     allenvs = env->allnext;

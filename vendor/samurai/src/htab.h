@@ -1,4 +1,4 @@
-#include <stdint.h> /* for uint64_t */
+#include <stdint.h>
 // --- INCLUDES END ---
 
 struct hashtablekey {

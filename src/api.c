@@ -73,23 +73,48 @@ void CreateConfig(MateOptions options) {
   state.customConfig = true;
 }
 
-errno_t readCache() {
-  String cache = {0};
-  String mateCachePath = F(state.arena, "%s/mate-cache.json", state.buildDirectory.data);
-  errno_t err = FileRead(state.arena, &mateCachePath, &cache);
+static void readCache() {
+  String mateCachePath = F(state.arena, "%s/mate-cache.ini", state.buildDirectory.data);
+  state.cache = IniParse(&mateCachePath);
 
-  if (err == FILE_NOT_EXIST) {
-    String modifyTime = F(state.arena, "%llu", TimeNow() / 1000);
-    FileWrite(&mateCachePath, &modifyTime);
-    state.mateCache.firstBuild = true;
-    cache = modifyTime;
-  } else if (err != SUCCESS) {
-    return err;
+  i32 modifyTime = IniGetInt(&state.cache, &S("modify-time"));
+  if (modifyTime == 0) {
+    state.firstBuild = true;
+    state.mateCache.lastBuild = TimeNow() / 1000;
+    String modifyTime = F(state.arena, "%d", state.mateCache.lastBuild);
+    IniSet(&state.cache, S("modify-time"), modifyTime);
+  } else {
+    state.mateCache.lastBuild = modifyTime;
   }
 
-  char *endptr;
-  state.mateCache.lastBuild = strtoll(cache.data, &endptr, 10);
-  return SUCCESS;
+  state.mateCache.samuraiBuild = IniGetBool(&state.cache, &S("samurai-build"));
+#if !defined(PLATFORM_WIN)
+  if (state.mateCache.samuraiBuild == false) {
+    String samuraiAmalgam = s(SAMURAI_AMALGAM);
+    String sourcePath = F(state.arena, "%s/samurai.c", state.buildDirectory.data);
+    FileWrite(&sourcePath, &samuraiAmalgam);
+
+    String compileCommand;
+    String outputPath = F(state.arena, "%s/samurai", state.buildDirectory.data);
+    if (StrEqual(&state.compiler, &S("gcc"))) {
+      compileCommand = F(state.arena, "gcc \"%s\" -o \"%s\" -lrt -std=c99 -O2", sourcePath.data, outputPath.data);
+    }
+    if (StrEqual(&state.compiler, &S("clang"))) {
+      compileCommand = F(state.arena, "clang \"%s\" -o \"%s\" -lrt -std=c99 -O2", sourcePath.data, outputPath.data);
+    }
+    errno_t err = RunCommand(compileCommand);
+    if (err != SUCCESS) {
+      LogError("Error meanwhile compiling samurai at %s, if you are seeing this please make an issue at github.com/TomasBorquez/mate.h", sourcePath.data);
+      abort();
+    }
+
+    LogSuccess("Successfully compiled samurai");
+    state.mateCache.samuraiBuild = true;
+    IniSet(&state.cache, S("samurai-build"), S("true"));
+  }
+#endif
+
+  IniWrite(&mateCachePath, &state.cache);
 }
 
 void StartBuild() {
@@ -114,9 +139,10 @@ static bool needRebuild() {
   }
 
   if (stats.modifyTime > state.mateCache.lastBuild) {
-    String mateCachePath = F(state.arena, "%s/mate-cache.json", state.buildDirectory.data);
+    String mateCachePath = F(state.arena, "%s/mate-cache.ini", state.buildDirectory.data);
     String modifyTime = F(state.arena, "%llu", stats.modifyTime);
-    FileWrite(&mateCachePath, &modifyTime);
+    IniSet(&state.cache, S("modify-time"), modifyTime);
+    IniWrite(&mateCachePath, &state.cache);
     return true;
   }
 
@@ -124,7 +150,7 @@ static bool needRebuild() {
 }
 
 void reBuild() {
-  if (state.mateCache.firstBuild || !needRebuild()) {
+  if (state.firstBuild || !needRebuild()) {
     return;
   }
 
@@ -134,15 +160,15 @@ void reBuild() {
 
   String compileCommand;
   if (StrEqual(&state.compiler, &S("gcc"))) {
-    compileCommand = F(state.arena, "gcc -o \"%s\" -Wall -g \"%s\"", mateExeNew.data, state.mateSource.data);
+    compileCommand = F(state.arena, "gcc \"%s\" -o \"%s\"", state.mateSource.data, mateExeNew.data);
   }
 
   if (StrEqual(&state.compiler, &S("clang"))) {
-    compileCommand = F(state.arena, "clang -o \"%s\" -Wall -g \"%s\"", mateExeNew.data, state.mateSource.data);
+    compileCommand = F(state.arena, "clang \"%s\" -o \"%s\"", state.mateSource.data, mateExeNew.data);
   }
 
   if (StrEqual(&state.compiler, &S("MSVC"))) {
-    compileCommand = F(state.arena, "cl.exe /Fe:\"%s\" /W4 /Zi \"%s\"", mateExeNew.data, state.mateSource.data);
+    compileCommand = F(state.arena, "cl.exe \"%s\" /Fe:\"%s\"", state.mateSource.data, mateExeNew.data);
   }
 
   LogWarn("%s changed rebuilding...", state.mateSource.data);
@@ -363,7 +389,13 @@ errno_t CreateCompileCommands() {
     return 1;
   }
 
-  String compdbCommand = ConvertPath(state.arena, F(state.arena, "ninja -f %s/build.ninja -t compdb", state.buildDirectory.data));
+  String compdbCommand;
+  if (state.mateCache.samuraiBuild) {
+    String samuraiOutputPath = F(state.arena, "%s/samurai", state.buildDirectory.data);
+    compdbCommand = ConvertPath(state.arena, F(state.arena, "%s -f %s/build.ninja -t compdb", samuraiOutputPath.data, state.buildDirectory.data));
+  } else {
+    compdbCommand = ConvertPath(state.arena, F(state.arena, "ninja -f %s/build.ninja -t compdb", state.buildDirectory.data));
+  }
 
   ninjaPipe = popen(compdbCommand.data, "r");
   if (ninjaPipe == NULL) {
@@ -564,7 +596,14 @@ String InstallExecutable() {
   String buildNinjaPath = F(state.arena, "%s/build.ninja", state.buildDirectory.data);
   FileWrite(&buildNinjaPath, &ninjaOutput);
 
-  errno_t result = RunCommand(F(state.arena, "ninja -f %s", buildNinjaPath.data));
+  errno_t result;
+  if (state.mateCache.samuraiBuild) {
+    String samuraiOutputPath = F(state.arena, "%s/samurai", state.buildDirectory.data);
+    result = RunCommand(F(state.arena, "%s -f %s", samuraiOutputPath.data, buildNinjaPath.data));
+  } else {
+    result = RunCommand(F(state.arena, "ninja -f %s", buildNinjaPath.data));
+  }
+
   if (result != 0) {
     LogError("Ninja file compilation failed with code: %d", result);
     abort();

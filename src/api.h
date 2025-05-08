@@ -20,8 +20,8 @@
    Guide on the `README.md`
 */
 typedef struct {
-  i64 lastBuild;
-  bool firstBuild;
+  i32 lastBuild;
+  bool samuraiBuild;
 } MateCache;
 
 typedef struct {
@@ -41,6 +41,8 @@ typedef struct {
 
   // Cache
   MateCache mateCache;
+  IniFile cache;
+  bool firstBuild;
 
   // Misc
   Arena *arena;
@@ -139,6 +141,8 @@ void EndBuild();
 
 static bool needRebuild();
 static void setDefaultState();
+
+#define SAMURAI_AMALGAM "SAMURAI SOURCE"
 
 // NOTE: Here goes MATE_IMPLEMENTATION
 // --- MATE.H END ---

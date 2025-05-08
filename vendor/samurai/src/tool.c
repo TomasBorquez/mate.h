@@ -108,7 +108,6 @@ static int clean(int argc, char *argv[]) {
   return ret;
 }
 
-/* depth-first traversal */
 static void targetcommands(struct node *n) {
   struct edge *e = n->gen;
   struct string *command;

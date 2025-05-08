@@ -198,22 +198,18 @@ argdone:
 
   tries = 0;
 retry:
-  /* (re-)initialize global graph, environment, and parse structures */
   graphinit();
   envinit();
   parseinit();
 
-  /* parse the manifest */
   parse(manifest, rootenv);
 
   if (tool) return tool->run(argc, argv);
 
-  /* load the build log */
   builddir = getbuilddir();
   loginit(builddir);
   depsinit(builddir);
 
-  /* rebuild the manifest if it's dirty */
   n = nodeget(manifest, 0);
   if (n && n->gen) {
     buildadd(n);
@@ -223,12 +219,10 @@ retry:
         if (++tries > 100) fatal("manifest '%s' dirty after 100 tries", manifest);
         if (!buildopts.dryrun) goto retry;
       }
-      /* manifest was pruned; reset state, then continue with build */
       buildreset();
     }
   }
 
-  /* finally, build any specified targets or the default targets */
   if (argc) {
     for (; *argv; ++argv) {
       n = nodeget(*argv, 0);

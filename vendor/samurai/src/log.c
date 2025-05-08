@@ -65,24 +65,22 @@ void loginit(const char *builddir) {
     ++nline;
     p = buf.data;
     buf.len = 0;
-    if (!nextfield(&p)) /* start time */
-      continue;
-    if (!nextfield(&p)) /* end time */
-      continue;
-    s = nextfield(&p); /* mtime (used for restat) */
+    if (!nextfield(&p)) continue;
+    if (!nextfield(&p)) continue;
+    s = nextfield(&p);
     if (!s) continue;
     mtime = strtoll(s, &s, 10);
     if (*s) {
       warn("corrupt build log: invalid mtime");
       continue;
     }
-    s = nextfield(&p); /* output path */
+    s = nextfield(&p);
     if (!s) continue;
     n = nodeget(s, 0);
     if (!n || !n->gen) continue;
     if (n->logmtime == MTIME_MISSING) ++nentry;
     n->logmtime = mtime;
-    s = nextfield(&p); /* command hash */
+    s = nextfield(&p);
     if (!s) continue;
     n->hash = strtoull(s, &s, 16);
     if (*s) {
