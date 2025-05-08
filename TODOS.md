@@ -4,11 +4,11 @@
 - [x] Full Linux support.
 - [x] `FLAG_DEBUG` -g3 rather than -g *when supported* since -g3 generates more information.
 - [x] Add glob pattern on `AddFile` using `ListDirectory`.
-- [ ] Switch to samurai instead of ninja files (for now only bootstrap on linux).
-- [ ] Actually parse `mate-cache.ini`.
+- [x] Switch to samurai instead of ninja files (for now only bootstrap on linux).
+- [x] Actually parse `mate-cache.ini`.
+- [x] Add `TCC` support
 - [ ] Different targets apart from `executables` such as static libs, dynamic libs, depending on platform.
 - [ ] Full `MSVC` support.
-- [ ] Add `TCC` support (when GNU extensions removed on `base.h`).
 - [ ] `clang-formatter` as a github action.
 - [ ] Add better error messages, eg. if someone doesnt use `StartBuild` before creating executable.
 

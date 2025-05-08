@@ -37,7 +37,7 @@ i32 main() {
 
     String exePath = InstallExecutable();
     errno_t err = RunCommand(exePath);
-    result = err == SAMU_NO_SUCH_FILE_OR_DIR ? 0 : 1; // NOTE: "samu: open build.ninja: No such file or directory"
+    result = err == SAMU_NO_SUCH_FILE_OR_DIR ? SUCCESS : 1; // NOTE: "samu: open build.ninja: No such file or directory"
   }
   EndBuild();
 

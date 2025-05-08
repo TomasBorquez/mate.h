@@ -2,7 +2,7 @@
 #include "../../mate.h"
 
 i32 main() {
-  errno_t result = 0;
+  errno_t result = SUCCESS;
 
   StartBuild();
   {
@@ -17,10 +17,10 @@ i32 main() {
     // Compiles all files parallely
     String exePath = InstallExecutable();
 
-    // Runs `./build/main.exe` or whatever your main file is
+    // Runs `./build/main`
     result = RunCommand(exePath);
   }
   EndBuild();
 
-  return result; // returns resul of running executable, 0 is success
+  return result; // result of running executable, 0 is success
 }
