@@ -16,7 +16,7 @@
 /* MIT License
 
   base.h - Better cross-platform STD
-  Version - 2025-05-08 (0.1.14):
+  Version - 2025-05-08 (0.1.15):
   https://github.com/TomasBorquez/base.h
 
   Usage:
@@ -37,8 +37,10 @@ extern "C" {
 #  define COMPILER_MSVC
 #elif defined(__GNUC__)
 #  define COMPILER_GCC
+#elif defined(__TINYC__)
+#  define COMPILER_TCC
 #else
-#  error "The codebase only supports Clang, MSVC and GCC. TCC soon"
+#  error "The codebase only supports GCC, Clang, TCC and MSVC"
 #endif
 
 #ifdef __GNUC__
@@ -57,8 +59,10 @@ extern "C" {
 #  define PLATFORM_WIN
 #elif defined(__linux__) || defined(__gnu_linux__)
 #  define PLATFORM_LINUX
+#elif defined(__APPLE__) || defined(__MACH__)
+#  define PLATFORM_MACOS
 #else
-#  error "The codebase only supports windows and linux, macos soon"
+#  error "The codebase only supports linux, macos and windows"
 #endif
 
 #if defined(COMPILER_CLANG)
@@ -70,7 +74,7 @@ extern "C" {
 #if defined(PLATFORM_WIN)
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
-#elif defined(PLATFORM_LINUX)
+#else
 #  define _POSIX_C_SOURCE 200809L
 #  define _GNU_SOURCE
 #  include <dirent.h>
@@ -94,7 +98,7 @@ extern "C" {
 #    define C_STANDARD_C99
 #    define C_STANDARD "C99"
 #  else
-#    error "you are cooked" // ???
+#    error "Why C89 if you have C99"
 #  endif
 #endif
 
@@ -109,7 +113,7 @@ extern "C" {
 #    define C_STANDARD_C11
 #    define C_STANDARD "C11"
 #  else
-#    error "you are cooked" // ???
+#    error "How did you even get here?? Send an issue on github/TomasBorquez/mate.h"
 #  endif
 #endif
 
@@ -622,6 +626,8 @@ String GetCompiler() {
   return S("clang");
 #  elif defined(COMPILER_GCC)
   return S("gcc");
+#  elif defined(COMPILER_TCC)
+  return S("tcc");
 #  elif defined(COMPILER_MSVC)
   return S("MSVC");
 #  endif
@@ -632,6 +638,8 @@ String GetPlatform() {
   return S("windows");
 #  elif defined(PLATFORM_LINUX)
   return S("linux");
+#  elif defined(PLATFORM_MACOS)
+  return S("macos");
 #  endif
 }
 
@@ -1133,7 +1141,7 @@ f32 RandomFloat(f32 min, f32 max) {
 /* File System Implementation */
 #  if defined(PLATFORM_WIN)
 char *GetCwd() {
-  static _Thread_local char currentPath[MAX_PATH];
+  static char currentPath[MAX_PATH];
   DWORD length = GetCurrentDirectory(MAX_PATH, currentPath);
   if (length == 0) {
     LogError("Error getting current directory: %lu", GetLastError());
@@ -1506,9 +1514,9 @@ StringVector ListDir(Arena *arena, String path) {
   FindClose(hFind);
   return result;
 }
-#  elif defined(PLATFORM_LINUX)
+#  else
 char *GetCwd() {
-  static _Thread_local char currentPath[PATH_MAX];
+  static char currentPath[PATH_MAX];
   if (getcwd(currentPath, PATH_MAX) == NULL) {
     LogError("Error getting current directory: %s", strerror(errno));
     currentPath[0] = '\0';
@@ -2191,6 +2199,12 @@ static bool needRebuild();
 static void setDefaultState();
 
 // --- SAMURAI START ---
+/*
+* This code comes from Samurai (https://github.com/michaelforney/samurai)
+* Copyright © 2017-2021 Michael Forney
+* Licensed under ISC license, with portions under Apache License 2.0 and MIT licenses.
+* See LICENSE-SAMURAI.txt for the full license text.
+*/
 #define SAMURAI_AMALGAM "#define _POSIX_C_SOURCE 200809L\n"  \
             "#include <errno.h>\n"\
             "#include <fcntl.h>\n"\
@@ -2203,7 +2217,6 @@ static void setDefaultState();
             "#include <assert.h>\n"\
             "#include <stdarg.h>\n"\
             "#include <string.h>\n"\
-            "\n"\
             "#include <sys/stat.h>\n"\
             "#include <poll.h>\n"\
             "#include <signal.h>\n"\
@@ -2211,102 +2224,72 @@ static void setDefaultState();
             "#include <sys/wait.h>\n"\
             "#include <time.h>\n"\
             "#include <unistd.h>\n"\
-            "\n"\
             "struct node;\n"\
-            "\n"\
             "struct buildoptions {\n"\
             "  size_t maxjobs, maxfail;\n"\
             "  _Bool verbose, explain, keepdepfile, keeprsp, dryrun;\n"\
             "  const char *statusfmt;\n"\
             "  double maxload;\n"\
             "};\n"\
-            "\n"\
             "extern struct buildoptions buildopts;\n"\
-            "\n"\
             "void buildreset(void);\n"\
             "void buildadd(struct node *);\n"\
             "void build(void);\n"\
-            "\n"\
             "struct edge;\n"\
-            "\n"\
             "void depsinit(const char *);\n"\
             "void depsclose(void);\n"\
             "void depsload(struct edge *);\n"\
             "void depsrecord(struct edge *);\n"\
-            "\n"\
             "struct evalstring;\n"\
             "struct string;\n"\
-            "\n"\
             "struct rule {\n"\
             "  char *name;\n"\
             "  struct treenode *bindings;\n"\
             "};\n"\
-            "\n"\
             "struct pool {\n"\
             "  char *name;\n"\
             "  int numjobs, maxjobs;\n"\
-            "\n"\
             "  struct edge *work;\n"\
             "};\n"\
-            "\n"\
             "void envinit(void);\n"\
-            "\n"\
             "struct environment *mkenv(struct environment *);\n"\
             "struct string *envvar(struct environment *, char *);\n"\
             "void envaddvar(struct environment *, char *, struct string *);\n"\
             "struct string *enveval(struct environment *, struct evalstring *);\n"\
             "struct rule *envrule(struct environment *, char *);\n"\
             "void envaddrule(struct environment *, struct rule *);\n"\
-            "\n"\
             "struct rule *mkrule(char *);\n"\
             "void ruleaddvar(struct rule *, char *, struct evalstring *);\n"\
-            "\n"\
             "struct pool *mkpool(char *);\n"\
             "struct pool *poolget(char *);\n"\
-            "\n"\
             "struct string *edgevar(struct edge *, char *, _Bool);\n"\
-            "\n"\
             "extern struct environment *rootenv;\n"\
             "extern struct rule phonyrule;\n"\
             "extern struct pool consolepool;\n"\
-            "\n"\
-            "\n"\
             "enum {\n"\
             "  MTIME_UNKNOWN = -1,\n"\
             "  MTIME_MISSING = -2,\n"\
             "};\n"\
-            "\n"\
             "struct node {\n"\
             "  struct string *path, *shellpath;\n"\
-            "\n"\
             "  int64_t mtime, logmtime;\n"\
-            "\n"\
             "  struct edge *gen, **use;\n"\
             "  size_t nuse;\n"\
-            "\n"\
             "  uint64_t hash;\n"\
-            "\n"\
             "  int32_t id;\n"\
-            "\n"\
             "  _Bool dirty;\n"\
             "};\n"\
-            "\n"\
             "struct edge {\n"\
             "  struct rule *rule;\n"\
             "  struct pool *pool;\n"\
             "  struct environment *env;\n"\
-            "\n"\
             "  struct node **out, **in;\n"\
             "  size_t nout, nin;\n"\
-            "\n"\
             "  size_t outimpidx;\n"\
             "  size_t inimpidx, inorderidx;\n"\
-            "\n"\
             "  uint64_t hash;\n"\
-            "\n"\
             "  size_t nblock;\n"\
             "  size_t nprune;\n"\
-            "\n"\
             "  enum {\n"\
             "    FLAG_WORK = 1 << 0,\n"\
             "    FLAG_HASH = 1 << 1,\n"\
@@ -2316,68 +2299,48 @@ static void setDefaultState();
             "    FLAG_CYCLE = 1 << 5,\n"\
             "    FLAG_DEPS = 1 << 6,\n"\
             "  } flags;\n"\
-            "\n"\
             "  struct edge *worknext;\n"\
             "  struct edge *allnext;\n"\
             "};\n"\
-            "\n"\
             "void graphinit(void);\n"\
-            "\n"\
             "struct node *mknode(struct string *);\n"\
             "struct node *nodeget(const char *, size_t);\n"\
             "void nodestat(struct node *);\n"\
             "struct string *nodepath(struct node *, _Bool);\n"\
             "void nodeuse(struct node *, struct edge *);\n"\
-            "\n"\
             "struct edge *mkedge(struct environment *parent);\n"\
             "void edgehash(struct edge *);\n"\
             "void edgeadddeps(struct edge *e, struct node **deps, size_t ndeps);\n"\
-            "\n"\
             "extern struct edge *alledges;\n"\
-            "\n"\
-            "\n"\
             "struct hashtablekey {\n"\
             "  uint64_t hash;\n"\
             "  const char *str;\n"\
             "  size_t len;\n"\
             "};\n"\
-            "\n"\
             "void htabkey(struct hashtablekey *, const char *, size_t);\n"\
-            "\n"\
             "struct hashtable *mkhtab(size_t);\n"\
             "void delhtab(struct hashtable *, void(void *));\n"\
             "void **htabput(struct hashtable *, struct hashtablekey *);\n"\
             "void *htabget(struct hashtable *, struct hashtablekey *);\n"\
-            "\n"\
             "uint64_t murmurhash64a(const void *, size_t);\n"\
-            "\n"\
             "struct node;\n"\
-            "\n"\
             "void loginit(const char *);\n"\
             "void logclose(void);\n"\
             "void logrecord(struct node *);\n"\
-            "\n"\
             "struct environment;\n"\
             "struct node;\n"\
-            "\n"\
             "struct parseoptions {\n"\
             "  _Bool dupbuildwarn;\n"\
             "};\n"\
-            "\n"\
             "void parseinit(void);\n"\
             "void parse(const char *, struct environment *);\n"\
-            "\n"\
             "extern struct parseoptions parseopts;\n"\
-            "\n"\
             "enum {\n"\
             "  ninjamajor = 1,\n"\
             "  ninjaminor = 9,\n"\
             "};\n"\
-            "\n"\
             "void defaultnodes(void(struct node *));\n"\
-            "\n"\
             "extern const char *argv0;\n"\
-            "\n"\
             "#define ARGBEGIN                                                         \\\n"\
             "  for (;;) {                                                             \\\n"\
             "    if (argc > 0) ++argv, --argc;                                        \\\n"\
@@ -2388,13 +2351,10 @@ static void setDefaultState();
             "    }                                                                    \\\n"\
             "    for (char *opt_ = &(*argv)[1], done_ = 0; !done_ && *opt_; ++opt_) { \\\n"\
             "      switch (*opt_)\n"\
-            "\n"\
             "#define ARGEND \\\n"\
             "  }            \\\n"\
             "  }\n"\
-            "\n"\
             "#define EARGF(x) (done_ = 1, *++opt_ ? opt_ : argv[1] ? --argc, *++argv : ((x), abort(), (char *)0))\n"\
-            "\n"\
             "enum token {\n"\
             "  BUILD,\n"\
             "  DEFAULT,\n"\
@@ -2404,19 +2364,15 @@ static void setDefaultState();
             "  SUBNINJA,\n"\
             "  VARIABLE,\n"\
             "};\n"\
-            "\n"\
             "struct scanner {\n"\
             "  FILE *f;\n"\
             "  const char *path;\n"\
             "  int chr, line, col;\n"\
             "};\n"\
-            "\n"\
             "extern struct evalstring **paths;\n"\
             "extern size_t npaths;\n"\
-            "\n"\
             "void scaninit(struct scanner *, const char *);\n"\
             "void scanclose(struct scanner *);\n"\
-            "\n"\
             "void scanerror(struct scanner *, const char *, ...);\n"\
             "int scankeyword(struct scanner *, char **);\n"\
             "char *scanname(struct scanner *);\n"\
@@ -2426,70 +2382,50 @@ static void setDefaultState();
             "int scanpipe(struct scanner *, int);\n"\
             "_Bool scanindent(struct scanner *);\n"\
             "void scannewline(struct scanner *);\n"\
-            "\n"\
             "struct tool {\n"\
             "  const char *name;\n"\
             "  int (*run)(int, char *[]);\n"\
             "};\n"\
-            "\n"\
             "const struct tool *toolget(const char *);\n"\
-            "\n"\
-            "\n"\
             "struct treenode {\n"\
             "  char *key;\n"\
             "  void *value;\n"\
             "  struct treenode *child[2];\n"\
             "  int height;\n"\
             "};\n"\
-            "\n"\
             "void deltree(struct treenode *, void(void *), void(void *));\n"\
             "struct treenode *treefind(struct treenode *, const char *);\n"\
             "void *treeinsert(struct treenode **, char *, void *);\n"\
-            "\n"\
-            "\n"\
             "struct buffer {\n"\
             "  char *data;\n"\
             "  size_t len, cap;\n"\
             "};\n"\
-            "\n"\
             "struct string {\n"\
             "  size_t n;\n"\
             "  char s[];\n"\
             "};\n"\
-            "\n"\
             "struct evalstring {\n"\
             "  char *var;\n"\
             "  struct string *str;\n"\
             "  struct evalstring *next;\n"\
             "};\n"\
-            "\n"\
             "#define LEN(a) (sizeof(a) / sizeof((a)[0]))\n"\
-            "\n"\
             "void warn(const char *, ...);\n"\
             "void fatal(const char *, ...);\n"\
-            "\n"\
             "void *xmalloc(size_t);\n"\
             "void *xreallocarray(void *, size_t, size_t);\n"\
             "char *xmemdup(const char *, size_t);\n"\
             "int xasprintf(char **, const char *, ...);\n"\
-            "\n"\
             "void bufadd(struct buffer *buf, char c);\n"\
-            "\n"\
             "struct string *mkstr(size_t n);\n"\
-            "\n"\
             "void delevalstr(void *);\n"\
-            "\n"\
             "void canonpath(struct string *);\n"\
             "int writefile(const char *, struct string *);\n"\
-            "\n"\
             "struct string;\n"\
-            "\n"\
             "void osgetcwd(char *, size_t);\n"\
             "void oschdir(const char *);\n"\
             "int osmkdirs(struct string *, _Bool);\n"\
             "int64_t osmtime(const char *);\n"\
-            "\n"\
-            "\n"\
             "struct job {\n"\
             "  struct string *cmd;\n"\
             "  struct edge *edge;\n"\
@@ -2499,27 +2435,21 @@ static void setDefaultState();
             "  int fd;\n"\
             "  bool failed;\n"\
             "};\n"\
-            "\n"\
             "struct buildoptions buildopts = {.maxfail = 1};\n"\
             "static struct edge *work;\n"\
             "static size_t nstarted, nfinished, ntotal;\n"\
             "static bool consoleused;\n"\
             "static struct timespec starttime;\n"\
-            "\n"\
             "void buildreset(void) {\n"\
             "  struct edge *e;\n"\
-            "\n"\
             "  for (e = alledges; e; e = e->allnext)\n"\
             "    e->flags &= ~FLAG_WORK;\n"\
             "}\n"\
-            "\n"\
             "static bool isnewer(struct node *n1, struct node *n2) {\n"\
             "  return n1 && n1->mtime > n2->mtime;\n"\
             "}\n"\
-            "\n"\
             "static bool isdirty(struct node *n, struct node *newest, bool generator, bool restat) {\n"\
             "  struct edge *e;\n"\
-            "\n"\
             "  e = n->gen;\n"\
             "  if (e->rule == &phonyrule) {\n"\
             "    if (e->nin > 0 || n->mtime != MTIME_MISSING) return false;\n"\
@@ -2553,10 +2483,8 @@ static void setDefaultState();
             "  if (buildopts.explain) warn(\"explain %s: command line changed\", n->path->s);\n"\
             "  return true;\n"\
             "}\n"\
-            "\n"\
             "static void queue(struct edge *e) {\n"\
             "  struct edge **front = &work;\n"\
-            "\n"\
             "  if (e->pool && e->rule != &phonyrule) {\n"\
             "    if (e->pool->numjobs == e->pool->maxjobs) front = &e->pool->work;\n"\
             "    else ++e->pool->numjobs;\n"\
@@ -2564,13 +2492,11 @@ static void setDefaultState();
             "  e->worknext = *front;\n"\
             "  *front = e;\n"\
             "}\n"\
-            "\n"\
             "void buildadd(struct node *n) {\n"\
             "  struct edge *e;\n"\
             "  struct node *newest;\n"\
             "  size_t i;\n"\
             "  bool generator, restat;\n"\
-            "\n"\
             "  e = n->gen;\n"\
             "  if (!e) {\n"\
             "    if (n->mtime == MTIME_UNKNOWN) nodestat(n);\n"\
@@ -2624,13 +2550,11 @@ static void setDefaultState();
             "  }\n"\
             "  e->flags &= ~FLAG_CYCLE;\n"\
             "}\n"\
-            "\n"\
             "static size_t formatstatus(char *buf, size_t len) {\n"\
             "  const char *fmt;\n"\
             "  size_t ret = 0;\n"\
             "  int n;\n"\
             "  struct timespec endtime;\n"\
-            "\n"\
             "  for (fmt = buildopts.statusfmt; *fmt; ++fmt) {\n"\
             "    if (*fmt != '%' || *++fmt == '%') {\n"\
             "      if (len > 1) {\n"\
@@ -2687,18 +2611,15 @@ static void setDefaultState();
             "  if (len > 0) *buf = '\\0';\n"\
             "  return ret;\n"\
             "}\n"\
-            "\n"\
             "static void printstatus(struct edge *e, struct string *cmd) {\n"\
             "  struct string *description;\n"\
             "  char status[256];\n"\
-            "\n"\
             "  description = buildopts.verbose ? NULL : edgevar(e, \"description\", true);\n"\
             "  if (!description || description->n == 0) description = cmd;\n"\
             "  formatstatus(status, sizeof(status));\n"\
             "  fputs(status, stdout);\n"\
             "  puts(description->s);\n"\
             "}\n"\
-            "\n"\
             "static int jobstart(struct job *j, struct edge *e) {\n"\
             "  extern char **environ;\n"\
             "  size_t i;\n"\
@@ -2707,7 +2628,6 @@ static void setDefaultState();
             "  int fd[2];\n"\
             "  posix_spawn_file_actions_t actions;\n"\
             "  char *argv[] = {\"/bin/sh\", \"-c\", NULL, NULL};\n"\
-            "\n"\
             "  ++nstarted;\n"\
             "  for (i = 0; i < e->nout; ++i) {\n"\
             "    n = e->out[i];\n"\
@@ -2720,7 +2640,6 @@ static void setDefaultState();
             "    content = edgevar(e, \"rspfile_content\", true);\n"\
             "    if (writefile(rspfile->s, content) < 0) goto err0;\n"\
             "  }\n"\
-            "\n"\
             "  if (pipe(fd) < 0) {\n"\
             "    warn(\"pipe:\");\n"\
             "    goto err1;\n"\
@@ -2729,9 +2648,7 @@ static void setDefaultState();
             "  j->cmd = edgevar(e, \"command\", true);\n"\
             "  j->fd = fd[0];\n"\
             "  argv[2] = j->cmd->s;\n"\
-            "\n"\
             "  if (!consoleused) printstatus(e, j->cmd);\n"\
-            "\n"\
             "  if ((errno = posix_spawn_file_actions_init(&actions))) {\n"\
             "    warn(\"posix_spawn_file_actions_init:\");\n"\
             "    goto err2;\n"\
@@ -2766,9 +2683,7 @@ static void setDefaultState();
             "  close(fd[1]);\n"\
             "  j->failed = false;\n"\
             "  if (e->pool == &consolepool) consoleused = true;\n"\
-            "\n"\
             "  return j->fd;\n"\
-            "\n"\
             "err3:\n"\
             "  posix_spawn_file_actions_destroy(&actions);\n"\
             "err2:\n"\
@@ -2779,11 +2694,9 @@ static void setDefaultState();
             "err0:\n"\
             "  return -1;\n"\
             "}\n"\
-            "\n"\
             "static void nodedone(struct node *n, bool prune) {\n"\
             "  struct edge *e;\n"\
             "  size_t i, j;\n"\
-            "\n"\
             "  for (i = 0; i < n->nuse; ++i) {\n"\
             "    e = n->use[i];\n"\
             "    if (!(e->flags & FLAG_WORK)) continue;\n"\
@@ -2796,11 +2709,9 @@ static void setDefaultState();
             "    }\n"\
             "  }\n"\
             "}\n"\
-            "\n"\
             "static bool shouldprune(struct edge *e, struct node *n, int64_t old) {\n"\
             "  struct node *in, *newest;\n"\
             "  size_t i;\n"\
-            "\n"\
             "  if (old != n->mtime) return false;\n"\
             "  newest = NULL;\n"\
             "  for (i = 0; i < e->inorderidx; ++i) {\n"\
@@ -2809,17 +2720,14 @@ static void setDefaultState();
             "    if (in->mtime != MTIME_MISSING && !isnewer(newest, in)) newest = in;\n"\
             "  }\n"\
             "  if (newest) n->logmtime = newest->mtime;\n"\
-            "\n"\
             "  return true;\n"\
             "}\n"\
-            "\n"\
             "static void edgedone(struct edge *e) {\n"\
             "  struct node *n;\n"\
             "  size_t i;\n"\
             "  struct string *rspfile;\n"\
             "  bool restat;\n"\
             "  int64_t old;\n"\
-            "\n"\
             "  restat = edgevar(e, \"restat\", true);\n"\
             "  for (i = 0; i < e->nout; ++i) {\n"\
             "    n = e->out[i];\n"\
@@ -2838,12 +2746,10 @@ static void setDefaultState();
             "    logrecord(n);\n"\
             "  }\n"\
             "}\n"\
-            "\n"\
             "static void jobdone(struct job *j) {\n"\
             "  int status;\n"\
             "  struct edge *e, *new;\n"\
             "  struct pool *p;\n"\
-            "\n"\
             "  ++nfinished;\n"\
             "  if (waitpid(j->pid, &status, 0) < 0) {\n"\
             "    warn(\"waitpid %d:\", j->pid);\n"\
@@ -2866,7 +2772,6 @@ static void setDefaultState();
             "  e = j->edge;\n"\
             "  if (e->pool) {\n"\
             "    p = e->pool;\n"\
-            "\n"\
             "    if (p == &consolepool) consoleused = false;\n"\
             "    if (p->work) {\n"\
             "      new = p->work;\n"\
@@ -2879,12 +2784,10 @@ static void setDefaultState();
             "  }\n"\
             "  if (!j->failed) edgedone(e);\n"\
             "}\n"\
-            "\n"\
             "static bool jobwork(struct job *j) {\n"\
             "  char *newdata;\n"\
             "  size_t newcap;\n"\
             "  ssize_t n;\n"\
-            "\n"\
             "  if (j->buf.cap - j->buf.len < BUFSIZ / 2) {\n"\
             "    newcap = j->buf.cap + BUFSIZ;\n"\
             "    newdata = realloc(j->buf.data, newcap);\n"\
@@ -2902,45 +2805,36 @@ static void setDefaultState();
             "  }\n"\
             "  if (n == 0) goto done;\n"\
             "  warn(\"read:\");\n"\
-            "\n"\
             "kill:\n"\
             "  kill(j->pid, SIGTERM);\n"\
             "  j->failed = true;\n"\
             "done:\n"\
             "  jobdone(j);\n"\
-            "\n"\
             "  return false;\n"\
             "}\n"\
-            "\n"\
             "static double queryload(void) {\n"\
             "#ifdef HAVE_GETLOADAVG\n"\
             "  double load;\n"\
-            "\n"\
             "  if (getloadavg(&load, 1) == -1) {\n"\
             "    warn(\"getloadavg:\");\n"\
             "    load = 100.0;\n"\
             "  }\n"\
-            "\n"\
             "  return load;\n"\
             "#else\n"\
             "  return 0;\n"\
             "#endif\n"\
             "}\n"\
-            "\n"\
             "void build(void) {\n"\
             "  struct job *jobs = NULL;\n"\
             "  struct pollfd *fds = NULL;\n"\
             "  size_t i, next = 0, jobslen = 0, maxjobs = buildopts.maxjobs, numjobs = 0, numfail = 0;\n"\
             "  struct edge *e;\n"\
-            "\n"\
             "  if (ntotal == 0) {\n"\
             "    warn(\"nothing to do\");\n"\
             "    return;\n"\
             "  }\n"\
-            "\n"\
             "  clock_gettime(CLOCK_MONOTONIC, &starttime);\n"\
             "  formatstatus(NULL, 0);\n"\
-            "\n"\
             "  nstarted = 0;\n"\
             "  for (;;) {\n"\
             "    if (buildopts.maxload) maxjobs = queryload() > buildopts.maxload ? 1 : buildopts.maxjobs;\n"\
@@ -3002,21 +2896,16 @@ static void setDefaultState();
             "  }\n"\
             "  ntotal = 0;\n"\
             "}\n"\
-            "\n"\
-            "\n"\
             "#define MAX_RECORD_SIZE (1 << 19)\n"\
-            "\n"\
             "struct nodearray {\n"\
             "  struct node **node;\n"\
             "  size_t len;\n"\
             "};\n"\
-            "\n"\
             "struct entry {\n"\
             "  struct node *node;\n"\
             "  struct nodearray deps;\n"\
             "  int64_t mtime;\n"\
             "};\n"\
-            "\n"\
             "static const char depsname[] = \".ninja_deps\";\n"\
             "static const char depstmpname[] = \".ninja_deps.tmp\";\n"\
             "static const char depsheader[] = \"# ninjadeps\\n\";\n"\
@@ -3024,14 +2913,11 @@ static void setDefaultState();
             "static FILE *depsfile;\n"\
             "static struct entry *entries;\n"\
             "static size_t entrieslen, entriescap;\n"\
-            "\n"\
             "static void depswrite(const void *p, size_t n, size_t m) {\n"\
             "  if (fwrite(p, n, m, depsfile) != m) fatal(\"deps log write:\");\n"\
             "}\n"\
-            "\n"\
             "static bool recordid(struct node *n) {\n"\
             "  uint32_t sz, chk;\n"\
-            "\n"\
             "  if (n->id != -1) return false;\n"\
             "  if (entrieslen == INT32_MAX) fatal(\"too many nodes\");\n"\
             "  n->id = entrieslen++;\n"\
@@ -3042,14 +2928,11 @@ static void setDefaultState();
             "  depswrite((char[4]){0}, 1, sz - n->path->n - 4);\n"\
             "  chk = ~n->id;\n"\
             "  depswrite(&chk, 4, 1);\n"\
-            "\n"\
             "  return true;\n"\
             "}\n"\
-            "\n"\
             "static void recorddeps(struct node *out, struct nodearray *deps, int64_t mtime) {\n"\
             "  uint32_t sz, m;\n"\
             "  size_t i;\n"\
-            "\n"\
             "  sz = 12 + deps->len * 4;\n"\
             "  if (sz + 4 >= MAX_RECORD_SIZE) fatal(\"deps record too large\");\n"\
             "  sz |= 0x80000000;\n"\
@@ -3062,7 +2945,6 @@ static void setDefaultState();
             "  for (i = 0; i < deps->len; ++i)\n"\
             "    depswrite(&deps->node[i]->id, 4, 1);\n"\
             "}\n"\
-            "\n"\
             "void depsinit(const char *builddir) {\n"\
             "  char *depspath = (char *)depsname, *depstmppath = (char *)depstmpname;\n"\
             "  uint32_t *buf, cap, ver, sz, id;\n"\
@@ -3072,7 +2954,6 @@ static void setDefaultState();
             "  struct node *n;\n"\
             "  struct edge *e;\n"\
             "  struct entry *entry, *oldentries;\n"\
-            "\n"\
             "  if (depsfile) fclose(depsfile);\n"\
             "  entrieslen = 0;\n"\
             "  cap = BUFSIZ;\n"\
@@ -3165,7 +3046,6 @@ static void setDefaultState();
             "      path = mkstr(len);\n"\
             "      memcpy(path->s, buf, len);\n"\
             "      path->s[len] = '\\0';\n"\
-            "\n"\
             "      n = mknode(path);\n"\
             "      if (entrieslen >= entriescap) {\n"\
             "        entriescap = entriescap ? entriescap * 2 : 1024;\n"\
@@ -3184,7 +3064,6 @@ static void setDefaultState();
             "    free(buf);\n"\
             "    return;\n"\
             "  }\n"\
-            "\n"\
             "rewrite:\n"\
             "  free(buf);\n"\
             "  if (depsfile) fclose(depsfile);\n"\
@@ -3193,12 +3072,10 @@ static void setDefaultState();
             "  if (!depsfile) fatal(\"open %s:\", depstmppath);\n"\
             "  depswrite(depsheader, 1, sizeof(depsheader) - 1);\n"\
             "  depswrite(&depsver, 1, sizeof(depsver));\n"\
-            "\n"\
             "  for (i = 0; i < entrieslen; ++i)\n"\
             "    entries[i].node->id = -1;\n"\
             "  oldentries = xreallocarray(NULL, entrieslen, sizeof(entries[0]));\n"\
             "  memcpy(oldentries, entries, entrieslen * sizeof(entries[0]));\n"\
-            "\n"\
             "  len = entrieslen;\n"\
             "  entrieslen = 0;\n"\
             "  for (i = 0; i < len; ++i) {\n"\
@@ -3219,13 +3096,11 @@ static void setDefaultState();
             "    free(depspath);\n"\
             "  }\n"\
             "}\n"\
-            "\n"\
             "void depsclose(void) {\n"\
             "  fflush(depsfile);\n"\
             "  if (ferror(depsfile)) fatal(\"deps log write failed\");\n"\
             "  fclose(depsfile);\n"\
             "}\n"\
-            "\n"\
             "static struct nodearray *depsparse(const char *name, bool allowmissing) {\n"\
             "  static struct buffer buf;\n"\
             "  static struct nodearray deps;\n"\
@@ -3234,7 +3109,6 @@ static void setDefaultState();
             "  FILE *f;\n"\
             "  int c, n;\n"\
             "  bool sawcolon;\n"\
-            "\n"\
             "  deps.len = 0;\n"\
             "  f = fopen(name, \"r\");\n"\
             "  if (!f) {\n"\
@@ -3338,17 +3212,14 @@ static void setDefaultState();
             "  }\n"\
             "  fclose(f);\n"\
             "  return &deps;\n"\
-            "\n"\
             "err:\n"\
             "  fclose(f);\n"\
             "  return NULL;\n"\
             "}\n"\
-            "\n"\
             "void depsload(struct edge *e) {\n"\
             "  struct string *deptype, *depfile;\n"\
             "  struct nodearray *deps = NULL;\n"\
             "  struct node *n;\n"\
-            "\n"\
             "  if (e->flags & FLAG_DEPS) return;\n"\
             "  e->flags |= FLAG_DEPS;\n"\
             "  n = e->out[0];\n"\
@@ -3369,7 +3240,6 @@ static void setDefaultState();
             "    e->flags |= FLAG_DIRTY_OUT;\n"\
             "  }\n"\
             "}\n"\
-            "\n"\
             "void depsrecord(struct edge *e) {\n"\
             "  struct string *deptype, *depfile;\n"\
             "  struct nodearray *deps;\n"\
@@ -3377,7 +3247,6 @@ static void setDefaultState();
             "  struct entry *entry;\n"\
             "  size_t i;\n"\
             "  bool update;\n"\
-            "\n"\
             "  deptype = edgevar(e, \"deps\", true);\n"\
             "  if (!deptype || deptype->n == 0) return;\n"\
             "  if (strcmp(deptype->s, \"gcc\") != 0) {\n"\
@@ -3413,28 +3282,22 @@ static void setDefaultState();
             "    if (fflush(depsfile) < 0) fatal(\"deps log flush:\");\n"\
             "  }\n"\
             "}\n"\
-            "\n"\
-            "\n"\
             "struct environment {\n"\
             "  struct environment *parent;\n"\
             "  struct treenode *bindings;\n"\
             "  struct treenode *rules;\n"\
             "  struct environment *allnext;\n"\
             "};\n"\
-            "\n"\
             "struct environment *rootenv;\n"\
             "struct rule phonyrule = {.name = \"phony\"};\n"\
             "struct pool consolepool = {.name = \"console\", .maxjobs = 1};\n"\
             "static struct treenode *pools;\n"\
             "static struct environment *allenvs;\n"\
-            "\n"\
             "static void addpool(struct pool *);\n"\
             "static void delpool(void *);\n"\
             "static void delrule(void *);\n"\
-            "\n"\
             "void envinit(void) {\n"\
             "  struct environment *env;\n"\
-            "\n"\
             "  while (allenvs) {\n"\
             "    env = allenvs;\n"\
             "    allenvs = env->allnext;\n"\
@@ -3443,54 +3306,42 @@ static void setDefaultState();
             "    free(env);\n"\
             "  }\n"\
             "  deltree(pools, NULL, delpool);\n"\
-            "\n"\
             "  rootenv = mkenv(NULL);\n"\
             "  envaddrule(rootenv, &phonyrule);\n"\
             "  pools = NULL;\n"\
             "  addpool(&consolepool);\n"\
             "}\n"\
-            "\n"\
             "static void addvar(struct treenode **tree, char *var, void *val) {\n"\
             "  char *old;\n"\
-            "\n"\
             "  old = treeinsert(tree, var, val);\n"\
             "  if (old) free(old);\n"\
             "}\n"\
-            "\n"\
             "struct environment *mkenv(struct environment *parent) {\n"\
             "  struct environment *env;\n"\
-            "\n"\
             "  env = xmalloc(sizeof(*env));\n"\
             "  env->parent = parent;\n"\
             "  env->bindings = NULL;\n"\
             "  env->rules = NULL;\n"\
             "  env->allnext = allenvs;\n"\
             "  allenvs = env;\n"\
-            "\n"\
             "  return env;\n"\
             "}\n"\
-            "\n"\
             "struct string *envvar(struct environment *env, char *var) {\n"\
             "  struct treenode *n;\n"\
-            "\n"\
             "  do {\n"\
             "    n = treefind(env->bindings, var);\n"\
             "    if (n) return n->value;\n"\
             "    env = env->parent;\n"\
             "  } while (env);\n"\
-            "\n"\
             "  return NULL;\n"\
             "}\n"\
-            "\n"\
             "void envaddvar(struct environment *env, char *var, struct string *val) {\n"\
             "  addvar(&env->bindings, var, val);\n"\
             "}\n"\
-            "\n"\
             "static struct string *merge(struct evalstring *str, size_t n) {\n"\
             "  struct string *result;\n"\
             "  struct evalstring *p;\n"\
             "  char *s;\n"\
-            "\n"\
             "  result = mkstr(n);\n"\
             "  s = result->s;\n"\
             "  for (p = str; p; p = p->next) {\n"\
@@ -3499,15 +3350,12 @@ static void setDefaultState();
             "    s += p->str->n;\n"\
             "  }\n"\
             "  *s = '\\0';\n"\
-            "\n"\
             "  return result;\n"\
             "}\n"\
-            "\n"\
             "struct string *enveval(struct environment *env, struct evalstring *str) {\n"\
             "  size_t n;\n"\
             "  struct evalstring *p;\n"\
             "  struct string *res;\n"\
-            "\n"\
             "  n = 0;\n"\
             "  for (p = str; p; p = p->next) {\n"\
             "    if (p->var) p->str = envvar(env, p->var);\n"\
@@ -3515,31 +3363,24 @@ static void setDefaultState();
             "  }\n"\
             "  res = merge(str, n);\n"\
             "  delevalstr(str);\n"\
-            "\n"\
             "  return res;\n"\
             "}\n"\
-            "\n"\
             "void envaddrule(struct environment *env, struct rule *r) {\n"\
             "  if (treeinsert(&env->rules, r->name, r)) fatal(\"rule '%s' redefined\", r->name);\n"\
             "}\n"\
-            "\n"\
             "struct rule *envrule(struct environment *env, char *name) {\n"\
             "  struct treenode *n;\n"\
-            "\n"\
             "  do {\n"\
             "    n = treefind(env->rules, name);\n"\
             "    if (n) return n->value;\n"\
             "    env = env->parent;\n"\
             "  } while (env);\n"\
-            "\n"\
             "  return NULL;\n"\
             "}\n"\
-            "\n"\
             "static struct string *pathlist(struct node **nodes, size_t n, char sep, bool escape) {\n"\
             "  size_t i, len;\n"\
             "  struct string *path, *result;\n"\
             "  char *s;\n"\
-            "\n"\
             "  if (n == 0) return NULL;\n"\
             "  if (n == 1) return nodepath(nodes[0], escape);\n"\
             "  for (i = 0, len = 0; i < n; ++i)\n"\
@@ -3553,39 +3394,30 @@ static void setDefaultState();
             "    *s++ = sep;\n"\
             "  }\n"\
             "  *--s = '\\0';\n"\
-            "\n"\
             "  return result;\n"\
             "}\n"\
-            "\n"\
             "struct rule *mkrule(char *name) {\n"\
             "  struct rule *r;\n"\
-            "\n"\
             "  r = xmalloc(sizeof(*r));\n"\
             "  r->name = name;\n"\
             "  r->bindings = NULL;\n"\
-            "\n"\
             "  return r;\n"\
             "}\n"\
-            "\n"\
             "static void delrule(void *ptr) {\n"\
             "  struct rule *r = ptr;\n"\
-            "\n"\
             "  if (r == &phonyrule) return;\n"\
             "  deltree(r->bindings, free, delevalstr);\n"\
             "  free(r->name);\n"\
             "  free(r);\n"\
             "}\n"\
-            "\n"\
             "void ruleaddvar(struct rule *r, char *var, struct evalstring *val) {\n"\
             "  addvar(&r->bindings, var, val);\n"\
             "}\n"\
-            "\n"\
             "struct string *edgevar(struct edge *e, char *var, bool escape) {\n"\
             "  static void *const cycle = (void *)&cycle;\n"\
             "  struct evalstring *str, *p;\n"\
             "  struct treenode *n;\n"\
             "  size_t len;\n"\
-            "\n"\
             "  if (strcmp(var, \"in\") == 0) return pathlist(e->in, e->inimpidx, ' ', escape);\n"\
             "  if (strcmp(var, \"in_newline\") == 0) return pathlist(e->in, e->inimpidx, '\\n', escape);\n"\
             "  if (strcmp(var, \"out\") == 0) return pathlist(e->out, e->outimpidx, ' ', escape);\n"\
@@ -3604,57 +3436,42 @@ static void setDefaultState();
             "  n->value = str;\n"\
             "  return merge(str, len);\n"\
             "}\n"\
-            "\n"\
             "static void addpool(struct pool *p) {\n"\
             "  if (treeinsert(&pools, p->name, p)) fatal(\"pool '%s' redefined\", p->name);\n"\
             "}\n"\
-            "\n"\
             "struct pool *mkpool(char *name) {\n"\
             "  struct pool *p;\n"\
-            "\n"\
             "  p = xmalloc(sizeof(*p));\n"\
             "  p->name = name;\n"\
             "  p->numjobs = 0;\n"\
             "  p->maxjobs = 0;\n"\
             "  p->work = NULL;\n"\
             "  addpool(p);\n"\
-            "\n"\
             "  return p;\n"\
             "}\n"\
-            "\n"\
             "static void delpool(void *ptr) {\n"\
             "  struct pool *p = ptr;\n"\
-            "\n"\
             "  if (p == &consolepool) return;\n"\
             "  free(p->name);\n"\
             "  free(p);\n"\
             "}\n"\
-            "\n"\
             "struct pool *poolget(char *name) {\n"\
             "  struct treenode *n;\n"\
-            "\n"\
             "  n = treefind(pools, name);\n"\
             "  if (!n) fatal(\"unknown pool '%s'\", name);\n"\
-            "\n"\
             "  return n->value;\n"\
             "}\n"\
-            "\n"\
-            "\n"\
             "static struct hashtable *allnodes;\n"\
             "struct edge *alledges;\n"\
-            "\n"\
             "static void delnode(void *p) {\n"\
             "  struct node *n = p;\n"\
-            "\n"\
             "  if (n->shellpath != n->path) free(n->shellpath);\n"\
             "  free(n->use);\n"\
             "  free(n->path);\n"\
             "  free(n);\n"\
             "}\n"\
-            "\n"\
             "void graphinit(void) {\n"\
             "  struct edge *e;\n"\
-            "\n"\
             "  delhtab(allnodes, delnode);\n"\
             "  while (alledges) {\n"\
             "    e = alledges;\n"\
@@ -3665,12 +3482,10 @@ static void setDefaultState();
             "  }\n"\
             "  allnodes = mkhtab(1024);\n"\
             "}\n"\
-            "\n"\
             "struct node *mknode(struct string *path) {\n"\
             "  void **v;\n"\
             "  struct node *n;\n"\
             "  struct hashtablekey k;\n"\
-            "\n"\
             "  htabkey(&k, path->s, path->n);\n"\
             "  v = htabput(allnodes, &k);\n"\
             "  if (*v) {\n"\
@@ -3688,26 +3503,20 @@ static void setDefaultState();
             "  n->hash = 0;\n"\
             "  n->id = -1;\n"\
             "  *v = n;\n"\
-            "\n"\
             "  return n;\n"\
             "}\n"\
-            "\n"\
             "struct node *nodeget(const char *path, size_t len) {\n"\
             "  struct hashtablekey k;\n"\
-            "\n"\
             "  if (!len) len = strlen(path);\n"\
             "  htabkey(&k, path, len);\n"\
             "  return htabget(allnodes, &k);\n"\
             "}\n"\
-            "\n"\
             "void nodestat(struct node *n) {\n"\
             "  n->mtime = osmtime(n->path->s);\n"\
             "}\n"\
-            "\n"\
             "struct string *nodepath(struct node *n, bool escape) {\n"\
             "  char *s, *d;\n"\
             "  int nquote;\n"\
-            "\n"\
             "  if (!escape) return n->path;\n"\
             "  if (n->shellpath) return n->shellpath;\n"\
             "  escape = false;\n"\
@@ -3734,15 +3543,12 @@ static void setDefaultState();
             "  }\n"\
             "  return n->shellpath;\n"\
             "}\n"\
-            "\n"\
             "void nodeuse(struct node *n, struct edge *e) {\n"\
             "  if (!(n->nuse & (n->nuse - 1))) n->use = xreallocarray(n->use, n->nuse ? n->nuse * 2 : 1, sizeof(e));\n"\
             "  n->use[n->nuse++] = e;\n"\
             "}\n"\
-            "\n"\
             "struct edge *mkedge(struct environment *parent) {\n"\
             "  struct edge *e;\n"\
-            "\n"\
             "  e = xmalloc(sizeof(*e));\n"\
             "  e->env = mkenv(parent);\n"\
             "  e->pool = NULL;\n"\
@@ -3753,14 +3559,11 @@ static void setDefaultState();
             "  e->flags = 0;\n"\
             "  e->allnext = alledges;\n"\
             "  alledges = e;\n"\
-            "\n"\
             "  return e;\n"\
             "}\n"\
-            "\n"\
             "void edgehash(struct edge *e) {\n"\
             "  static const char sep[] = \";rspfile=\";\n"\
             "  struct string *cmd, *rsp, *s;\n"\
-            "\n"\
             "  if (e->flags & FLAG_HASH) return;\n"\
             "  e->flags |= FLAG_HASH;\n"\
             "  cmd = edgevar(e, \"command\", true);\n"\
@@ -3778,10 +3581,8 @@ static void setDefaultState();
             "    e->hash = murmurhash64a(cmd->s, cmd->n);\n"\
             "  }\n"\
             "}\n"\
-            "\n"\
             "static struct edge *mkphony(struct node *n) {\n"\
             "  struct edge *e;\n"\
-            "\n"\
             "  e = mkedge(rootenv);\n"\
             "  e->rule = &phonyrule;\n"\
             "  e->inimpidx = 0;\n"\
@@ -3790,14 +3591,11 @@ static void setDefaultState();
             "  e->nout = 1;\n"\
             "  e->out = xmalloc(sizeof(n));\n"\
             "  e->out[0] = n;\n"\
-            "\n"\
             "  return e;\n"\
             "}\n"\
-            "\n"\
             "void edgeadddeps(struct edge *e, struct node **deps, size_t ndeps) {\n"\
             "  struct node **order, *n;\n"\
             "  size_t norder, i;\n"\
-            "\n"\
             "  for (i = 0; i < ndeps; ++i) {\n"\
             "    n = deps[i];\n"\
             "    if (!n->gen) n->gen = mkphony(n);\n"\
@@ -3811,24 +3609,19 @@ static void setDefaultState();
             "  e->inorderidx += ndeps;\n"\
             "  e->nin += ndeps;\n"\
             "}\n"\
-            "\n"\
-            "\n"\
             "struct hashtable {\n"\
             "  size_t len, cap;\n"\
             "  struct hashtablekey *keys;\n"\
             "  void **vals;\n"\
             "};\n"\
-            "\n"\
             "void htabkey(struct hashtablekey *k, const char *s, size_t n) {\n"\
             "  k->str = s;\n"\
             "  k->len = n;\n"\
             "  k->hash = murmurhash64a(s, n);\n"\
             "}\n"\
-            "\n"\
             "struct hashtable *mkhtab(size_t cap) {\n"\
             "  struct hashtable *h;\n"\
             "  size_t i;\n"\
-            "\n"\
             "  assert(!(cap & (cap - 1)));\n"\
             "  h = xmalloc(sizeof(*h));\n"\
             "  h->len = 0;\n"\
@@ -3837,13 +3630,10 @@ static void setDefaultState();
             "  h->vals = xreallocarray(NULL, cap, sizeof(h->vals[0]));\n"\
             "  for (i = 0; i < cap; ++i)\n"\
             "    h->keys[i].str = NULL;\n"\
-            "\n"\
             "  return h;\n"\
             "}\n"\
-            "\n"\
             "void delhtab(struct hashtable *h, void del(void *)) {\n"\
             "  size_t i;\n"\
-            "\n"\
             "  if (!h) return;\n"\
             "  if (del) {\n"\
             "    for (i = 0; i < h->cap; ++i) {\n"\
@@ -3854,26 +3644,21 @@ static void setDefaultState();
             "  free(h->vals);\n"\
             "  free(h);\n"\
             "}\n"\
-            "\n"\
             "static bool keyequal(struct hashtablekey *k1, struct hashtablekey *k2) {\n"\
             "  if (k1->hash != k2->hash || k1->len != k2->len) return false;\n"\
             "  return memcmp(k1->str, k2->str, k1->len) == 0;\n"\
             "}\n"\
-            "\n"\
             "static size_t keyindex(struct hashtable *h, struct hashtablekey *k) {\n"\
             "  size_t i;\n"\
-            "\n"\
             "  i = k->hash & (h->cap - 1);\n"\
             "  while (h->keys[i].str && !keyequal(&h->keys[i], k))\n"\
             "    i = (i + 1) & (h->cap - 1);\n"\
             "  return i;\n"\
             "}\n"\
-            "\n"\
             "void **htabput(struct hashtable *h, struct hashtablekey *k) {\n"\
             "  struct hashtablekey *oldkeys;\n"\
             "  void **oldvals;\n"\
             "  size_t i, j, oldcap;\n"\
-            "\n"\
             "  if (h->cap / 2 < h->len) {\n"\
             "    oldkeys = h->keys;\n"\
             "    oldvals = h->vals;\n"\
@@ -3899,39 +3684,31 @@ static void setDefaultState();
             "    h->vals[i] = NULL;\n"\
             "    ++h->len;\n"\
             "  }\n"\
-            "\n"\
             "  return &h->vals[i];\n"\
             "}\n"\
-            "\n"\
             "void *htabget(struct hashtable *h, struct hashtablekey *k) {\n"\
             "  size_t i;\n"\
-            "\n"\
             "  i = keyindex(h, k);\n"\
             "  return h->keys[i].str ? h->vals[i] : NULL;\n"\
             "}\n"\
-            "\n"\
             "uint64_t murmurhash64a(const void *ptr, size_t len) {\n"\
             "  const uint64_t seed = 0xdecafbaddecafbadull;\n"\
             "  const uint64_t m = 0xc6a4a7935bd1e995ull;\n"\
             "  uint64_t h, k, n;\n"\
             "  const uint8_t *p, *end;\n"\
             "  int r = 47;\n"\
-            "\n"\
             "  h = seed ^ (len * m);\n"\
             "  n = len & ~0x7ull;\n"\
             "  end = ptr;\n"\
             "  end += n;\n"\
             "  for (p = ptr; p != end; p += 8) {\n"\
             "    memcpy(&k, p, sizeof(k));\n"\
-            "\n"\
             "    k *= m;\n"\
             "    k ^= k >> r;\n"\
             "    k *= m;\n"\
-            "\n"\
             "    h ^= k;\n"\
             "    h *= m;\n"\
             "  }\n"\
-            "\n"\
             "  switch (len & 0x7) {\n"\
             "  case 7:\n"\
             "    h ^= (uint64_t)p[6] << 48;\n"\
@@ -3949,34 +3726,26 @@ static void setDefaultState();
             "    h ^= (uint64_t)p[0];\n"\
             "    h *= m;\n"\
             "  }\n"\
-            "\n"\
             "  h ^= h >> r;\n"\
             "  h *= m;\n"\
             "  h ^= h >> r;\n"\
-            "\n"\
             "  return h;\n"\
             "}\n"\
-            "\n"\
-            "\n"\
             "static FILE *logfile;\n"\
             "static const char *logname = \".ninja_log\";\n"\
             "static const char *logtmpname = \".ninja_log.tmp\";\n"\
             "static const char *logfmt = \"# ninja log v%d\\n\";\n"\
             "static const int logver = 5;\n"\
-            "\n"\
             "static char *nextfield(char **end) {\n"\
             "  char *s = *end;\n"\
-            "\n"\
             "  if (!*s) {\n"\
             "    warn(\"corrupt build log: missing field\");\n"\
             "    return NULL;\n"\
             "  }\n"\
             "  *end += strcspn(*end, \"\\t\\n\");\n"\
             "  if (**end) *(*end)++ = '\\0';\n"\
-            "\n"\
             "  return s;\n"\
             "}\n"\
-            "\n"\
             "void loginit(const char *builddir) {\n"\
             "  int ver;\n"\
             "  char *logpath = (char *)logname, *logtmppath = (char *)logtmpname, *p, *s;\n"\
@@ -3985,10 +3754,8 @@ static void setDefaultState();
             "  struct node *n;\n"\
             "  int64_t mtime;\n"\
             "  struct buffer buf = {0};\n"\
-            "\n"\
             "  nline = 0;\n"\
             "  nentry = 0;\n"\
-            "\n"\
             "  if (logfile) fclose(logfile);\n"\
             "  if (builddir) xasprintf(&logpath, \"%s/%s\", builddir, logname);\n"\
             "  logfile = fopen(logpath, \"r+\");\n"\
@@ -3999,7 +3766,6 @@ static void setDefaultState();
             "  setvbuf(logfile, NULL, _IOLBF, 0);\n"\
             "  if (fscanf(logfile, logfmt, &ver) < 1) goto rewrite;\n"\
             "  if (ver != logver) goto rewrite;\n"\
-            "\n"\
             "  for (;;) {\n"\
             "    if (buf.cap - buf.len < BUFSIZ) {\n"\
             "      buf.cap = buf.cap ? buf.cap * 2 : BUFSIZ;\n"\
@@ -4046,7 +3812,6 @@ static void setDefaultState();
             "    if (builddir) free(logpath);\n"\
             "    return;\n"\
             "  }\n"\
-            "\n"\
             "rewrite:\n"\
             "  if (logfile) fclose(logfile);\n"\
             "  if (builddir) xasprintf(&logtmppath, \"%s/%s\", builddir, logtmpname);\n"\
@@ -4071,40 +3836,32 @@ static void setDefaultState();
             "    free(logtmppath);\n"\
             "  }\n"\
             "}\n"\
-            "\n"\
             "void logclose(void) {\n"\
             "  fflush(logfile);\n"\
             "  if (ferror(logfile)) fatal(\"build log write failed\");\n"\
             "  fclose(logfile);\n"\
             "}\n"\
-            "\n"\
             "void logrecord(struct node *n) {\n"\
             "  fprintf(logfile, \"0\\t0\\t%\" PRId64 \"\\t%s\\t%\" PRIx64 \"\\n\", n->logmtime, n->path->s, n->hash);\n"\
             "}\n"\
-            "\n"\
-            "\n"\
             "struct parseoptions parseopts;\n"\
             "static struct node **deftarg;\n"\
             "static size_t ndeftarg;\n"\
-            "\n"\
             "void parseinit(void) {\n"\
             "  free(deftarg);\n"\
             "  deftarg = NULL;\n"\
             "  ndeftarg = 0;\n"\
             "}\n"\
-            "\n"\
             "static void parselet(struct scanner *s, struct evalstring **val) {\n"\
             "  scanchar(s, '=');\n"\
             "  *val = scanstring(s, false);\n"\
             "  scannewline(s);\n"\
             "}\n"\
-            "\n"\
             "static void parserule(struct scanner *s, struct environment *env) {\n"\
             "  struct rule *r;\n"\
             "  char *var;\n"\
             "  struct evalstring *val;\n"\
             "  bool hascommand = false, hasrspfile = false, hasrspcontent = false;\n"\
-            "\n"\
             "  r = mkrule(scanname(s));\n"\
             "  scannewline(s);\n"\
             "  while (scanindent(s)) {\n"\
@@ -4120,7 +3877,6 @@ static void setDefaultState();
             "  if (hasrspfile != hasrspcontent) fatal(\"rule '%s' has rspfile and no rspfile_content or vice versa\", r->name);\n"\
             "  envaddrule(env, r);\n"\
             "}\n"\
-            "\n"\
             "static void parseedge(struct scanner *s, struct environment *env) {\n"\
             "  struct edge *e;\n"\
             "  struct evalstring *str, **path;\n"\
@@ -4129,9 +3885,7 @@ static void setDefaultState();
             "  struct node *n;\n"\
             "  size_t i;\n"\
             "  int p;\n"\
-            "\n"\
             "  e = mkedge(env);\n"\
-            "\n"\
             "  scanpaths(s);\n"\
             "  e->outimpidx = npaths;\n"\
             "  if (scanpipe(s, 1)) scanpaths(s);\n"\
@@ -4159,7 +3913,6 @@ static void setDefaultState();
             "    val = enveval(env, str);\n"\
             "    envaddvar(e->env, name, val);\n"\
             "  }\n"\
-            "\n"\
             "  e->out = xreallocarray(NULL, e->nout, sizeof(e->out[0]));\n"\
             "  for (i = 0, path = paths; i < e->nout; ++path) {\n"\
             "    val = enveval(e->env, *path);\n"\
@@ -4185,30 +3938,24 @@ static void setDefaultState();
             "    nodeuse(n, e);\n"\
             "  }\n"\
             "  npaths = 0;\n"\
-            "\n"\
             "  val = edgevar(e, \"pool\", true);\n"\
             "  if (val) e->pool = poolget(val->s);\n"\
             "}\n"\
-            "\n"\
             "static void parseinclude(struct scanner *s, struct environment *env, bool newscope) {\n"\
             "  struct evalstring *str;\n"\
             "  struct string *path;\n"\
-            "\n"\
             "  str = scanstring(s, true);\n"\
             "  if (!str) scanerror(s, \"expected include path\");\n"\
             "  scannewline(s);\n"\
             "  path = enveval(env, str);\n"\
-            "\n"\
             "  if (newscope) env = mkenv(env);\n"\
             "  parse(path->s, env);\n"\
             "  free(path);\n"\
             "}\n"\
-            "\n"\
             "static void parsedefault(struct scanner *s, struct environment *env) {\n"\
             "  struct string *path;\n"\
             "  struct node *n;\n"\
             "  size_t i;\n"\
-            "\n"\
             "  scanpaths(s);\n"\
             "  deftarg = xreallocarray(deftarg, ndeftarg + npaths, sizeof(*deftarg));\n"\
             "  for (i = 0; i < npaths; ++i) {\n"\
@@ -4222,13 +3969,11 @@ static void setDefaultState();
             "  scannewline(s);\n"\
             "  npaths = 0;\n"\
             "}\n"\
-            "\n"\
             "static void parsepool(struct scanner *s, struct environment *env) {\n"\
             "  struct pool *p;\n"\
             "  struct evalstring *val;\n"\
             "  struct string *str;\n"\
             "  char *var, *end;\n"\
-            "\n"\
             "  p = mkpool(scanname(s));\n"\
             "  scannewline(s);\n"\
             "  while (scanindent(s)) {\n"\
@@ -4245,20 +3990,16 @@ static void setDefaultState();
             "  }\n"\
             "  if (!p->maxjobs) fatal(\"pool '%s' has no depth\", p->name);\n"\
             "}\n"\
-            "\n"\
             "static void checkversion(const char *ver) {\n"\
             "  int major, minor = 0;\n"\
-            "\n"\
             "  if (sscanf(ver, \"%d.%d\", &major, &minor) < 1) fatal(\"invalid ninja_required_version\");\n"\
             "  if (major > ninjamajor || (major == ninjamajor && minor > ninjaminor)) fatal(\"ninja_required_version %s is newer than %d.%d\", ver, ninjamajor, ninjaminor);\n"\
             "}\n"\
-            "\n"\
             "void parse(const char *name, struct environment *env) {\n"\
             "  struct scanner s;\n"\
             "  char *var;\n"\
             "  struct string *val;\n"\
             "  struct evalstring *str;\n"\
-            "\n"\
             "  scaninit(&s, name);\n"\
             "  for (;;) {\n"\
             "    switch (scankeyword(&s, &var)) {\n"\
@@ -4292,12 +4033,10 @@ static void setDefaultState();
             "    }\n"\
             "  }\n"\
             "}\n"\
-            "\n"\
             "void defaultnodes(void fn(struct node *)) {\n"\
             "  struct edge *e;\n"\
             "  struct node *n;\n"\
             "  size_t i;\n"\
-            "\n"\
             "  if (ndeftarg > 0) {\n"\
             "    for (i = 0; i < ndeftarg; ++i)\n"\
             "      fn(deftarg[i]);\n"\
@@ -4310,37 +4049,29 @@ static void setDefaultState();
             "    }\n"\
             "  }\n"\
             "}\n"\
-            "\n"\
-            "\n"\
             "const char *argv0;\n"\
-            "\n"\
             "static void usage(void) {\n"\
             "  fprintf(stderr, \"usage: %s [-C dir] [-f buildfile] [-j maxjobs] [-k maxfail] [-l maxload] [-n]\\n\", argv0);\n"\
             "  exit(2);\n"\
             "}\n"\
-            "\n"\
             "static char *getbuilddir(void) {\n"\
             "  struct string *builddir;\n"\
-            "\n"\
             "  builddir = envvar(rootenv, \"builddir\");\n"\
             "  if (!builddir) return NULL;\n"\
             "  if (osmkdirs(builddir, false) < 0) exit(1);\n"\
             "  return builddir->s;\n"\
             "}\n"\
-            "\n"\
             "static void debugflag(const char *flag) {\n"\
             "  if (strcmp(flag, \"explain\") == 0) buildopts.explain = true;\n"\
             "  else if (strcmp(flag, \"keepdepfile\") == 0) buildopts.keepdepfile = true;\n"\
             "  else if (strcmp(flag, \"keeprsp\") == 0) buildopts.keeprsp = true;\n"\
             "  else fatal(\"unknown debug flag '%s'\", flag);\n"\
             "}\n"\
-            "\n"\
             "static void loadflag(const char *flag) {\n"\
             "#ifdef HAVE_GETLOADAVG\n"\
             "  double value;\n"\
             "  char *end;\n"\
             "  errno = 0;\n"\
-            "\n"\
             "  value = strtod(flag, &end);\n"\
             "  if (*end || value < 0 || errno != 0) fatal(\"invalid -l parameter\");\n"\
             "  buildopts.maxload = value;\n"\
@@ -4348,26 +4079,21 @@ static void setDefaultState();
             "  warn(\"job scheduling based on load average is not supported\");\n"\
             "#endif\n"\
             "}\n"\
-            "\n"\
             "static void warnflag(const char *flag) {\n"\
             "  if (strcmp(flag, \"dupbuild=err\") == 0) parseopts.dupbuildwarn = false;\n"\
             "  else if (strcmp(flag, \"dupbuild=warn\") == 0) parseopts.dupbuildwarn = true;\n"\
             "  else fatal(\"unknown warning flag '%s'\", flag);\n"\
             "}\n"\
-            "\n"\
             "static void jobsflag(const char *flag) {\n"\
             "  long num;\n"\
             "  char *end;\n"\
-            "\n"\
             "  num = strtol(flag, &end, 10);\n"\
             "  if (*end || num < 0) fatal(\"invalid -j parameter\");\n"\
             "  buildopts.maxjobs = num > 0 ? num : -1;\n"\
             "}\n"\
-            "\n"\
             "static void parseenvargs(char *env) {\n"\
             "  char *arg, *argvbuf[64], **argv = argvbuf;\n"\
             "  int argc;\n"\
-            "\n"\
             "  if (!env) return;\n"\
             "  env = xmemdup(env, strlen(env) + 1);\n"\
             "  argc = 1;\n"\
@@ -4379,7 +4105,6 @@ static void setDefaultState();
             "    arg = strtok(NULL, \" \");\n"\
             "  }\n"\
             "  argv[argc] = NULL;\n"\
-            "\n"\
             "  ARGBEGIN {\n"\
             "  case 'j':\n"\
             "    jobsflag(EARGF(usage()));\n"\
@@ -4394,25 +4119,20 @@ static void setDefaultState();
             "    fatal(\"invalid option in SAMUFLAGS\");\n"\
             "  }\n"\
             "  ARGEND\n"\
-            "\n"\
             "  free(env);\n"\
             "}\n"\
-            "\n"\
             "static const char *progname(const char *arg, const char *def) {\n"\
             "  const char *slash;\n"\
-            "\n"\
             "  if (!arg) return def;\n"\
             "  slash = strrchr(arg, '/');\n"\
             "  return slash ? slash + 1 : arg;\n"\
             "}\n"\
-            "\n"\
             "int main(int argc, char *argv[]) {\n"\
             "  char *builddir, *manifest = \"build.ninja\", *end, *arg;\n"\
             "  const struct tool *tool = NULL;\n"\
             "  struct node *n;\n"\
             "  long num;\n"\
             "  int tries;\n"\
-            "\n"\
             "  argv0 = progname(argv[0], \"samu\");\n"\
             "  parseenvargs(getenv(\"SAMUFLAGS\"));\n"\
             "  ARGBEGIN {\n"\
@@ -4486,26 +4206,19 @@ static void setDefaultState();
             "    buildopts.maxjobs = 2;\n"\
             "#endif\n"\
             "  }\n"\
-            "\n"\
             "  buildopts.statusfmt = getenv(\"NINJA_STATUS\");\n"\
             "  if (!buildopts.statusfmt) buildopts.statusfmt = \"[%s/%t] \";\n"\
-            "\n"\
             "  setvbuf(stdout, NULL, _IOLBF, 0);\n"\
-            "\n"\
             "  tries = 0;\n"\
             "retry:\n"\
             "  graphinit();\n"\
             "  envinit();\n"\
             "  parseinit();\n"\
-            "\n"\
             "  parse(manifest, rootenv);\n"\
-            "\n"\
             "  if (tool) return tool->run(argc, argv);\n"\
-            "\n"\
             "  builddir = getbuilddir();\n"\
             "  loginit(builddir);\n"\
             "  depsinit(builddir);\n"\
-            "\n"\
             "  n = nodeget(manifest, 0);\n"\
             "  if (n && n->gen) {\n"\
             "    buildadd(n);\n"\
@@ -4518,7 +4231,6 @@ static void setDefaultState();
             "      buildreset();\n"\
             "    }\n"\
             "  }\n"\
-            "\n"\
             "  if (argc) {\n"\
             "    for (; *argv; ++argv) {\n"\
             "      n = nodeget(*argv, 0);\n"\
@@ -4531,15 +4243,11 @@ static void setDefaultState();
             "  build();\n"\
             "  logclose();\n"\
             "  depsclose();\n"\
-            "\n"\
             "  return 0;\n"\
             "}\n"\
-            "\n"\
-            "\n"\
             "struct evalstring **paths;\n"\
             "size_t npaths;\n"\
             "static struct buffer buf;\n"\
-            "\n"\
             "void scaninit(struct scanner *s, const char *path) {\n"\
             "  s->path = path;\n"\
             "  s->line = 1;\n"\
@@ -4548,15 +4256,12 @@ static void setDefaultState();
             "  if (!s->f) fatal(\"open %s:\", path);\n"\
             "  s->chr = getc(s->f);\n"\
             "}\n"\
-            "\n"\
             "void scanclose(struct scanner *s) {\n"\
             "  fclose(s->f);\n"\
             "}\n"\
-            "\n"\
             "void scanerror(struct scanner *s, const char *fmt, ...) {\n"\
             "  extern const char *argv0;\n"\
             "  va_list ap;\n"\
-            "\n"\
             "  fprintf(stderr, \"%s: %s:%d:%d: \", argv0, s->path, s->line, s->col);\n"\
             "  va_start(ap, fmt);\n"\
             "  vfprintf(stderr, fmt, ap);\n"\
@@ -4564,7 +4269,6 @@ static void setDefaultState();
             "  putc('\\n', stderr);\n"\
             "  exit(1);\n"\
             "}\n"\
-            "\n"\
             "static int next(struct scanner *s) {\n"\
             "  if (s->chr == '\\n') {\n"\
             "    ++s->line;\n"\
@@ -4573,18 +4277,14 @@ static void setDefaultState();
             "    ++s->col;\n"\
             "  }\n"\
             "  s->chr = getc(s->f);\n"\
-            "\n"\
             "  return s->chr;\n"\
             "}\n"\
-            "\n"\
             "static int issimplevar(int c) {\n"\
             "  return isalnum(c) || c == '_' || c == '-';\n"\
             "}\n"\
-            "\n"\
             "static int isvar(int c) {\n"\
             "  return issimplevar(c) || c == '.';\n"\
             "}\n"\
-            "\n"\
             "static bool newline(struct scanner *s) {\n"\
             "  switch (s->chr) {\n"\
             "  case '\\r':\n"\
@@ -4595,7 +4295,6 @@ static void setDefaultState();
             "  }\n"\
             "  return false;\n"\
             "}\n"\
-            "\n"\
             "static bool singlespace(struct scanner *s) {\n"\
             "  switch (s->chr) {\n"\
             "  case '$':\n"\
@@ -4610,14 +4309,12 @@ static void setDefaultState();
             "  }\n"\
             "  return false;\n"\
             "}\n"\
-            "\n"\
             "static bool space(struct scanner *s) {\n"\
             "  if (!singlespace(s)) return false;\n"\
             "  while (singlespace(s))\n"\
             "    ;\n"\
             "  return true;\n"\
             "}\n"\
-            "\n"\
             "static bool comment(struct scanner *s) {\n"\
             "  if (s->chr != '#') return false;\n"\
             "  do\n"\
@@ -4625,7 +4322,6 @@ static void setDefaultState();
             "  while (!newline(s));\n"\
             "  return true;\n"\
             "}\n"\
-            "\n"\
             "static void name(struct scanner *s) {\n"\
             "  buf.len = 0;\n"\
             "  while (isvar(s->chr)) {\n"\
@@ -4636,7 +4332,6 @@ static void setDefaultState();
             "  bufadd(&buf, '\\0');\n"\
             "  space(s);\n"\
             "}\n"\
-            "\n"\
             "int scankeyword(struct scanner *s, char **var) {\n"\
             "  static const struct {\n"\
             "    const char *name;\n"\
@@ -4650,7 +4345,6 @@ static void setDefaultState();
             "      {\"subninja\", SUBNINJA},\n"\
             "  };\n"\
             "  int low = 0, high = LEN(keywords) - 1, mid, cmp;\n"\
-            "\n"\
             "  for (;;) {\n"\
             "    switch (s->chr) {\n"\
             "    case ' ':\n"\
@@ -4680,15 +4374,12 @@ static void setDefaultState();
             "    }\n"\
             "  }\n"\
             "}\n"\
-            "\n"\
             "char *scanname(struct scanner *s) {\n"\
             "  name(s);\n"\
             "  return xmemdup(buf.data, buf.len);\n"\
             "}\n"\
-            "\n"\
             "static void addstringpart(struct evalstring ***end, bool var) {\n"\
             "  struct evalstring *p;\n"\
-            "\n"\
             "  p = xmalloc(sizeof(*p));\n"\
             "  p->next = NULL;\n"\
             "  **end = p;\n"\
@@ -4704,7 +4395,6 @@ static void setDefaultState();
             "  *end = &p->next;\n"\
             "  buf.len = 0;\n"\
             "}\n"\
-            "\n"\
             "static void escape(struct scanner *s, struct evalstring ***end) {\n"\
             "  switch (s->chr) {\n"\
             "  case '$':\n"\
@@ -4736,10 +4426,8 @@ static void setDefaultState();
             "    addstringpart(end, true);\n"\
             "  }\n"\
             "}\n"\
-            "\n"\
             "struct evalstring *scanstring(struct scanner *s, bool path) {\n"\
             "  struct evalstring *str = NULL, **end = &str;\n"\
-            "\n"\
             "  buf.len = 0;\n"\
             "  for (;;) {\n"\
             "    switch (s->chr) {\n"\
@@ -4766,11 +4454,9 @@ static void setDefaultState();
             "  if (path) space(s);\n"\
             "  return str;\n"\
             "}\n"\
-            "\n"\
             "void scanpaths(struct scanner *s) {\n"\
             "  static size_t max;\n"\
             "  struct evalstring *str;\n"\
-            "\n"\
             "  while ((str = scanstring(s, true))) {\n"\
             "    if (npaths == max) {\n"\
             "      max = max ? max * 2 : 32;\n"\
@@ -4779,13 +4465,11 @@ static void setDefaultState();
             "    paths[npaths++] = str;\n"\
             "  }\n"\
             "}\n"\
-            "\n"\
             "void scanchar(struct scanner *s, int c) {\n"\
             "  if (s->chr != c) scanerror(s, \"expected '%c'\", c);\n"\
             "  next(s);\n"\
             "  space(s);\n"\
             "}\n"\
-            "\n"\
             "int scanpipe(struct scanner *s, int n) {\n"\
             "  if (s->chr != '|') return 0;\n"\
             "  next(s);\n"\
@@ -4799,21 +4483,16 @@ static void setDefaultState();
             "  space(s);\n"\
             "  return 2;\n"\
             "}\n"\
-            "\n"\
             "bool scanindent(struct scanner *s) {\n"\
             "  bool indent;\n"\
-            "\n"\
             "  for (;;) {\n"\
             "    indent = space(s);\n"\
             "    if (!comment(s)) return indent && !newline(s);\n"\
             "  }\n"\
             "}\n"\
-            "\n"\
             "void scannewline(struct scanner *s) {\n"\
             "  if (!newline(s)) scanerror(s, \"expected newline\");\n"\
             "}\n"\
-            "\n"\
-            "\n"\
             "static int cleanpath(struct string *path) {\n"\
             "  if (path) {\n"\
             "    if (remove(path->s) == 0) {\n"\
@@ -4823,43 +4502,34 @@ static void setDefaultState();
             "      return -1;\n"\
             "    }\n"\
             "  }\n"\
-            "\n"\
             "  return 0;\n"\
             "}\n"\
-            "\n"\
             "static int cleanedge(struct edge *e) {\n"\
             "  int ret = 0;\n"\
             "  size_t i;\n"\
-            "\n"\
             "  for (i = 0; i < e->nout; ++i) {\n"\
             "    if (cleanpath(e->out[i]->path) < 0) ret = -1;\n"\
             "  }\n"\
             "  if (cleanpath(edgevar(e, \"rspfile\", false)) < 0) ret = -1;\n"\
             "  if (cleanpath(edgevar(e, \"depfile\", false)) < 0) ret = -1;\n"\
-            "\n"\
             "  return ret;\n"\
             "}\n"\
-            "\n"\
             "static int cleantarget(struct node *n) {\n"\
             "  int ret = 0;\n"\
             "  size_t i;\n"\
-            "\n"\
             "  if (!n->gen || n->gen->rule == &phonyrule) return 0;\n"\
             "  if (cleanpath(n->path) < 0) ret = -1;\n"\
             "  for (i = 0; i < n->gen->nin; ++i) {\n"\
             "    if (cleantarget(n->gen->in[i]) < 0) ret = -1;\n"\
             "  }\n"\
-            "\n"\
             "  return ret;\n"\
             "}\n"\
-            "\n"\
             "static int clean(int argc, char *argv[]) {\n"\
             "  int ret = 0;\n"\
             "  bool cleangen = false, cleanrule = false;\n"\
             "  struct edge *e;\n"\
             "  struct node *n;\n"\
             "  struct rule *r;\n"\
-            "\n"\
             "  ARGBEGIN {\n"\
             "  case 'g':\n"\
             "    cleangen = true;\n"\
@@ -4872,7 +4542,6 @@ static void setDefaultState();
             "    return 2;\n"\
             "  }\n"\
             "  ARGEND\n"\
-            "\n"\
             "  if (cleanrule) {\n"\
             "    if (!argc) fatal(\"expected a rule to clean\");\n"\
             "    for (; *argv; ++argv) {\n"\
@@ -4904,15 +4573,12 @@ static void setDefaultState();
             "      if (cleanedge(e) < 0) ret = 1;\n"\
             "    }\n"\
             "  }\n"\
-            "\n"\
             "  return ret;\n"\
             "}\n"\
-            "\n"\
             "static void targetcommands(struct node *n) {\n"\
             "  struct edge *e = n->gen;\n"\
             "  struct string *command;\n"\
             "  size_t i;\n"\
-            "\n"\
             "  if (!e || (e->flags & FLAG_WORK)) return;\n"\
             "  e->flags |= FLAG_WORK;\n"\
             "  for (i = 0; i < e->nin; ++i)\n"\
@@ -4920,10 +4586,8 @@ static void setDefaultState();
             "  command = edgevar(e, \"command\", true);\n"\
             "  if (command && command->n) puts(command->s);\n"\
             "}\n"\
-            "\n"\
             "static int commands(int argc, char *argv[]) {\n"\
             "  struct node *n;\n"\
-            "\n"\
             "  if (argc > 1) {\n"\
             "    while (*++argv) {\n"\
             "      n = nodeget(*argv, 0);\n"\
@@ -4933,16 +4597,12 @@ static void setDefaultState();
             "  } else {\n"\
             "    defaultnodes(targetcommands);\n"\
             "  }\n"\
-            "\n"\
             "  if (fflush(stdout) || ferror(stdout)) fatal(\"write failed\");\n"\
-            "\n"\
             "  return 0;\n"\
             "}\n"\
-            "\n"\
             "static void printquoted(const char *s, size_t n, bool join) {\n"\
             "  size_t i;\n"\
             "  char c;\n"\
-            "\n"\
             "  for (i = 0; i < n; ++i) {\n"\
             "    c = s[i];\n"\
             "    switch (c) {\n"\
@@ -4959,7 +4619,6 @@ static void setDefaultState();
             "    putchar(c);\n"\
             "  }\n"\
             "}\n"\
-            "\n"\
             "static int compdb(int argc, char *argv[]) {\n"\
             "  char dir[1024], *p;\n"\
             "  struct edge *e;\n"\
@@ -4967,7 +4626,6 @@ static void setDefaultState();
             "  bool expandrsp = false, first = true;\n"\
             "  int i;\n"\
             "  size_t off;\n"\
-            "\n"\
             "  ARGBEGIN {\n"\
             "  case 'x':\n"\
             "    expandrsp = true;\n"\
@@ -4977,9 +4635,7 @@ static void setDefaultState();
             "    return 2;\n"\
             "  }\n"\
             "  ARGEND\n"\
-            "\n"\
             "  osgetcwd(dir, sizeof(dir));\n"\
-            "\n"\
             "  putchar('[');\n"\
             "  for (e = alledges; e; e = e->allnext) {\n"\
             "    if (e->nin == 0) continue;\n"\
@@ -4987,10 +4643,8 @@ static void setDefaultState();
             "      if (strcmp(e->rule->name, argv[i]) == 0) {\n"\
             "        if (first) first = false;\n"\
             "        else putchar(',');\n"\
-            "\n"\
             "        printf(\"\\n  {\\n    \\\"directory\\\": \\\"\");\n"\
             "        printquoted(dir, -1, false);\n"\
-            "\n"\
             "        printf(\"\\\",\\n    \\\"command\\\": \\\"\");\n"\
             "        cmd = edgevar(e, \"command\", true);\n"\
             "        rspfile = expandrsp ? edgevar(e, \"rspfile\", true) : NULL;\n"\
@@ -5005,40 +4659,30 @@ static void setDefaultState();
             "          off += rspfile->n;\n"\
             "          printquoted(cmd->s + off, cmd->n - off, false);\n"\
             "        }\n"\
-            "\n"\
             "        printf(\"\\\",\\n    \\\"file\\\": \\\"\");\n"\
             "        printquoted(e->in[0]->path->s, -1, false);\n"\
-            "\n"\
             "        printf(\"\\\",\\n    \\\"output\\\": \\\"\");\n"\
             "        printquoted(e->out[0]->path->s, -1, false);\n"\
-            "\n"\
             "        printf(\"\\\"\\n  }\");\n"\
             "        break;\n"\
             "      }\n"\
             "    }\n"\
             "  }\n"\
             "  puts(\"\\n]\");\n"\
-            "\n"\
             "  if (fflush(stdout) || ferror(stdout)) fatal(\"write failed\");\n"\
-            "\n"\
             "  return 0;\n"\
             "}\n"\
-            "\n"\
             "static void graphnode(struct node *n) {\n"\
             "  struct edge *e = n->gen;\n"\
             "  size_t i;\n"\
             "  const char *style;\n"\
-            "\n"\
             "  printf(\"\\\"%p\\\" [label=\\\"\", (void *)n);\n"\
             "  printquoted(n->path->s, n->path->n, false);\n"\
             "  printf(\"\\\"]\\n\");\n"\
-            "\n"\
             "  if (!e || (e->flags & FLAG_WORK)) return;\n"\
             "  e->flags |= FLAG_WORK;\n"\
-            "\n"\
             "  for (i = 0; i < e->nin; ++i)\n"\
             "    graphnode(e->in[i]);\n"\
-            "\n"\
             "  if (e->nin == 1 && e->nout == 1) {\n"\
             "    printf(\"\\\"%p\\\" -> \\\"%p\\\" [label=\\\"%s\\\"]\\n\", (void *)e->in[0], (void *)e->out[0], e->rule->name);\n"\
             "  } else {\n"\
@@ -5051,15 +4695,12 @@ static void setDefaultState();
             "    }\n"\
             "  }\n"\
             "}\n"\
-            "\n"\
             "static int graph(int argc, char *argv[]) {\n"\
             "  struct node *n;\n"\
-            "\n"\
             "  puts(\"digraph ninja {\");\n"\
             "  puts(\"rankdir=\\\"LR\\\"\");\n"\
             "  puts(\"node [fontsize=10, shape=box, height=0.25]\");\n"\
             "  puts(\"edge [fontsize=10]\");\n"\
-            "\n"\
             "  if (argc > 1) {\n"\
             "    while (*++argv) {\n"\
             "      n = nodeget(*argv, 0);\n"\
@@ -5069,21 +4710,16 @@ static void setDefaultState();
             "  } else {\n"\
             "    defaultnodes(graphnode);\n"\
             "  }\n"\
-            "\n"\
             "  puts(\"}\");\n"\
-            "\n"\
             "  if (fflush(stdout) || ferror(stdout)) fatal(\"write failed\");\n"\
-            "\n"\
             "  return 0;\n"\
             "}\n"\
-            "\n"\
             "static int query(int argc, char *argv[]) {\n"\
             "  struct node *n;\n"\
             "  struct edge *e;\n"\
             "  char *path;\n"\
             "  int i;\n"\
             "  size_t j, k;\n"\
-            "\n"\
             "  if (argc == 1) {\n"\
             "    fprintf(stderr, \"usage: %s ... -t query target...\\n\", argv0);\n"\
             "    exit(2);\n"\
@@ -5106,14 +4742,11 @@ static void setDefaultState();
             "        printf(\"    %s\\n\", e->out[k]->path->s);\n"\
             "    }\n"\
             "  }\n"\
-            "\n"\
             "  return 0;\n"\
             "}\n"\
-            "\n"\
             "static void targetsdepth(struct node *n, size_t depth, size_t indent) {\n"\
             "  struct edge *e = n->gen;\n"\
             "  size_t i;\n"\
-            "\n"\
             "  for (i = 0; i < indent; ++i)\n"\
             "    printf(\"  \");\n"\
             "  if (e) {\n"\
@@ -5126,7 +4759,6 @@ static void setDefaultState();
             "    puts(n->path->s);\n"\
             "  }\n"\
             "}\n"\
-            "\n"\
             "static void targetsusage(void) {\n"\
             "  fprintf(stderr,\n"\
             "          \"usage: %s ... -t targets [depth [maxdepth]]\\n\"\n"\
@@ -5137,12 +4769,10 @@ static void setDefaultState();
             "          argv0);\n"\
             "  exit(2);\n"\
             "}\n"\
-            "\n"\
             "static int targets(int argc, char *argv[]) {\n"\
             "  struct edge *e;\n"\
             "  size_t depth = 1, i;\n"\
             "  char *end, *mode, *name;\n"\
-            "\n"\
             "  if (argc > 3) targetsusage();\n"\
             "  mode = argv[1];\n"\
             "  if (!mode || strcmp(mode, \"depth\") == 0) {\n"\
@@ -5175,12 +4805,9 @@ static void setDefaultState();
             "  } else {\n"\
             "    targetsusage();\n"\
             "  }\n"\
-            "\n"\
             "  if (fflush(stdout) || ferror(stdout)) fatal(\"write failed\");\n"\
-            "\n"\
             "  return 0;\n"\
             "}\n"\
-            "\n"\
             "static const struct tool tools[] = {\n"\
             "    {\"clean\", clean},\n"\
             "    {\"commands\", commands},\n"\
@@ -5189,11 +4816,9 @@ static void setDefaultState();
             "    {\"query\", query},\n"\
             "    {\"targets\", targets},\n"\
             "};\n"\
-            "\n"\
             "const struct tool *toolget(const char *name) {\n"\
             "  const struct tool *t;\n"\
             "  size_t i;\n"\
-            "\n"\
             "  t = NULL;\n"\
             "  for (i = 0; i < LEN(tools); ++i) {\n"\
             "    if (strcmp(name, tools[i].name) == 0) {\n"\
@@ -5202,13 +4827,9 @@ static void setDefaultState();
             "    }\n"\
             "  }\n"\
             "  if (!t) fatal(\"unknown tool '%s'\", name);\n"\
-            "\n"\
             "  return t;\n"\
             "}\n"\
-            "\n"\
-            "\n"\
             "#define MAXH (sizeof(void *) * 8 * 3 / 2)\n"\
-            "\n"\
             "void deltree(struct treenode *n, void delkey(void *), void delval(void *)) {\n"\
             "  if (!n) return;\n"\
             "  if (delkey) delkey(n->key);\n"\
@@ -5217,17 +4838,14 @@ static void setDefaultState();
             "  deltree(n->child[1], delkey, delval);\n"\
             "  free(n);\n"\
             "}\n"\
-            "\n"\
             "static inline int height(struct treenode *n) {\n"\
             "  return n ? n->height : 0;\n"\
             "}\n"\
-            "\n"\
             "static int rot(struct treenode **p, struct treenode *x, int dir) {\n"\
             "  struct treenode *y = x->child[dir];\n"\
             "  struct treenode *z = y->child[!dir];\n"\
             "  int hx = x->height;\n"\
             "  int hz = height(z);\n"\
-            "\n"\
             "  if (hz > height(y->child[dir])) {\n"\
             "    x->child[dir] = z->child[!dir];\n"\
             "    y->child[!dir] = z->child[dir];\n"\
@@ -5246,12 +4864,10 @@ static void setDefaultState();
             "  *p = z;\n"\
             "  return z->height - hx;\n"\
             "}\n"\
-            "\n"\
             "static int balance(struct treenode **p) {\n"\
             "  struct treenode *n = *p;\n"\
             "  int h0 = height(n->child[0]);\n"\
             "  int h1 = height(n->child[1]);\n"\
-            "\n"\
             "  if (h0 - h1 + 1u < 3u) {\n"\
             "    int old = n->height;\n"\
             "    n->height = h0 < h1 ? h1 + 1 : h0 + 1;\n"\
@@ -5259,10 +4875,8 @@ static void setDefaultState();
             "  }\n"\
             "  return rot(p, n, h0 < h1);\n"\
             "}\n"\
-            "\n"\
             "struct treenode *treefind(struct treenode *n, const char *key) {\n"\
             "  int c;\n"\
-            "\n"\
             "  while (n) {\n"\
             "    c = strcmp(key, n->key);\n"\
             "    if (c == 0) return n;\n"\
@@ -5270,12 +4884,10 @@ static void setDefaultState();
             "  }\n"\
             "  return NULL;\n"\
             "}\n"\
-            "\n"\
             "void *treeinsert(struct treenode **rootp, char *key, void *value) {\n"\
             "  struct treenode **a[MAXH], *n = *rootp, *r;\n"\
             "  void *old;\n"\
             "  int i = 0, c;\n"\
-            "\n"\
             "  a[i++] = rootp;\n"\
             "  while (n) {\n"\
             "    c = strcmp(key, n->key);\n"\
@@ -5297,10 +4909,7 @@ static void setDefaultState();
             "    ;\n"\
             "  return NULL;\n"\
             "}\n"\
-            "\n"\
-            "\n"\
             "extern const char *argv0;\n"\
-            "\n"\
             "static void vwarn(const char *fmt, va_list ap) {\n"\
             "  fprintf(stderr, \"%s: \", argv0);\n"\
             "  vfprintf(stderr, fmt, ap);\n"\
@@ -5311,33 +4920,25 @@ static void setDefaultState();
             "    putc('\\n', stderr);\n"\
             "  }\n"\
             "}\n"\
-            "\n"\
             "void warn(const char *fmt, ...) {\n"\
             "  va_list ap;\n"\
-            "\n"\
             "  va_start(ap, fmt);\n"\
             "  vwarn(fmt, ap);\n"\
             "  va_end(ap);\n"\
             "}\n"\
-            "\n"\
             "void fatal(const char *fmt, ...) {\n"\
             "  va_list ap;\n"\
-            "\n"\
             "  va_start(ap, fmt);\n"\
             "  vwarn(fmt, ap);\n"\
             "  va_end(ap);\n"\
             "  exit(1);\n"\
             "}\n"\
-            "\n"\
             "void *xmalloc(size_t n) {\n"\
             "  void *p;\n"\
-            "\n"\
             "  p = malloc(n);\n"\
             "  if (!p) fatal(\"malloc:\");\n"\
-            "\n"\
             "  return p;\n"\
             "}\n"\
-            "\n"\
             "static void *reallocarray_(void *p, size_t n, size_t m) {\n"\
             "  if (m && n > SIZE_MAX / m) {\n"\
             "    errno = ENOMEM;\n"\
@@ -5345,28 +4946,21 @@ static void setDefaultState();
             "  }\n"\
             "  return realloc(p, n * m);\n"\
             "}\n"\
-            "\n"\
             "void *xreallocarray(void *p, size_t n, size_t m) {\n"\
             "  p = reallocarray_(p, n, m);\n"\
             "  if (!p) fatal(\"reallocarray:\");\n"\
-            "\n"\
             "  return p;\n"\
             "}\n"\
-            "\n"\
             "char *xmemdup(const char *s, size_t n) {\n"\
             "  char *p;\n"\
-            "\n"\
             "  p = xmalloc(n);\n"\
             "  memcpy(p, s, n);\n"\
-            "\n"\
             "  return p;\n"\
             "}\n"\
-            "\n"\
             "int xasprintf(char **s, const char *fmt, ...) {\n"\
             "  va_list ap;\n"\
             "  int ret;\n"\
             "  size_t n;\n"\
-            "\n"\
             "  va_start(ap, fmt);\n"\
             "  ret = vsnprintf(NULL, 0, fmt, ap);\n"\
             "  va_end(ap);\n"\
@@ -5377,10 +4971,8 @@ static void setDefaultState();
             "  ret = vsnprintf(*s, n, fmt, ap);\n"\
             "  va_end(ap);\n"\
             "  if (ret < 0 || (size_t)ret >= n) fatal(\"vsnprintf:\");\n"\
-            "\n"\
             "  return ret;\n"\
             "}\n"\
-            "\n"\
             "void bufadd(struct buffer *buf, char c) {\n"\
             "  if (buf->len >= buf->cap) {\n"\
             "    buf->cap = buf->cap ? buf->cap * 2 : 1 << 8;\n"\
@@ -5389,19 +4981,14 @@ static void setDefaultState();
             "  }\n"\
             "  buf->data[buf->len++] = c;\n"\
             "}\n"\
-            "\n"\
             "struct string *mkstr(size_t n) {\n"\
             "  struct string *str;\n"\
-            "\n"\
             "  str = xmalloc(sizeof(*str) + n + 1);\n"\
             "  str->n = n;\n"\
-            "\n"\
             "  return str;\n"\
             "}\n"\
-            "\n"\
             "void delevalstr(void *ptr) {\n"\
             "  struct evalstring *str = ptr, *p;\n"\
-            "\n"\
             "  while (str) {\n"\
             "    p = str;\n"\
             "    str = str->next;\n"\
@@ -5410,12 +4997,10 @@ static void setDefaultState();
             "    free(p);\n"\
             "  }\n"\
             "}\n"\
-            "\n"\
             "void canonpath(struct string *path) {\n"\
             "  char *component[60];\n"\
             "  int n;\n"\
             "  char *s, *d, *end;\n"\
-            "\n"\
             "  if (path->n == 0) fatal(\"empty path\");\n"\
             "  s = d = path->s;\n"\
             "  end = path->s + path->n;\n"\
@@ -5462,11 +5047,9 @@ static void setDefaultState();
             "  }\n"\
             "  path->n = d - path->s;\n"\
             "}\n"\
-            "\n"\
             "int writefile(const char *name, struct string *s) {\n"\
             "  FILE *f;\n"\
             "  int ret;\n"\
-            "\n"\
             "  f = fopen(name, \"w\");\n"\
             "  if (!f) {\n"\
             "    warn(\"open %s:\", name);\n"\
@@ -5478,24 +5061,18 @@ static void setDefaultState();
             "    ret = -1;\n"\
             "  }\n"\
             "  fclose(f);\n"\
-            "\n"\
             "  return ret;\n"\
             "}\n"\
-            "\n"\
-            "\n"\
             "void osgetcwd(char *buf, size_t len) {\n"\
             "  if (!getcwd(buf, len)) fatal(\"getcwd:\");\n"\
             "}\n"\
-            "\n"\
             "void oschdir(const char *dir) {\n"\
             "  if (chdir(dir) < 0) fatal(\"chdir %s:\", dir);\n"\
             "}\n"\
-            "\n"\
             "int osmkdirs(struct string *path, bool parent) {\n"\
             "  int ret;\n"\
             "  struct stat st;\n"\
             "  char *s, *end;\n"\
-            "\n"\
             "  ret = 0;\n"\
             "  end = path->s + path->n;\n"\
             "  for (s = end - parent; s > path->s; --s) {\n"\
@@ -5517,13 +5094,10 @@ static void setDefaultState();
             "    }\n"\
             "    if (s < end) *s = '/';\n"\
             "  }\n"\
-            "\n"\
             "  return ret;\n"\
             "}\n"\
-            "\n"\
             "int64_t osmtime(const char *name) {\n"\
             "  struct stat st;\n"\
-            "\n"\
             "  if (stat(name, &st) < 0) {\n"\
             "    if (errno != ENOENT) fatal(\"stat %s:\", name);\n"\
             "    return MTIME_MISSING;\n"\
@@ -5552,7 +5126,7 @@ String FixPathExe(String str) {
   String path = ConvertPath(state.arena, ConvertExe(state.arena, str));
 #if defined(PLATFORM_WIN)
   return F(state.arena, "%s\\%s", GetCwd(), path.data);
-#elif defined(PLATFORM_LINUX)
+#else
   return F(state.arena, "%s/%s", GetCwd(), path.data);
 #endif
 }
@@ -5561,7 +5135,7 @@ String FixPath(String str) {
   String path = ConvertPath(state.arena, str);
 #if defined(PLATFORM_WIN)
   return F(state.arena, "%s\\%s", GetCwd(), path.data);
-#elif defined(PLATFORM_LINUX)
+#else
   return F(state.arena, "%s/%s", GetCwd(), path.data);
 #endif
 }
@@ -5573,7 +5147,7 @@ String ConvertNinjaPath(String str) {
   copy.data[1] = '$';
   copy.data[2] = ':';
   return copy;
-#elif defined(PLATFORM_LINUX)
+#else
   return str;
 #endif
 }
@@ -5647,6 +5221,9 @@ static void readCache() {
     if (StrEqual(&state.compiler, &S("clang"))) {
       compileCommand = F(state.arena, "clang \"%s\" -o \"%s\" -lrt -std=c99 -O2", sourcePath.data, outputPath.data);
     }
+    if (StrEqual(&state.compiler, &S("tcc"))) {
+      compileCommand = F(state.arena, "tcc \"%s\" -o \"%s\" -lrt -std=c99 -O2", sourcePath.data, outputPath.data);
+    }
     errno_t err = RunCommand(compileCommand);
     if (err != SUCCESS) {
       LogError("Error meanwhile compiling samurai at %s, if you are seeing this please make an issue at github.com/TomasBorquez/mate.h", sourcePath.data);
@@ -5710,6 +5287,10 @@ void reBuild() {
 
   if (StrEqual(&state.compiler, &S("clang"))) {
     compileCommand = F(state.arena, "clang \"%s\" -o \"%s\"", state.mateSource.data, mateExeNew.data);
+  }
+
+  if (StrEqual(&state.compiler, &S("tcc"))) {
+    compileCommand = F(state.arena, "tcc \"%s\" -o \"%s\"", state.mateSource.data, mateExeNew.data);
   }
 
   if (StrEqual(&state.compiler, &S("MSVC"))) {
@@ -6091,6 +5672,11 @@ String InstallExecutable() {
     compileCommand = F(state.arena, "rule compile\n  command = $cc $flags $includes -c $in -o $out\n");
   }
 
+  if (StrEqual(&state.compiler, &S("tcc"))) {
+    linkCommand = F(state.arena, "rule link\n  command = $cc $flags $linker_flags -o $out $in $libs\n");
+    compileCommand = F(state.arena, "rule compile\n  command = $cc $flags $includes -c $in -o $out\n");
+  }
+
   if (StrEqual(&state.compiler, &S("MSVC"))) {
     LogError("MSVC not yet implemented");
     abort();
@@ -6158,7 +5744,7 @@ String InstallExecutable() {
   state.totalTime = TimeNow() - state.startTime;
 #if defined(PLATFORM_WIN)
   return F(state.arena, "%s\\%s", state.buildDirectory.data, executable.output.data);
-#elif defined(PLATFORM_LINUX)
+#else
   return F(state.arena, "%s/%s", state.buildDirectory.data, executable.output.data);
 #endif
 }

@@ -7,7 +7,7 @@ String FixPathExe(String str) {
   String path = ConvertPath(state.arena, ConvertExe(state.arena, str));
 #if defined(PLATFORM_WIN)
   return F(state.arena, "%s\\%s", GetCwd(), path.data);
-#elif defined(PLATFORM_LINUX)
+#else
   return F(state.arena, "%s/%s", GetCwd(), path.data);
 #endif
 }
@@ -16,7 +16,7 @@ String FixPath(String str) {
   String path = ConvertPath(state.arena, str);
 #if defined(PLATFORM_WIN)
   return F(state.arena, "%s\\%s", GetCwd(), path.data);
-#elif defined(PLATFORM_LINUX)
+#else
   return F(state.arena, "%s/%s", GetCwd(), path.data);
 #endif
 }
@@ -28,7 +28,7 @@ String ConvertNinjaPath(String str) {
   copy.data[1] = '$';
   copy.data[2] = ':';
   return copy;
-#elif defined(PLATFORM_LINUX)
+#else
   return str;
 #endif
 }
@@ -102,6 +102,9 @@ static void readCache() {
     if (StrEqual(&state.compiler, &S("clang"))) {
       compileCommand = F(state.arena, "clang \"%s\" -o \"%s\" -lrt -std=c99 -O2", sourcePath.data, outputPath.data);
     }
+    if (StrEqual(&state.compiler, &S("tcc"))) {
+      compileCommand = F(state.arena, "tcc \"%s\" -o \"%s\" -lrt -std=c99 -O2", sourcePath.data, outputPath.data);
+    }
     errno_t err = RunCommand(compileCommand);
     if (err != SUCCESS) {
       LogError("Error meanwhile compiling samurai at %s, if you are seeing this please make an issue at github.com/TomasBorquez/mate.h", sourcePath.data);
@@ -165,6 +168,10 @@ void reBuild() {
 
   if (StrEqual(&state.compiler, &S("clang"))) {
     compileCommand = F(state.arena, "clang \"%s\" -o \"%s\"", state.mateSource.data, mateExeNew.data);
+  }
+
+  if (StrEqual(&state.compiler, &S("tcc"))) {
+    compileCommand = F(state.arena, "tcc \"%s\" -o \"%s\"", state.mateSource.data, mateExeNew.data);
   }
 
   if (StrEqual(&state.compiler, &S("MSVC"))) {
@@ -546,6 +553,11 @@ String InstallExecutable() {
     compileCommand = F(state.arena, "rule compile\n  command = $cc $flags $includes -c $in -o $out\n");
   }
 
+  if (StrEqual(&state.compiler, &S("tcc"))) {
+    linkCommand = F(state.arena, "rule link\n  command = $cc $flags $linker_flags -o $out $in $libs\n");
+    compileCommand = F(state.arena, "rule compile\n  command = $cc $flags $includes -c $in -o $out\n");
+  }
+
   if (StrEqual(&state.compiler, &S("MSVC"))) {
     LogError("MSVC not yet implemented");
     abort();
@@ -613,7 +625,7 @@ String InstallExecutable() {
   state.totalTime = TimeNow() - state.startTime;
 #if defined(PLATFORM_WIN)
   return F(state.arena, "%s\\%s", state.buildDirectory.data, executable.output.data);
-#elif defined(PLATFORM_LINUX)
+#else
   return F(state.arena, "%s/%s", state.buildDirectory.data, executable.output.data);
 #endif
 }

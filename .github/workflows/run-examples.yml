@@ -8,6 +8,10 @@ jobs:
   test-examples:
     runs-on: ubuntu-latest
     
+    strategy:
+      matrix:
+        compiler: [gcc, clang, tcc]
+    
     steps:
     - name: Checkout code with submodules
       uses: actions/checkout@v3
@@ -16,56 +20,57 @@ jobs:
         fetch-depth: 0  
         token: ${{ secrets.GITHUB_TOKEN }}
     
-    - name: Install GCC
-      run: sudo apt-get update && sudo apt-get install -y gcc
+    - name: Install compilers
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc clang tcc
     
     - name: Test example 01-basic-build
       working-directory: ./examples/01-basic-build
       run: |
-        gcc mate.c -o mate
+        ${{ matrix.compiler }} mate.c -o mate
         ./mate
         if [ $? -ne 0 ]; then
-          echo "Example 01-basic-build failed"
+          echo "Example 01-basic-build failed with ${{ matrix.compiler }}"
           exit 1
         fi
     
     - name: Test example 02-custom-config
       working-directory: ./examples/02-custom-config
       run: |
-        gcc mate.c -o mate
+        ${{ matrix.compiler }} mate.c -o mate
         ./mate
         if [ $? -ne 0 ]; then
-          echo "Example 02-custom-config failed"
+          echo "Example 02-custom-config failed with ${{ matrix.compiler }}"
           exit 1
         fi
     
     - name: Test example 03-generic-flags
       working-directory: ./examples/03-generic-flags
       run: |
-        gcc mate.c -o mate
+        ${{ matrix.compiler }} mate.c -o mate
         ./mate
         if [ $? -ne 0 ]; then
-          echo "Example 03-generic-flags failed"
+          echo "Example 03-generic-flags failed with ${{ matrix.compiler }}"
           exit 1
         fi
     
     - name: Test example 04-raylib-build
       working-directory: ./examples/04-raylib-build
       run: |
-        gcc mate.c -o mate
+        ${{ matrix.compiler }} mate.c -o mate
         ./mate
         if [ $? -ne 0 ]; then
-          echo "Example 04-raylib-build failed"
+          echo "Example 04-raylib-build failed with ${{ matrix.compiler }}"
           exit 1
         fi
-
+        
     - name: Test example 05-samurai-source-code
       working-directory: ./examples/05-samurai-source-code
       run: |
-        gcc mate.c -o mate
+        ${{ matrix.compiler }} mate.c -o mate
         ./mate
         if [ $? -ne 0 ]; then
-          echo "Example 05-samurai-source-code"
+          echo "Example 05-samurai-source-code failed with ${{ matrix.compiler }}"
           exit 1
         fi
-

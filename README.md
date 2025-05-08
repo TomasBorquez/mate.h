@@ -1,45 +1,50 @@
-> [!WARNING]
-> This is still very experimental
-
-# About:
-Inspired from `build.zig`, `nob.h` and `CMake` I created my own build system with the goal to reivent the wheel
-and use my own build system for my projects, for now it has limited support multiple platforms, the main one is 
-`gcc` in `MINGW` and Windows, but I'm planning on supporting `Clang`, `MSVC` and `TCC`, as well as `Linux`. This
-is very much experimental but if you want to use it here is an example for building a `raylib` project:
+# About
+Mate is a build system for C in C and all you need to run it is a C compiler, if you want to learn more about it check out our [examples](./examples) which should
+teach you everything you need to know to use it, here is a simple example of a `mate.c`:
 
 ```c 
-#define MATE_IMPLEMENTATION
+#define MATE_IMPLEMENTATION // Adds function implementations 
 #include "mate.h"
 
 i32 main() {
   StartBuild();
   {
-    // Sets the output name and different flags
-    CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall -ggdb"});
+    CreateExecutable((ExecutableOptions){
+        .output = "main",   // output name, in windows this becomes `main.exe` automatically and on linux it stays as `main`
+        .flags = "-Wall -g" // adds warnings and debug symbols
+    });
 
     // Files to compile
     AddFile("./src/main.c");
 
-    // Libraries and includes
-    AddIncludePaths("C:/raylib/include", "./src");
-    AddLibraryPaths("C:/raylib/lib");
-    LinkSystemLibraries("raylib", "opengl32", "gdi32", "winmm");
-
-    // Compiles all files parallely with ninja
+    // Compiles all files parallely with samurai
     String exePath = InstallExecutable();
 
-    // Runs `./build/main.exe` or whatever your main file is
+    // Runs `./build/main` or `./build/main.exe` depending on the platform
     RunCommand(exePath);
-
-    // Creates a `compile_commands.json`
-    CreateCompileCommands();
   }
   EndBuild();
 }
 ```
 
-All you need is `mate.h` on the same folder you have `mate.c` example file and run `gcc ./mate.c -o ./mate.exe && ./mate.exe`, after running once
-it will detect if you need to rebuild based on `./build/mate-cache.json`. 
+To use it al you need is `mate.h` on the same folder you have the `mate.c` example file and you can run it like `gcc ./mate.c -o ./mate.exe && ./mate.exe`, after running once
+it will auto detect if you need to rebuild based on `./build/mate-cache.ini`, so you can just run `./mate` directly.
 
-You also need ninja installed and available in your `PATH` since everything is parsed into a `build.ninja` for performance reasons (like incremental builds, parallel compilation, ...) 
-and for making it easier to cross platform.
+Under the hood we use [Samurai](https://github.com/michaelforney/samurai), a ninja rewrite in C, we add it to the source code and compile it on the first run, after that
+it is cached and thanks to it builds are extremely fast.
+
+## Compatibility
+- linux, supported.
+- windows, supported. (you'll need to use ninja since samurai is not yet supported, we are [working](https://github.com/TomasBorquez/mate.h/issues/2) on it though)
+- macos, somewhat supported. (mate was made to be as compatible as possible but we have limited testing in macos)
+
+- [gcc](https://gcc.gnu.org/), supported. (it was mainly made for it so it has the best support)
+- [clang](https://releases.llvm.org/), supported.
+- [tinyc](https://bellard.org/tcc/), supported.
+- [msvc](https://visualstudio.microsoft.com/vs/features/cplusplus/), unsupported yet (you can use all of the above in MinGW perfectly well)
+
+## Acknowledgments
+This project incorporates code from [Samurai](https://github.com/michaelforney/samurai), which is primarily licensed under ISC license by Michael Forney, 
+with portions under Apache License 2.0 and MIT licenses. The full license text is available in the [LICENSE-SAMURAI.txt](./LICENSE-SAMURAI.txt) file.
+
+Inspired from `build.zig`, `nob.h`, `CMake` and other unrelated C libraries.

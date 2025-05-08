@@ -138,7 +138,12 @@ i32 main() {
 
     if (StrEqual(currLine, &samuraiMacro)) {
       FileAdd(&resultPath, &S("// --- SAMURAI START ---"));
-
+      FileAdd(&resultPath, &S("/*"));
+      FileAdd(&resultPath, &S("* This code comes from Samurai (https://github.com/michaelforney/samurai)"));
+      FileAdd(&resultPath, &S("* Copyright © 2017-2021 Michael Forney"));
+      FileAdd(&resultPath, &S("* Licensed under ISC license, with portions under Apache License 2.0 and MIT licenses."));
+      FileAdd(&resultPath, &S("* See LICENSE-SAMURAI.txt for the full license text."));
+      FileAdd(&resultPath, &S("*/"));
       for (size_t j = 0; j < samuraiSourceSplit.length; j++) {
         String *currLine = VecAt(samuraiSourceSplit, j);
 
@@ -155,13 +160,9 @@ i32 main() {
           continue;
         }
 
-        if (currLine->data[0] == '/' && currLine->data[1] == '/') {
+        if (currLine->length == 0 || (currLine->data[0] == '/' && currLine->data[1] == '/')) {
           continue;
         }
-
-        // if (currLine->data[0] == '\n') {
-        //   continue;
-        // }
 
         String escapedLine = escapeString(arena, currLine);
         String middleLine = F(arena, "            \"%s\\n\"\\", escapedLine.data);
