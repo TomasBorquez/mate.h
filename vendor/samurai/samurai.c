@@ -1,4 +1,3 @@
-// Base include headers
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <fcntl.h>
@@ -12,7 +11,6 @@
 #include <stdarg.h>
 #include <string.h>
 
-// Linux specific headers
 #include <sys/stat.h>
 #include <poll.h>
 #include <signal.h>
@@ -33,11 +31,8 @@ struct buildoptions {
 
 extern struct buildoptions buildopts;
 
-/* reset state, so a new build can be executed */
 void buildreset(void);
-/* schedule a particular target to be built */
 void buildadd(struct node *);
-/* execute rules to build the scheduled targets */
 void build(void);
 
 // --- deps.h ---
@@ -61,36 +56,24 @@ struct pool {
   char *name;
   int numjobs, maxjobs;
 
-  /* a queue of ready edges blocked by the pool's capacity */
   struct edge *work;
 };
 
 void envinit(void);
 
-/* create a new environment with an optional parent */
 struct environment *mkenv(struct environment *);
-/* search environment and its parents for a variable, returning the value or NULL if not found */
 struct string *envvar(struct environment *, char *);
-/* add to environment a variable and its value, replacing the old value if there is one */
 void envaddvar(struct environment *, char *, struct string *);
-/* evaluate an unevaluated string within an environment, returning the result */
 struct string *enveval(struct environment *, struct evalstring *);
-/* search an environment and its parents for a rule, returning the rule or NULL if not found */
 struct rule *envrule(struct environment *, char *);
-/* add a rule to an environment, or fail if the rule already exists */
 void envaddrule(struct environment *, struct rule *);
 
-/* create a new rule with the given name */
 struct rule *mkrule(char *);
-/* add to rule a variable and its value */
 void ruleaddvar(struct rule *, char *, struct evalstring *);
 
-/* create a new pool with the given name */
 struct pool *mkpool(char *);
-/* lookup a pool by name, or fail if it does not exist */
 struct pool *poolget(char *);
 
-/* evaluate and return an edge's variable, optionally shell-escaped */
 struct string *edgevar(struct edge *, char *, _Bool);
 
 extern struct environment *rootenv;
@@ -99,95 +82,68 @@ extern struct pool consolepool;
 
 // --- graph.h ---
 
-/* set in the tv_nsec field of a node's mtime */
 enum {
-  /* we haven't stat the file yet */
   MTIME_UNKNOWN = -1,
-  /* the file does not exist */
   MTIME_MISSING = -2,
 };
 
 struct node {
-  /* shellpath is the escaped shell path, and is populated as needed by nodepath */
   struct string *path, *shellpath;
 
-  /* modification time of file (in nanoseconds) and build log entry (in seconds) */
   int64_t mtime, logmtime;
 
-  /* generating edge and dependent edges */
   struct edge *gen, **use;
   size_t nuse;
 
-  /* command hash used to build this output, read from build log */
   uint64_t hash;
 
-  /* ID for .ninja_deps. -1 if not present in log. */
   int32_t id;
 
-  /* does the node need to be rebuilt */
   _Bool dirty;
 };
 
-/* build rule, i.e., edge between inputs and outputs */
 struct edge {
   struct rule *rule;
   struct pool *pool;
   struct environment *env;
 
-  /* input and output nodes */
   struct node **out, **in;
   size_t nout, nin;
 
-  /* index of first implicit output */
   size_t outimpidx;
-  /* index of first implicit and order-only input */
   size_t inimpidx, inorderidx;
 
-  /* command hash */
   uint64_t hash;
 
-  /* how many inputs need to be rebuilt or pruned before this edge is ready */
   size_t nblock;
-  /* how many inputs need to be pruned before all outputs can be pruned */
   size_t nprune;
 
   enum {
-    FLAG_WORK = 1 << 0,      /* scheduled for build */
-    FLAG_HASH = 1 << 1,      /* calculated the command hash */
-    FLAG_DIRTY_IN = 1 << 3,  /* dirty input */
-    FLAG_DIRTY_OUT = 1 << 4, /* missing or outdated output */
+    FLAG_WORK = 1 << 0,
+    FLAG_HASH = 1 << 1,
+    FLAG_DIRTY_IN = 1 << 3,
+    FLAG_DIRTY_OUT = 1 << 4,
     FLAG_DIRTY = FLAG_DIRTY_IN | FLAG_DIRTY_OUT,
-    FLAG_CYCLE = 1 << 5, /* used for cycle detection */
-    FLAG_DEPS = 1 << 6,  /* dependencies loaded */
+    FLAG_CYCLE = 1 << 5,
+    FLAG_DEPS = 1 << 6,
   } flags;
 
-  /* used to coordinate ready work in build() */
   struct edge *worknext;
-  /* used for alledges linked list */
   struct edge *allnext;
 };
 
 void graphinit(void);
 
-/* create a new node or return existing node */
 struct node *mknode(struct string *);
-/* lookup a node by name; returns NULL if it does not exist */
 struct node *nodeget(const char *, size_t);
-/* update the mtime field of a node */
 void nodestat(struct node *);
-/* get a node's path, possibly escaped for the shell */
 struct string *nodepath(struct node *, _Bool);
-/* record the usage of a node by an edge */
 void nodeuse(struct node *, struct edge *);
 
-/* create a new edge with the given parent environment */
 struct edge *mkedge(struct environment *parent);
-/* compute the murmurhash64a of an edge command and store it in the hash field */
 void edgehash(struct edge *);
-/* add dependencies from $depfile or .ninja_deps as implicit inputs */
 void edgeadddeps(struct edge *e, struct node **deps, size_t ndeps);
 
-/* a single linked list of all edges, valid up until build() */
 extern struct edge *alledges;
 
 // --- htab.h ---
@@ -227,13 +183,11 @@ void parse(const char *, struct environment *);
 
 extern struct parseoptions parseopts;
 
-/* supported ninja version */
 enum {
   ninjamajor = 1,
   ninjaminor = 9,
 };
 
-/* execute a function with all default nodes */
 void defaultnodes(void(struct node *));
 
 // --- arg.h ---
@@ -299,7 +253,6 @@ const struct tool *toolget(const char *);
 
 // --- tree.h ---
 
-/* binary tree node, such that keys are sorted lexicographically for fast lookup */
 struct treenode {
   char *key;
   void *value;
@@ -307,11 +260,8 @@ struct treenode {
   int height;
 };
 
-/* free a tree and its children recursively, free keys and values with a function */
 void deltree(struct treenode *, void(void *), void(void *));
-/* search a binary tree for a key, return the key's value or NULL */
 struct treenode *treefind(struct treenode *, const char *);
-/* insert into a binary tree a key and a value, replace and return the old value if the key already exists */
 void *treeinsert(struct treenode **, char *, void *);
 
 // --- util.h ---
@@ -326,7 +276,6 @@ struct string {
   char s[];
 };
 
-/* an unevaluated string */
 struct evalstring {
   char *var;
   struct string *str;
@@ -343,31 +292,21 @@ void *xreallocarray(void *, size_t, size_t);
 char *xmemdup(const char *, size_t);
 int xasprintf(char **, const char *, ...);
 
-/* append a byte to a buffer */
 void bufadd(struct buffer *buf, char c);
 
-/* allocates a new string with length n. n + 1 bytes are allocated for
- * s, but not initialized. */
 struct string *mkstr(size_t n);
 
-/* delete an unevaluated string */
 void delevalstr(void *);
 
-/* canonicalizes the given path by removing duplicate slashes, and
- * folding '/.' and 'foo/..' */
 void canonpath(struct string *);
-/* write a new file with the given name and contents */
 int writefile(const char *, struct string *);
 
 // --- os.h ---
 struct string;
 
 void osgetcwd(char *, size_t);
-/* changes the working directory to the given path */
 void oschdir(const char *);
-/* creates all the parent directories of the given path */
 int osmkdirs(struct string *, _Bool);
-/* queries the mtime of a file in nanoseconds since the UNIX epoch */
 int64_t osmtime(const char *);
 
 // --- build.c ---
@@ -395,12 +334,10 @@ void buildreset(void) {
     e->flags &= ~FLAG_WORK;
 }
 
-/* returns whether n1 is newer than n2, or false if n1 is NULL */
 static bool isnewer(struct node *n1, struct node *n2) {
   return n1 && n1->mtime > n2->mtime;
 }
 
-/* returns whether this output node is dirty in relation to the newest input */
 static bool isdirty(struct node *n, struct node *newest, bool generator, bool restat) {
   struct edge *e;
 
@@ -438,7 +375,6 @@ static bool isdirty(struct node *n, struct node *newest, bool generator, bool re
   return true;
 }
 
-/* add an edge to the work queue */
 static void queue(struct edge *e) {
   struct edge **front = &work;
 
@@ -483,7 +419,6 @@ void buildadd(struct node *n) {
     }
     if (n->dirty || (n->gen && n->gen->nblock > 0)) ++e->nblock;
   }
-  /* all outputs are dirty if any are older than the newest input */
   generator = edgevar(e, "generator", true);
   restat = edgevar(e, "restat", true);
   for (i = 0; i < e->nout && !(e->flags & FLAG_DIRTY_OUT); ++i) {
@@ -562,7 +497,7 @@ static size_t formatstatus(char *buf, size_t len) {
       break;
     default:
       fatal("unknown placeholder '%%%c' in $NINJA_STATUS", *fmt);
-      continue; /* unreachable, but avoids warning */
+      continue;
     }
     if (n < 0) fatal("snprintf:");
     ret += n;
@@ -672,12 +607,8 @@ static void nodedone(struct node *n, bool prune) {
 
   for (i = 0; i < n->nuse; ++i) {
     e = n->use[i];
-    /* skip edges not used in this build */
     if (!(e->flags & FLAG_WORK)) continue;
     if (!(e->flags & (prune ? FLAG_DIRTY_OUT : FLAG_DIRTY)) && --e->nprune == 0) {
-      /* either edge was clean (possible with order-only
-       * inputs), or all its blocking inputs were pruned, so
-       * its outputs can be pruned as well */
       for (j = 0; j < e->nout; ++j)
         nodedone(e->out[j], true);
       if (e->flags & FLAG_DIRTY && e->rule != &phonyrule) --ntotal;
@@ -747,7 +678,6 @@ static void jobdone(struct job *j) {
     warn("job terminated due to signal %d: %s", WTERMSIG(status), j->cmd->s);
     j->failed = true;
   } else {
-    /* cannot happen according to POSIX */
     warn("job status unknown: %s", j->cmd->s);
     j->failed = true;
   }
@@ -759,7 +689,6 @@ static void jobdone(struct job *j) {
     p = e->pool;
 
     if (p == &consolepool) consoleused = false;
-    /* move edge from pool queue to main work queue */
     if (p->work) {
       new = p->work;
       p->work = p->work->worknext;
@@ -772,7 +701,6 @@ static void jobdone(struct job *j) {
   if (!j->failed) edgedone(e);
 }
 
-/* returns whether a job still has work to do. if not, sets j->failed */
 static bool jobwork(struct job *j) {
   char *newdata;
   size_t newcap;
@@ -805,7 +733,6 @@ done:
   return false;
 }
 
-/* queries the system load average */
 static double queryload(void) {
 #ifdef HAVE_GETLOADAVG
   double load;
@@ -837,9 +764,7 @@ void build(void) {
 
   nstarted = 0;
   for (;;) {
-    /* limit number of of jobs based on load */
     if (buildopts.maxload) maxjobs = queryload() > buildopts.maxload ? 1 : buildopts.maxjobs;
-    /* start ready edges */
     while (work && numjobs < maxjobs && numfail < buildopts.maxfail) {
       e = work;
       work = work->worknext;
@@ -896,12 +821,11 @@ void build(void) {
     else if (numfail > 1) fatal("subcommands failed");
     else fatal("subcommand failed");
   }
-  ntotal = 0; /* reset in case we just rebuilt the manifest */
+  ntotal = 0;
 }
 
 // --- deps.c ---
 
-/* maximum record size (in bytes) */
 #define MAX_RECORD_SIZE (1 << 19)
 
 struct nodearray {
@@ -970,9 +894,6 @@ void depsinit(const char *builddir) {
   struct node *n;
   struct edge *e;
   struct entry *entry, *oldentries;
-
-  /* XXX: when ninja hits a bad record, it truncates the log to the last
-   * good record. perhaps we should do the same. */
 
   if (depsfile) fclose(depsfile);
   entrieslen = 0;
@@ -1095,10 +1016,8 @@ rewrite:
   depswrite(depsheader, 1, sizeof(depsheader) - 1);
   depswrite(&depsver, 1, sizeof(depsver));
 
-  /* reset ID for all current entries */
   for (i = 0; i < entrieslen; ++i)
     entries[i].node->id = -1;
-  /* save a temporary copy of the old entries */
   oldentries = xreallocarray(NULL, entrieslen, sizeof(entries[0]));
   memcpy(oldentries, entries, entrieslen * sizeof(entries[0]));
 
@@ -1148,11 +1067,9 @@ static struct nodearray *depsparse(const char *name, bool allowmissing) {
   buf.len = 0;
   c = getc(f);
   for (;;) {
-    /* TODO: this parser needs to be rewritten to be made simpler */
     while (isalnum(c) || strchr("$+,-./@\\_", c)) {
       switch (c) {
       case '\\':
-        /* handle the crazy escaping generated by clang and gcc */
         n = 0;
         do {
           c = getc(f);
@@ -1341,7 +1258,6 @@ static void delrule(void *);
 void envinit(void) {
   struct environment *env;
 
-  /* free old environments and pools in case we rebuilt the manifest */
   while (allenvs) {
     env = allenvs;
     allenvs = env->allnext;
@@ -1563,7 +1479,6 @@ static void delnode(void *p) {
 void graphinit(void) {
   struct edge *e;
 
-  /* delete old nodes and edges in case we rebuilt the manifest */
   delhtab(allnodes, delnode);
   while (alledges) {
     e = alledges;
@@ -1645,7 +1560,6 @@ struct string *nodepath(struct node *n, bool escape) {
 }
 
 void nodeuse(struct node *n, struct edge *e) {
-  /* allocate in powers of two */
   if (!(n->nuse & (n->nuse - 1))) n->use = xreallocarray(n->use, n->nuse ? n->nuse * 2 : 1, sizeof(e));
   n->use[n->nuse++] = e;
 }
@@ -1845,17 +1759,17 @@ uint64_t murmurhash64a(const void *ptr, size_t len) {
 
   switch (len & 0x7) {
   case 7:
-    h ^= (uint64_t)p[6] << 48; /* fallthrough */
+    h ^= (uint64_t)p[6] << 48;
   case 6:
-    h ^= (uint64_t)p[5] << 40; /* fallthrough */
+    h ^= (uint64_t)p[5] << 40;
   case 5:
-    h ^= (uint64_t)p[4] << 32; /* fallthrough */
+    h ^= (uint64_t)p[4] << 32;
   case 4:
-    h ^= (uint64_t)p[3] << 24; /* fallthrough */
+    h ^= (uint64_t)p[3] << 24;
   case 3:
-    h ^= (uint64_t)p[2] << 16; /* fallthrough */
+    h ^= (uint64_t)p[2] << 16;
   case 2:
-    h ^= (uint64_t)p[1] << 8; /* fallthrough */
+    h ^= (uint64_t)p[1] << 8;
   case 1:
     h ^= (uint64_t)p[0];
     h *= m;
@@ -1926,24 +1840,22 @@ void loginit(const char *builddir) {
     ++nline;
     p = buf.data;
     buf.len = 0;
-    if (!nextfield(&p)) /* start time */
-      continue;
-    if (!nextfield(&p)) /* end time */
-      continue;
-    s = nextfield(&p); /* mtime (used for restat) */
+    if (!nextfield(&p)) continue;
+    if (!nextfield(&p)) continue;
+    s = nextfield(&p);
     if (!s) continue;
     mtime = strtoll(s, &s, 10);
     if (*s) {
       warn("corrupt build log: invalid mtime");
       continue;
     }
-    s = nextfield(&p); /* output path */
+    s = nextfield(&p);
     if (!s) continue;
     n = nodeget(s, 0);
     if (!n || !n->gen) continue;
     if (n->logmtime == MTIME_MISSING) ++nentry;
     n->logmtime = mtime;
-    s = nextfield(&p); /* command hash */
+    s = nextfield(&p);
     if (!s) continue;
     n->hash = strtoull(s, &s, 16);
     if (*s) {
@@ -2217,7 +2129,6 @@ void defaultnodes(void fn(struct node *)) {
     for (i = 0; i < ndeftarg; ++i)
       fn(deftarg[i]);
   } else {
-    /* by default build all nodes which are not used by any edges */
     for (e = alledges; e; e = e->allnext) {
       for (i = 0; i < e->nout; ++i) {
         n = e->out[i];
@@ -2411,22 +2322,18 @@ argdone:
 
   tries = 0;
 retry:
-  /* (re-)initialize global graph, environment, and parse structures */
   graphinit();
   envinit();
   parseinit();
 
-  /* parse the manifest */
   parse(manifest, rootenv);
 
   if (tool) return tool->run(argc, argv);
 
-  /* load the build log */
   builddir = getbuilddir();
   loginit(builddir);
   depsinit(builddir);
 
-  /* rebuild the manifest if it's dirty */
   n = nodeget(manifest, 0);
   if (n && n->gen) {
     buildadd(n);
@@ -2436,12 +2343,10 @@ retry:
         if (++tries > 100) fatal("manifest '%s' dirty after 100 tries", manifest);
         if (!buildopts.dryrun) goto retry;
       }
-      /* manifest was pruned; reset state, then continue with build */
       buildreset();
     }
   }
 
-  /* finally, build any specified targets or the default targets */
   if (argc) {
     for (; *argv; ++argv) {
       n = nodeget(*argv, 0);
@@ -2513,7 +2418,6 @@ static bool newline(struct scanner *s) {
   switch (s->chr) {
   case '\r':
     if (next(s) != '\n') scanerror(s, "expected '\\n' after '\\r'");
-    /* fallthrough */
   case '\n':
     next(s);
     return true;
@@ -2563,7 +2467,6 @@ static void name(struct scanner *s) {
 }
 
 int scankeyword(struct scanner *s, char **var) {
-  /* must stay in sorted order */
   static const struct {
     const char *name;
     int value;
@@ -2677,7 +2580,6 @@ struct evalstring *scanstring(struct scanner *s, bool path) {
     case '|':
     case ' ':
       if (path) goto out;
-      /* fallthrough */
     default:
       bufadd(&buf, s->chr);
       next(s);
@@ -2836,7 +2738,6 @@ static int clean(int argc, char *argv[]) {
   return ret;
 }
 
-/* depth-first traversal */
 static void targetcommands(struct node *n) {
   struct edge *e = n->gen;
   struct string *command;
@@ -3152,22 +3053,13 @@ static inline int height(struct treenode *n) {
   return n ? n->height : 0;
 }
 
-static int rot(struct treenode **p, struct treenode *x, int dir /* deeper side */) {
+static int rot(struct treenode **p, struct treenode *x, int dir) {
   struct treenode *y = x->child[dir];
   struct treenode *z = y->child[!dir];
   int hx = x->height;
   int hz = height(z);
 
   if (hz > height(y->child[dir])) {
-    /*
-     *   x
-     *  / \ dir          z
-     * A   y            / \
-     *    / \   -->    x   y
-     *   z   D        /|   |\
-     *  / \          A B   C D
-     * B   C
-     */
     x->child[dir] = z->child[!dir];
     y->child[!dir] = z->child[dir];
     z->child[!dir] = x;
@@ -3176,13 +3068,6 @@ static int rot(struct treenode **p, struct treenode *x, int dir /* deeper side *
     y->height = hz;
     z->height = hz + 1;
   } else {
-    /*
-     *   x               y
-     *  / \             / \
-     * A   y    -->    x   D
-     *    / \         / \
-     *   z   D       A   z
-     */
     x->child[dir] = z;
     y->child[!dir] = x;
     x->height = hz + 1;
@@ -3238,7 +3123,6 @@ void *treeinsert(struct treenode **rootp, char *key, void *value) {
   r->value = value;
   r->child[0] = r->child[1] = NULL;
   r->height = 1;
-  /* insert new node, rebalance ancestors.  */
   *a[--i] = r;
   while (i && balance(a[--i]))
     ;
@@ -3479,11 +3363,6 @@ int64_t osmtime(const char *name) {
   } else {
 #ifdef __APPLE__
     return (int64_t)st.st_mtime * 1000000000 + st.st_mtimensec;
-/*
-Illumos hides the members of st_mtim when you define _POSIX_C_SOURCE
-since it has not been updated to support POSIX.1-2008:
-https://www.illumos.org/issues/13327
-*/
 #elif defined(__sun)
     return (int64_t)st.st_mtim.__tv_sec * 1000000000 + st.st_mtim.__tv_nsec;
 #else

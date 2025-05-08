@@ -33,8 +33,7 @@ FileResult readSource(String path) {
 // NOTE: Set file empty before writing
 void resetAmalgamFile() {
 
-  String initialHeaders = S("// Base include headers\n"
-                            "#define _POSIX_C_SOURCE 200809L\n"
+  String initialHeaders = S("#define _POSIX_C_SOURCE 200809L\n"
                             "#include <errno.h>\n"
                             "#include <fcntl.h>\n"
                             "#include <inttypes.h>\n"
@@ -47,7 +46,6 @@ void resetAmalgamFile() {
                             "#include <stdarg.h>\n"
                             "#include <string.h>\n"
                             "\n"
-                            "// Linux specific headers\n"
                             "#include <sys/stat.h>\n"
                             "#include <poll.h>\n"
                             "#include <signal.h>\n"

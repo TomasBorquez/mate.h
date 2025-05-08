@@ -26,7 +26,6 @@ static void delnode(void *p) {
 void graphinit(void) {
   struct edge *e;
 
-  /* delete old nodes and edges in case we rebuilt the manifest */
   delhtab(allnodes, delnode);
   while (alledges) {
     e = alledges;
@@ -108,7 +107,6 @@ struct string *nodepath(struct node *n, bool escape) {
 }
 
 void nodeuse(struct node *n, struct edge *e) {
-  /* allocate in powers of two */
   if (!(n->nuse & (n->nuse - 1))) n->use = xreallocarray(n->use, n->nuse ? n->nuse * 2 : 1, sizeof(e));
   n->use[n->nuse++] = e;
 }

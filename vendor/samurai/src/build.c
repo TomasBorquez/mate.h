@@ -46,12 +46,10 @@ void buildreset(void) {
     e->flags &= ~FLAG_WORK;
 }
 
-/* returns whether n1 is newer than n2, or false if n1 is NULL */
 static bool isnewer(struct node *n1, struct node *n2) {
   return n1 && n1->mtime > n2->mtime;
 }
 
-/* returns whether this output node is dirty in relation to the newest input */
 static bool isdirty(struct node *n, struct node *newest, bool generator, bool restat) {
   struct edge *e;
 
@@ -89,7 +87,6 @@ static bool isdirty(struct node *n, struct node *newest, bool generator, bool re
   return true;
 }
 
-/* add an edge to the work queue */
 static void queue(struct edge *e) {
   struct edge **front = &work;
 
@@ -134,7 +131,6 @@ void buildadd(struct node *n) {
     }
     if (n->dirty || (n->gen && n->gen->nblock > 0)) ++e->nblock;
   }
-  /* all outputs are dirty if any are older than the newest input */
   generator = edgevar(e, "generator", true);
   restat = edgevar(e, "restat", true);
   for (i = 0; i < e->nout && !(e->flags & FLAG_DIRTY_OUT); ++i) {
@@ -213,7 +209,7 @@ static size_t formatstatus(char *buf, size_t len) {
       break;
     default:
       fatal("unknown placeholder '%%%c' in $NINJA_STATUS", *fmt);
-      continue; /* unreachable, but avoids warning */
+      continue;
     }
     if (n < 0) fatal("snprintf:");
     ret += n;
@@ -323,12 +319,8 @@ static void nodedone(struct node *n, bool prune) {
 
   for (i = 0; i < n->nuse; ++i) {
     e = n->use[i];
-    /* skip edges not used in this build */
     if (!(e->flags & FLAG_WORK)) continue;
     if (!(e->flags & (prune ? FLAG_DIRTY_OUT : FLAG_DIRTY)) && --e->nprune == 0) {
-      /* either edge was clean (possible with order-only
-       * inputs), or all its blocking inputs were pruned, so
-       * its outputs can be pruned as well */
       for (j = 0; j < e->nout; ++j)
         nodedone(e->out[j], true);
       if (e->flags & FLAG_DIRTY && e->rule != &phonyrule) --ntotal;
@@ -398,7 +390,6 @@ static void jobdone(struct job *j) {
     warn("job terminated due to signal %d: %s", WTERMSIG(status), j->cmd->s);
     j->failed = true;
   } else {
-    /* cannot happen according to POSIX */
     warn("job status unknown: %s", j->cmd->s);
     j->failed = true;
   }
@@ -410,7 +401,6 @@ static void jobdone(struct job *j) {
     p = e->pool;
 
     if (p == &consolepool) consoleused = false;
-    /* move edge from pool queue to main work queue */
     if (p->work) {
       new = p->work;
       p->work = p->work->worknext;
@@ -423,7 +413,6 @@ static void jobdone(struct job *j) {
   if (!j->failed) edgedone(e);
 }
 
-/* returns whether a job still has work to do. if not, sets j->failed */
 static bool jobwork(struct job *j) {
   char *newdata;
   size_t newcap;
@@ -456,7 +445,6 @@ done:
   return false;
 }
 
-/* queries the system load average */
 static double queryload(void) {
 #ifdef HAVE_GETLOADAVG
   double load;
@@ -488,9 +476,7 @@ void build(void) {
 
   nstarted = 0;
   for (;;) {
-    /* limit number of of jobs based on load */
     if (buildopts.maxload) maxjobs = queryload() > buildopts.maxload ? 1 : buildopts.maxjobs;
-    /* start ready edges */
     while (work && numjobs < maxjobs && numfail < buildopts.maxfail) {
       e = work;
       work = work->worknext;
@@ -547,5 +533,5 @@ void build(void) {
     else if (numfail > 1) fatal("subcommands failed");
     else fatal("subcommand failed");
   }
-  ntotal = 0; /* reset in case we just rebuilt the manifest */
+  ntotal = 0;
 }
