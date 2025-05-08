@@ -31,7 +31,8 @@ To use it al you need is `mate.h` on the same folder you have the `mate.c` examp
 it will auto detect if you need to rebuild based on `./build/mate-cache.ini`, so you can just run `./mate` directly.
 
 Under the hood we use [Samurai](https://github.com/michaelforney/samurai), a ninja rewrite in C, we add it to the source code and compile it on the first run, after that
-it is cached and thanks to it builds are extremely fast.
+it is cached and thanks to it builds are extremely fast. So the first build usually takes a bit longer but on the second one it should be very fast. If you want even faster 
+builds, you can use [TCC](https://bellard.org/tcc/) just to run mate, on medium sized projects our builds go from `1_000ms` to `40ms`.
 
 ## Compatibility
 - linux, supported.
