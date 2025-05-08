@@ -10,7 +10,7 @@ i32 main() {
   StartBuild();
   {
     CreateExecutable((ExecutableOptions){
-        .output = "main",   // output name, in windows this becomes `main.exe` automatically and on linux it stays as `main`
+        .output = "main",   // output name, in windows this becomes `main.exe` automatically
         .flags = "-Wall -g" // adds warnings and debug symbols
     });
 
@@ -27,25 +27,31 @@ i32 main() {
 }
 ```
 
-To use it al you need is `mate.h` on the same folder you have the `mate.c` example file and you can run it like `gcc ./mate.c -o ./mate.exe && ./mate.exe`, after running once
-it will auto detect if you need to rebuild based on `./build/mate-cache.ini`, so you can just run `./mate` directly.
+To use it all you need is [mate.h](./mate.h) file on the same folder you have the `mate.c` example file and you can run by `gcc ./mate.c -o ./mate && ./mate`, after running once
+it will auto detect if you need to rebuild based on `mate-cache.ini`, so you can just run `./mate` directly and it'll rebuild itself.
 
-Under the hood we use [Samurai](https://github.com/michaelforney/samurai), a ninja rewrite in C, we add it to the source code and compile it on the first run, after that
+Under the hood we use [Samurai](https://github.com/michaelforney/samurai), a ninja rewrite in C, we added it to the source code and compile it on the first run, after that
 it is cached and thanks to it builds are extremely fast. So the first build usually takes a bit longer but on the second one it should be very fast. If you want even faster 
-builds, you can use [TCC](https://bellard.org/tcc/) just to run mate, on medium sized projects our builds go from `1_000ms` to `40ms`.
+builds, you can use [TCC](https://bellard.org/tcc/) just to run `mate.c`, on medium sized projects our builds go from `1_000ms` to `40ms` because `tcc` was made to be very fast
+to compile.
 
-## Compatibility
-- linux, supported.
-- windows, supported. (you'll need to use ninja since samurai is not yet supported, we are [working](https://github.com/TomasBorquez/mate.h/issues/2) on it though)
-- macos, somewhat supported. (mate was made to be as compatible as possible but we have limited testing in macos)
+## Operating Systems
+| OS | Status | Notes |
+|---|---|---|
+| **Linux** | ✅ Supported | Uses [Samurai](https://github.com/michaelforney/samurai) under the hood |
+| **Windows** | ✅ Supported | Requires Ninja build system (Samurai [in progress](https://github.com/TomasBorquez/mate.h/issues/2)) |
+| **macOS** | ⚠️ Partially Supported | Limited testing available |
 
-- [gcc](https://gcc.gnu.org/), supported. (it was mainly made for it so it has the best support)
-- [clang](https://releases.llvm.org/), supported.
-- [tinyc](https://bellard.org/tcc/), supported.
-- [msvc](https://visualstudio.microsoft.com/vs/features/cplusplus/), unsupported yet (you can use all of the above in MinGW perfectly well)
+## Compilers
+| Compiler | Status | Notes |
+|---|---|---|
+| [**GCC**](https://gcc.gnu.org/) | ✅ Supported | Primary development target with best support |
+| [**Clang**](https://releases.llvm.org/) | ✅ Supported | Works perfectly well too |
+| [**TinyC**](https://bellard.org/tcc/) | ✅ Supported | Recommended if you want fast compile times |
+| [**MSVC**](https://visualstudio.microsoft.com/vs/features/cplusplus/) | ❌ Not supported yet | Alternative: Use MinGW with any supported compiler |
 
 ## Acknowledgments
 This project incorporates code from [Samurai](https://github.com/michaelforney/samurai), which is primarily licensed under ISC license by Michael Forney, 
 with portions under Apache License 2.0 and MIT licenses. The full license text is available in the [LICENSE-SAMURAI.txt](./LICENSE-SAMURAI.txt) file.
 
-Inspired from `build.zig`, `nob.h`, `CMake` and other unrelated C libraries.
+Inspired from `build.zig`, `nob.h`, `CMake` and `Mason` build systems, aswell as other unrelated C libraries like `raylib` and `clay.h` in terms of interfaces and implementations.
