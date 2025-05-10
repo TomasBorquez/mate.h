@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="https://img.shields.io/github/stars/TomasBorquez/mate.h?style=flat&color=blue&label=stars" alt="Stars">
-  <img src="https://img.shields.io/github/commit-activity/t/TomasBorquez/mate.h?style=flat&color=blue&label=total%20commits" alt="Commits">
+  <img src="https://img.shields.io/github/stars/TomasBorquez/mate.h?style=flat&color=blue&label=Stars" alt="Stars">
+  <img src="https://img.shields.io/github/commit-activity/t/TomasBorquez/mate.h?style=flat&color=blue&label=Total%20Commits" alt="Commits">
   <img src="https://img.shields.io/github/actions/workflow/status/TomasBorquez/mate.h/run-examples-linux.yml?style=flat&label=Linux%20Pipeline" alt="Linux Pipeline">
   <img src="https://img.shields.io/github/actions/workflow/status/TomasBorquez/mate.h/run-examples-windows.yml?style=flat&label=Windows%20Pipeline" alt="Windows Pipeline">
 </div>
