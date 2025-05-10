@@ -1,7 +1,7 @@
 /* MIT License
 
   mate.h - A single-header library for compiling your C code in C
-  Version - 2025-05-05 (0.1.7):
+  Version - 2025-05-10 (0.1.8):
   https://github.com/TomasBorquez/mate.h
 
   Guide on the `README.md`
@@ -20,8 +20,9 @@
    Guide on the `README.md`
 */
 typedef struct {
-  i32 lastBuild;
+  i64 lastBuild;
   bool samuraiBuild;
+  bool firstBuild;
 } MateCache;
 
 typedef struct {
@@ -42,11 +43,11 @@ typedef struct {
   // Cache
   MateCache mateCache;
   IniFile cache;
-  bool firstBuild;
 
   // Misc
   Arena *arena;
-  bool customConfig;
+  bool initConfig;
+
   i64 startTime;
   i64 totalTime;
 } MateConfig;
@@ -100,10 +101,17 @@ typedef struct {
   u8 std;
 } ExecutableOptions;
 
-void CreateConfig(MateOptions options);
 void StartBuild();
-void reBuild();
+void EndBuild();
+
+void CreateConfig(MateOptions options);
 void CreateExecutable(ExecutableOptions executableOptions);
+String InstallExecutable();
+
+WARN_UNUSED errno_t RunCommand(String command);
+
+enum CreateCompileCommandsError { COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMPILE_COMMANDS_FAILED_COMPDB };
+WARN_UNUSED errno_t CreateCompileCommands();
 
 #define AddLibraryPaths(...)                   \
   ({                                           \
@@ -135,14 +143,10 @@ static void addFile(String source);
 #define RemoveFile(source) removeFile(S(source));
 static bool removeFile(String source);
 
-String InstallExecutable();
-errno_t RunCommand(String command);
-void EndBuild();
-
+static void reBuild();
 static bool needRebuild();
 static void setDefaultState();
 
 #define SAMURAI_AMALGAM "SAMURAI SOURCE"
 
-// NOTE: Here goes MATE_IMPLEMENTATION
 // --- MATE.H END ---

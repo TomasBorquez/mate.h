@@ -1,7 +1,7 @@
 /* MIT License
 
   mate.h - A single-header library for compiling your C code in C
-  Version - 2025-05-05 (0.1.7):
+  Version - 2025-05-10 (0.1.8):
   https://github.com/TomasBorquez/mate.h
 
   Guide on the `README.md`
@@ -16,7 +16,7 @@
 /* MIT License
 
   base.h - Better cross-platform STD
-  Version - 2025-05-08 (0.1.15):
+  Version - 2025-05-10 (0.1.16):
   https://github.com/TomasBorquez/base.h
 
   Usage:
@@ -43,16 +43,27 @@ extern "C" {
 #  error "The codebase only supports GCC, Clang, TCC and MSVC"
 #endif
 
-#ifdef __GNUC__
-#  define _BASE_NORETURN __attribute__((noreturn))
-#  define _BASE_UNLIKELY(x) __builtin_expect(!!(x), 0)
-#  define _BASE_ALLOC_ATTR2(sz, al) __attribute__((malloc, alloc_size(sz), alloc_align(al)))
-#  define _BASE_ALLOC_ATTR(sz) __attribute__((malloc, alloc_size(sz)))
+#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
+#  define NORETURN __attribute__((noreturn))
+#  define UNLIKELY(x) __builtin_expect(!!(x), 0)
+#  define ALLOC_ATTR2(sz, al) __attribute__((malloc, alloc_size(sz), alloc_align(al)))
+#  define ALLOC_ATTR(sz) __attribute__((malloc, alloc_size(sz)))
+#  define FORMAT_CHECK(fmt_pos, args_pos) __attribute__((format(printf, fmt_pos, args_pos)))
+#  define WARN_UNUSED __attribute__((warn_unused_result))
+#elif defined(COMPILER_MSVC)
+#  define NORETURN __declspec(noreturn)
+#  define UNLIKELY(x) x
+#  define ALLOC_ATTR2(sz, al)
+#  define ALLOC_ATTR(sz)
+#  define FORMAT_CHECK(fmt_pos, args_pos)
+#  define WARN_UNUSED _Check_return_
 #else
-#  define _BASE_NORETURN __declspec(noreturn)
-#  define _BASE_UNLIKELY(x) x
-#  define _BASE_ALLOC_ATTR2(sz, al)
-#  define _BASE_ALLOC_ATTR(sz)
+#  define NORETURN __declspec(noreturn)
+#  define UNLIKELY(x) x
+#  define ALLOC_ATTR2(sz, al)
+#  define ALLOC_ATTR(sz)
+#  define FORMAT_CHECK(fmt_pos, args_pos)
+#  define WARN_UNUSED
 #endif
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
@@ -78,6 +89,7 @@ extern "C" {
 #  define _POSIX_C_SOURCE 200809L
 #  define _GNU_SOURCE
 #  include <dirent.h>
+#  include <errno.h>
 #  include <fcntl.h>
 #  include <sys/stat.h>
 #  include <sys/types.h>
@@ -113,14 +125,11 @@ extern "C" {
 #    define C_STANDARD_C11
 #    define C_STANDARD "C11"
 #  else
-#    error "How did you even get here?? Send an issue on github/TomasBorquez/mate.h"
+#    error "How did you even get here?? Send an issue at github.com/TomasBorquez/mate.h"
 #  endif
 #endif
 
-#include <assert.h>
 #include <ctype.h>
-#include <errno.h>
-#include <limits.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -238,41 +247,52 @@ typedef struct {
 
 #define TYPE_INIT(type) (type)
 
+void _custom_assert(const char *expr, const char *file, unsigned line, const char *format, ...) FORMAT_CHECK(4, 5);
+#define Assert(expression, ...) (void)((!!(expression)) || (_custom_assert(#expression, __FILE__, __LINE__, __VA_ARGS__), 0))
+
 /* --- Vector Macros --- */
 // TODO: Add MSVC like vector macros
-// TODO: `VecInit` for adding an initial capacity at the beginning
 // TODO: `VecSort` implement some sorting algorithm for sorting the vector
 #define VEC_TYPE(typeName, valueType) \
   typedef struct {                    \
     valueType *data;                  \
-    i32 length;                       \
-    i32 capacity;                     \
+    size_t length;                    \
+    size_t capacity;                  \
   } typeName
 
-// WARNING: Vector must always be initialized to zero `Vector vector = {0}`
-#define VecPush(vector, value)                                                                                   \
-  ({                                                                                                             \
-    assert(vector.length <= vector.capacity && "VecPush: Possible memory corruption or vector not initialized"); \
-    if (vector.length >= vector.capacity) {                                                                      \
-      if (vector.capacity == 0) vector.capacity = 128;                                                           \
-      else vector.capacity *= 2;                                                                                 \
-      vector.data = Realloc(vector.data, vector.capacity * sizeof(*vector.data));                                \
-    }                                                                                                            \
-    vector.data[vector.length++] = value;                                                                        \
-    &vector.data[vector.length - 1];                                                                             \
+#define VecCreate(vector, count)                                               \
+  ({                                                                           \
+    vector.capacity = count;                                                   \
+    vector.data = Malloc(vector.data, vector.capacity * sizeof(*vector.data)); \
+                                                                               \
+    vector.data[vector.length++] = value;                                      \
+    &vector.data[vector.length - 1];                                           \
   })
 
-#define VecPop(vector)                                                   \
-  ({                                                                     \
-    assert(vector.length > 0 && "VecPop: Cannot pop from empty vector"); \
-    typeof(vector.data[0]) value = vector.data[vector.length - 1];       \
-    vector.length--;                                                     \
-    &value;                                                              \
+// WARNING: Vector must always be initialized to zero `Vector vector = {0}` or `VecCreate()`
+#define VecPush(vector, value)                                                                                                        \
+  ({                                                                                                                                  \
+    Assert(vector.length <= vector.capacity, "VecPush: Possible memory corruption or vector not initialized, `Vector vector = {0}`"); \
+    if (vector.length >= vector.capacity) {                                                                                           \
+      if (vector.capacity == 0) vector.capacity = 128;                                                                                \
+      else vector.capacity *= 2;                                                                                                      \
+      vector.data = Realloc(vector.data, vector.capacity * sizeof(*vector.data));                                                     \
+    }                                                                                                                                 \
+    vector.data[vector.length++] = value;                                                                                             \
+    &vector.data[vector.length - 1];                                                                                                  \
+  })
+
+#define VecPop(vector)                                                 \
+  ({                                                                   \
+    Assert(vector.length > 0, "VecPop: Cannot pop from empty vector"); \
+    typeof(vector.data[0]) value = vector.data[vector.length - 1];     \
+    vector.length--;                                                   \
+    &value;                                                            \
   })
 
 #define VecShift(vector)                                                                   \
   ({                                                                                       \
-    assert(vector.length != 0 && "VecShift: Length should at least be >= 1");              \
+    Assert(vector.length != 0, "VecShift: Length should at least be >= 1");                \
     typeof(vector.data[0]) value = vector.data[0];                                         \
     memmove(&vector.data[0], &vector.data[1], (vector.length - 1) * sizeof(*vector.data)); \
     vector.length--;                                                                       \
@@ -298,7 +318,7 @@ typedef struct {
 
 #define VecInsert(vector, value, index)                                                                    \
   ({                                                                                                       \
-    assert(index <= vector.length && "VecInsert: Index out of bounds for insertion");                      \
+    Assert(index <= vector.length, "VecInsert: Index out of bounds for insertion");                        \
     if (vector.length >= vector.capacity) {                                                                \
       if (vector.capacity == 0) vector.capacity = 2;                                                       \
       else vector.capacity *= 2;                                                                           \
@@ -310,10 +330,10 @@ typedef struct {
     &value;                                                                                                \
   })
 
-#define VecAt(vector, index)                                                     \
-  ({                                                                             \
-    assert(index >= 0 && index < vector.length && "VecAt: Index out of bounds"); \
-    &vector.data[index];                                                         \
+#define VecAt(vector, index)                                                   \
+  ({                                                                           \
+    Assert(index >= 0 && index < vector.length, "VecAt: Index out of bounds"); \
+    &vector.data[index];                                                       \
   })
 
 #define VecFree(vector)        \
@@ -332,14 +352,14 @@ void WaitTime(i64 ms);
 String GetCompiler();
 String GetPlatform();
 
-/* --- Errors --- */
+/* --- Error --- */
 typedef i32 errno_t;
 
 enum GeneralError {
-  SUCCESS,
-  MEMORY_ALLOCATION_FAILED,
+  SUCCESS = 0,
 };
 
+String ErrToStr(errno_t err);
 /* --- Arena --- */
 typedef struct __ArenaChunk {
   struct __ArenaChunk *next;
@@ -358,9 +378,9 @@ typedef struct {
 #define DEFAULT_ALIGNMENT (2 * sizeof(void *))
 
 Arena *ArenaCreate(size_t chunkSize);
-_BASE_ALLOC_ATTR2(2, 3) void *ArenaAllocAligned(Arena *arena, size_t size, size_t align);
-_BASE_ALLOC_ATTR(2) char *ArenaAllocChars(Arena *arena, size_t count);
-_BASE_ALLOC_ATTR(2) void *ArenaAlloc(Arena *arena, size_t size);
+ALLOC_ATTR2(2, 3) void *ArenaAllocAligned(Arena *arena, size_t size, size_t align);
+ALLOC_ATTR(2) char *ArenaAllocChars(Arena *arena, size_t count);
+ALLOC_ATTR(2) void *ArenaAlloc(Arena *arena, size_t size);
 void ArenaFree(Arena *arena);
 void ArenaReset(Arena *arena);
 
@@ -377,12 +397,6 @@ void Free(void *address);
 #define S(string) (TYPE_INIT(String){.length = STRING_LENGTH(ENSURE_STRING_LITERAL(string)), .data = (string)})
 String s(char *msg);
 
-#if defined(COMPILER_CLANG)
-#  define FORMAT_CHECK(fmt_pos, args_pos) __attribute__((format(printf, fmt_pos, args_pos))) // NOTE: Printf like warnings on format
-#else
-#  define FORMAT_CHECK(fmt_pos, args_pos)
-#endif
-
 String F(Arena *arena, const char *format, ...) FORMAT_CHECK(2, 3);
 
 VEC_TYPE(StringVector, String);
@@ -398,22 +412,36 @@ VEC_TYPE(StringVector, String);
 void SetMaxStrSize(size_t size);
 String StrNew(Arena *arena, char *str);
 String StrNewSize(Arena *arena, char *str, size_t len); // Without null terminator
-void StrCopy(String *destination, String *source);
-StringVector StrSplit(Arena *arena, String *string, String *delimiter);
-StringVector StrSplitNewLine(Arena *arena, String *str);
-bool StrEqual(String *string1, String *string2);
-String StrConcat(Arena *arena, String *string1, String *string2);
-void StrToUpper(String *string1);
-void StrToLower(String *string1);
-bool StrIsNull(String *string);
-void StrTrim(String *string);
-String StrSlice(Arena *arena, String *str, size_t start, size_t end);
-String ConvertExe(Arena *arena, String path);
-String ConvertPath(Arena *arena, String path);
-String ParsePath(Arena *arena, String path);
+
+void StrCopy(String destination, String source);
+StringVector StrSplit(Arena *arena, String string, String delimiter);
+StringVector StrSplitNewLine(Arena *arena, String str);
+bool StrEq(String string1, String string2);
+String StrConcat(Arena *arena, String string1, String string2);
+
+void StrToLower(String string1);
+void StrToUpper(String string1);
+
+bool StrIsNull(String string);
+void StrTrim(String string);
+
+String StrSlice(Arena *arena, String str, size_t start, size_t end);
+
+String NormalizePath(Arena *arena, String path);
+String NormalizeExePath(Arena *arena, String path);
+String NormalizePathStart(Arena *arena, String path);
+
+typedef struct {
+  size_t capacity;
+  String buffer;
+} StringBuilder;
+
+StringBuilder StringBuilderCreate(Arena *arena);
+StringBuilder StringBuilderReserve(Arena *arena, size_t capacity);
+void StringBuilderAppend(Arena *arena, StringBuilder *builder, String *string);
 
 /* --- Random --- */
-void RandomInit(); // NOTE: Must init before using
+void RandomInit();
 u64 RandomGetSeed();
 void RandomSetSeed(u64 newSeed);
 i32 RandomInteger(i32 min, i32 max);
@@ -425,50 +453,36 @@ f32 RandomFloat(f32 min, f32 max);
 typedef struct {
   char *name;
   char *extension;
-  int64_t size;
-  int64_t createTime;
-  int64_t modifyTime;
+  i64 size;
+  i64 createTime;
+  i64 modifyTime;
 } File;
-
-typedef struct {
-  char *name;
-} Folder;
-
-typedef struct {
-  Folder *folders;
-  size_t folderCount;
-
-  File *files;
-  size_t fileCount;
-
-  size_t totalCount;
-} FileData;
 
 char *GetCwd();
 void SetCwd(char *destination);
-FileData *GetDirFiles();
-FileData *NewFileData();
-
-enum FileStatsError { FILE_GET_ATTRIBUTES_FAILED = 1 };
-errno_t FileStats(String *path, File *file);
-
-enum FileReadError { FILE_NOT_EXIST = 1, FILE_OPEN_FAILED, FILE_GET_SIZE_FAILED, FILE_READ_FAILED };
-errno_t FileRead(Arena *arena, String *path, String *result);
-
-enum FileWriteError { FILE_WRITE_OPEN_FAILED = 1, FILE_WRITE_ACCESS_DENIED, FILE_WRITE_NO_MEMORY, FILE_WRITE_NOT_FOUND, FILE_WRITE_DISK_FULL, FILE_WRITE_IO_ERROR };
-errno_t FileWrite(String *path, String *data);
-
-enum FileAddError { FILE_ADD_OPEN_FAILED = 1, FILE_ADD_ACCESS_DENIED, FILE_ADD_NO_MEMORY, FILE_ADD_NOT_FOUND, FILE_ADD_DISK_FULL, FILE_ADD_IO_ERROR };
-errno_t FileAdd(String *path, String *data); // NOTE: Adds `\n` at the end always
-
-enum FileDeleteError { FILE_DELETE_ACCESS_DENIED = 1, FILE_DELETE_NOT_FOUND, FILE_DELETE_IO_ERROR };
-errno_t FileDelete(String *path);
-
-enum FileRenameError { FILE_RENAME_ACCESS_DENIED = 1, FILE_RENAME_NOT_FOUND, FILE_RENAME_EXISTS, FILE_RENAME_IO_ERROR };
-errno_t FileRename(String *oldPath, String *newPath);
-
 bool Mkdir(String path); // NOTE: Mkdir if not exist
 StringVector ListDir(Arena *arena, String path);
+
+enum FileStatsError { FILE_GET_ATTRIBUTES_FAILED = 100, FILE_STATS_FILE_NOT_EXIST };
+WARN_UNUSED errno_t FileStats(String path, File *file);
+
+enum FileReadError { FILE_NOT_EXIST = 200, FILE_OPEN_FAILED, FILE_GET_SIZE_FAILED, FILE_READ_FAILED };
+WARN_UNUSED errno_t FileRead(Arena *arena, String path, String *result);
+
+enum FileWriteError { FILE_WRITE_OPEN_FAILED = 300, FILE_WRITE_ACCESS_DENIED, FILE_WRITE_NO_MEMORY, FILE_WRITE_NOT_FOUND, FILE_WRITE_DISK_FULL, FILE_WRITE_IO_ERROR };
+WARN_UNUSED errno_t FileWrite(String path, String data);
+
+// enum FileWriteError - Same error enum since it uses `FileWrite("")` under the hood
+WARN_UNUSED errno_t FileReset(String path);
+
+enum FileAddError { FILE_ADD_OPEN_FAILED = 400, FILE_ADD_ACCESS_DENIED, FILE_ADD_NO_MEMORY, FILE_ADD_NOT_FOUND, FILE_ADD_DISK_FULL, FILE_ADD_IO_ERROR };
+WARN_UNUSED errno_t FileAdd(String path, String data); // NOTE: Adds `\n` at the end always
+
+enum FileDeleteError { FILE_DELETE_ACCESS_DENIED = 500, FILE_DELETE_NOT_FOUND, FILE_DELETE_IO_ERROR };
+WARN_UNUSED errno_t FileDelete(String path);
+
+enum FileRenameError { FILE_RENAME_ACCESS_DENIED = 600, FILE_RENAME_NOT_FOUND, FILE_RENAME_EXISTS, FILE_RENAME_IO_ERROR };
+WARN_UNUSED errno_t FileRename(String oldPath, String newPath);
 
 /* --- Logger --- */
 #define _RESET "\x1b[0m"
@@ -477,11 +491,11 @@ StringVector ListDir(Arena *arena, String path);
 #define _GREEN "\x1b[0;32m"
 #define _ORANGE "\x1b[0;33m"
 
+void LogInit();
 void LogInfo(const char *format, ...) FORMAT_CHECK(1, 2);
 void LogWarn(const char *format, ...) FORMAT_CHECK(1, 2);
 void LogError(const char *format, ...) FORMAT_CHECK(1, 2);
 void LogSuccess(const char *format, ...) FORMAT_CHECK(1, 2);
-void LogInit();
 
 /* --- Math --- */
 #define Min(a, b) (((a) < (b)) ? (a) : (b))
@@ -531,6 +545,7 @@ static inline void __df_cb(__df_t *__fp) {
 #    error "Not available yet in MSVC, use `_try/_finally`"
 #  endif
 #endif
+
 /* --- INI Parser --- */
 typedef struct {
   String key;
@@ -544,23 +559,25 @@ typedef struct {
   Arena *arena;
 } IniFile;
 
-IniFile IniParse(String *path);
-bool IniWrite(String *path, IniFile *iniFile); // NOTE: Updates/Creates .ini file
+WARN_UNUSED errno_t IniParse(String path, IniFile *result);
+WARN_UNUSED errno_t IniWrite(String path, IniFile *iniFile); // NOTE: Updates/Creates .ini file
+
 void IniFree(IniFile *iniFile);
 
-String IniGet(IniFile *ini, String *key);
+String IniGet(IniFile *ini, String key);
 String IniSet(IniFile *ini, String key, String value);
-i32 IniGetInt(IniFile *ini, String *key);
-i64 IniGetLong(IniFile *ini, String *key);
-f64 IniGetDouble(IniFile *ini, String *key);
-bool IniGetBool(IniFile *ini, String *key);
+i32 IniGetInt(IniFile *ini, String key);
+i64 IniGetLong(IniFile *ini, String key);
+f64 IniGetDouble(IniFile *ini, String key);
+bool IniGetBool(IniFile *ini, String key);
 
 /* MIT License
    base.h - Implementation of base.h
    https://github.com/TomasBorquez/base.h
 */
+
 #if defined(BASE_IMPLEMENTATION)
-// --- Platform specific functions ---
+// --- Time and Platforms Implementation ---
 #  if !defined(PLATFORM_WIN)
 
 #    if !defined(EINVAL)
@@ -571,7 +588,7 @@ bool IniGetBool(IniFile *ini, String *key);
 #      define ERANGE 34 // Result too large
 #    endif
 
-errno_t memcpy_s(void *dest, size_t destSize, const void *src, size_t count) {
+WARN_UNUSED errno_t memcpy_s(void *dest, size_t destSize, const void *src, size_t count) {
   if (dest == NULL) {
     return EINVAL;
   }
@@ -585,7 +602,7 @@ errno_t memcpy_s(void *dest, size_t destSize, const void *src, size_t count) {
   return 0;
 }
 
-errno_t fopen_s(FILE **streamptr, const char *filename, const char *mode) {
+WARN_UNUSED errno_t fopen_s(FILE **streamptr, const char *filename, const char *mode) {
   if (streamptr == NULL) {
     return EINVAL;
   }
@@ -658,13 +675,13 @@ i64 TimeNow() {
   clock_gettime(CLOCK_REALTIME, &ts);
   i64 currentTime = (ts.tv_sec * 1000LL) + (ts.tv_nsec / 1000000LL);
 #  endif
-  assert(currentTime != -1 && "TimeNow: currentTime should never be -1");
+  Assert(currentTime != -1, "TimeNow: currentTime should never be -1");
   return currentTime;
 }
 
 void WaitTime(i64 ms) {
 #  if defined(PLATFORM_WIN)
-  Sleep(ms);
+  sleep(ms);
 #  else
   struct timespec ts;
   ts.tv_sec = ms / 1000;
@@ -673,6 +690,113 @@ void WaitTime(i64 ms) {
 #  endif
 }
 
+/* --- Error Implementation --- */
+String FileErrToStr(errno_t err) {
+  if (err < 100) {
+#  if defined(PLATFORM_WIN)
+    char buffer[256];
+    DWORD msgLen = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buffer, sizeof(buffer), NULL);
+
+    // Trim message
+    if (msgLen > 0) {
+      while (msgLen > 0 && (buffer[msgLen - 1] == '\r' || buffer[msgLen - 1] == '\n')) {
+        buffer[--msgLen] = '\0';
+      }
+
+      if (msgLen > 0 && buffer[msgLen - 1] == '.') {
+        buffer[--msgLen] = '\0';
+      }
+
+      return s(buffer);
+    }
+    return S("Unknown system error");
+#  else
+    return s(strerror(err));
+#  endif
+  }
+
+  switch (err) {
+  // FileStats errors (100-199)
+  case FILE_GET_ATTRIBUTES_FAILED:
+    return S("Failed to get file attributes");
+  case FILE_STATS_FILE_NOT_EXIST:
+    return S("File does not exist");
+
+  // FileRead errors (200-299)
+  case FILE_NOT_EXIST:
+    return S("File does not exist");
+  case FILE_OPEN_FAILED:
+    return S("Failed to open file for reading");
+  case FILE_GET_SIZE_FAILED:
+    return S("Failed to get file size");
+  case FILE_READ_FAILED:
+    return S("Failed to read file");
+
+  // FileWrite errors (300-399)
+  case FILE_WRITE_OPEN_FAILED:
+    return S("Failed to open file for writing");
+  case FILE_WRITE_ACCESS_DENIED:
+    return S("Access denied when writing file");
+  case FILE_WRITE_NO_MEMORY:
+    return S("Not enough memory to write file");
+  case FILE_WRITE_NOT_FOUND:
+    return S("File not found for writing");
+  case FILE_WRITE_DISK_FULL:
+    return S("Disk full when writing file");
+  case FILE_WRITE_IO_ERROR:
+    return S("I/O error when writing file");
+
+  // FileAdd errors (400-499)
+  case FILE_ADD_OPEN_FAILED:
+    return S("Failed to open file for appending");
+  case FILE_ADD_ACCESS_DENIED:
+    return S("Access denied when appending to file");
+  case FILE_ADD_NO_MEMORY:
+    return S("Not enough memory to append to file");
+  case FILE_ADD_NOT_FOUND:
+    return S("File not found for appending");
+  case FILE_ADD_DISK_FULL:
+    return S("Disk full when appending to file");
+  case FILE_ADD_IO_ERROR:
+    return S("I/O error when appending to file");
+
+  // FileDelete errors (500-599)
+  case FILE_DELETE_ACCESS_DENIED:
+    return S("Access denied when deleting file");
+  case FILE_DELETE_NOT_FOUND:
+    return S("File not found for deletion");
+  case FILE_DELETE_IO_ERROR:
+    return S("I/O error when deleting file");
+
+  // FileRename errors (600-699)
+  case FILE_RENAME_ACCESS_DENIED:
+    return S("Access denied when renaming file");
+  case FILE_RENAME_NOT_FOUND:
+    return S("File not found for renaming");
+  case FILE_RENAME_EXISTS:
+    return S("Destination file already exists");
+  case FILE_RENAME_IO_ERROR:
+    return S("I/O error when renaming file");
+
+  default:
+    return S("Unknown file error");
+  }
+}
+
+void _custom_assert(const char *expr, const char *file, unsigned line, const char *format, ...) {
+  printf("%sAssertion failed: %s, file %s, line %u %s\n", _RED, expr, file, line, _RESET);
+
+  if (format) {
+    va_list args;
+    va_start(args, format);
+    LogError(format, args);
+    va_start(args, format);
+  }
+
+  abort();
+}
+
+/* --- Arena Implementation --- */
 // Allocate or iterate to next chunk that can fit `bytes`
 void __ArenaNextChunk(Arena *arena, size_t bytes) {
   __ArenaChunk *next = arena->current ? arena->current->next : NULL;
@@ -693,15 +817,18 @@ void __ArenaNextChunk(Arena *arena, size_t bytes) {
 void *ArenaAllocAligned(Arena *arena, size_t size, size_t al) {
   // Align 'currPtr' forward to the specified alignment
   intptr_t tail = arena->offset & (al - 1);
+  // WARNING: should be? `intptr_t aligned = tail ? arena->offset + al - tail : arena->offset;`
   intptr_t aligned = tail ? arena->offset + al - arena->offset : arena->offset;
   arena->offset = aligned + size;
   void *result;
   if (arena->offset > arena->current->cap) {
-    __ArenaNextChunk(arena, size > arena->chunkSize ? size : arena->chunkSize);
+    size_t bytes = size > arena->chunkSize ? size : arena->chunkSize;
+    __ArenaNextChunk(arena, bytes);
     result = arena->current->buffer;
   } else {
     result = arena->current->buffer + aligned;
   }
+
   if (size) memset(result, 0, size);
   return result;
 }
@@ -741,18 +868,18 @@ Arena *ArenaCreate(size_t chunkSize) {
 /* Memory Allocations */
 // TODO: Add hashmap that checks for unfreed values only on DEBUG, __FILE__ and __LINE__
 void *Malloc(size_t size) {
-  assert(size > 0 && "Malloc: size cant be negative");
+  Assert(size > 0, "Malloc: size cant be negative");
 
   void *address = malloc(size);
-  assert(address != NULL && "Malloc: failed, returned address should never be NULL");
+  Assert(address != NULL, "Malloc: failed, returned address should never be NULL");
   return address;
 }
 
 void *Realloc(void *block, size_t size) {
-  assert(size > 0 && "Realloc: size cant be negative");
+  Assert(size > 0, "Realloc: size cant be negative");
 
   void *address = realloc(block, size);
-  assert(address != NULL && "Realloc: failed, returned address should never be NULL");
+  Assert(address != NULL, "Realloc: failed, returned address should never be NULL");
   return address;
 }
 
@@ -780,8 +907,8 @@ static void addNullTerminator(char *str, size_t len) {
   str[len] = '\0';
 }
 
-bool StrIsNull(String *str) {
-  return str == NULL || str->data == NULL;
+bool StrIsNull(String str) {
+  return str.data == NULL;
 }
 
 void SetMaxStrSize(size_t size) {
@@ -817,71 +944,79 @@ String s(char *msg) {
   };
 }
 
-String StrConcat(Arena *arena, String *string1, String *string2) {
+String StrConcat(Arena *arena, String string1, String string2) {
   if (StrIsNull(string1)) {
-    const size_t len = string2->length;
+    const size_t len = string2.length;
     const size_t memorySize = sizeof(char) * len;
     char *allocatedString = ArenaAllocChars(arena, memorySize);
-    memcpy_s(allocatedString, memorySize, string2->data, string2->length);
+
+    errno_t err = memcpy_s(allocatedString, memorySize, string2.data, string2.length);
+    Assert(err == SUCCESS, "StrConcat: memcpy_s failed, err: %d", err);
+
     addNullTerminator(allocatedString, len);
     return (String){len, allocatedString};
   }
 
   if (StrIsNull(string2)) {
-    const size_t len = string1->length;
+    const size_t len = string1.length;
     const size_t memorySize = sizeof(char) * len;
     char *allocatedString = ArenaAllocChars(arena, memorySize);
-    memcpy_s(allocatedString, memorySize, string1->data, string1->length);
+    errno_t err = memcpy_s(allocatedString, memorySize, string1.data, string1.length);
+    Assert(err == SUCCESS, "StrConcat: memcpy_s failed, err: %d", err);
+
     addNullTerminator(allocatedString, len);
     return (String){len, allocatedString};
   }
 
-  const size_t len = string1->length + string2->length;
+  const size_t len = string1.length + string2.length;
   const size_t memorySize = sizeof(char) * len + 1; // NOTE: Includes null terminator
   char *allocatedString = ArenaAllocChars(arena, memorySize);
 
-  memcpy_s(allocatedString, memorySize, string1->data, string1->length);
-  memcpy_s(allocatedString + string1->length, memorySize, string2->data, string2->length);
+  errno_t err = memcpy_s(allocatedString, memorySize, string1.data, string1.length);
+  Assert(err == SUCCESS, "StrConcat: memcpy_s failed, err: %d", err);
+
+  err = memcpy_s(allocatedString + string1.length, memorySize, string2.data, string2.length);
+  Assert(err == SUCCESS, "StrConcat: memcpy_s failed, err: %d", err);
+
   addNullTerminator(allocatedString, len);
   return (String){len, allocatedString};
 }
 
-void StrCopy(String *destination, String *source) {
-  assert(!StrIsNull(destination) && "StrCopy: destination should never be NULL");
-  assert(!StrIsNull(source) && "StrCopy: source should never be NULL");
-  assert(destination->length >= source->length && "destination length should never smaller than source length");
+void StrCopy(String destination, String source) {
+  Assert(!StrIsNull(destination), "StrCopy: destination should never be NULL");
+  Assert(!StrIsNull(source), "StrCopy: source should never be NULL");
+  Assert(destination.length >= source.length, "destination length should never smaller than source length");
 
-  const errno_t result = memcpy_s(destination->data, destination->length, source->data, source->length);
+  errno_t err = memcpy_s(destination.data, destination.length, source.data, source.length);
+  Assert(err == SUCCESS, "StrCopy: memcpy_s failed, err: %d", err);
 
-  assert(result == 0 && "StrCopy: result should never be anything but 0");
-  destination->length = source->length;
-  addNullTerminator(destination->data, destination->length);
+  destination.length = source.length;
+  addNullTerminator(destination.data, destination.length);
 }
 
-bool StrEqual(String *string1, String *string2) {
-  if (string1->length != string2->length) {
+bool StrEq(String string1, String string2) {
+  if (string1.length != string2.length) {
     return false;
   }
 
-  if (memcmp(string1->data, string2->data, string1->length) != 0) {
+  if (memcmp(string1.data, string2.data, string1.length) != 0) {
     return false;
   }
+
   return true;
 }
 
-// TODO: Change to (String *str, String delimiter);
-// ^ Malloc strings instead, update StringVecFree
-StringVector StrSplit(Arena *arena, String *str, String *delimiter) {
-  assert(!StrIsNull(str) && "StrSplit: str should never be NULL");
-  assert(!StrIsNull(delimiter) && "StrSplit: delimiter should never be NULL");
+StringVector StrSplit(Arena *arena, String str, String delimiter) {
+  Assert(!StrIsNull(str), "StrSplit: str should never be NULL");
+  Assert(!StrIsNull(delimiter), "StrSplit: delimiter should never be NULL");
 
-  char *start = str->data;
-  const char *end = str->data + str->length;
+  char *start = str.data;
+  const char *end = str.data + str.length;
   char *curr = start;
   StringVector result = {0};
-  if (delimiter->length == 0) {
-    for (size_t i = 0; i < str->length; i++) {
-      String currString = StrNewSize(arena, str->data + i, 1);
+  if (delimiter.length == 0) {
+    for (size_t i = 0; i < str.length; i++) {
+      String currString = StrNewSize(arena, str.data + i, 1);
       VecPush(result, currString);
     }
     return result;
@@ -889,8 +1024,8 @@ StringVector StrSplit(Arena *arena, String *str, String *delimiter) {
 
   while (curr < end) {
     char *match = NULL;
-    for (char *search = curr; search <= end - delimiter->length; search++) {
-      if (memcmp(search, delimiter->data, delimiter->length) == 0) {
+    for (char *search = curr; search <= end - delimiter.length; search++) {
+      if (memcmp(search, delimiter.data, delimiter.length) == 0) {
         match = search;
         break;
       }
@@ -906,16 +1041,16 @@ StringVector StrSplit(Arena *arena, String *str, String *delimiter) {
     String currString = StrNewSize(arena, curr, len);
     VecPush(result, currString);
 
-    curr = match + delimiter->length;
+    curr = match + delimiter.length;
   }
 
   return result;
 }
 
-StringVector StrSplitNewLine(Arena *arena, String *str) {
-  assert(!StrIsNull(str) && "SplitNewLine: str should never be NULL");
-  char *start = str->data;
-  const char *end = str->data + str->length;
+StringVector StrSplitNewLine(Arena *arena, String str) {
+  Assert(!StrIsNull(str), "SplitNewLine: str should never be NULL");
+  char *start = str.data;
+  const char *end = str.data + str.length;
   char *curr = start;
   StringVector result = {0};
 
@@ -945,17 +1080,17 @@ StringVector StrSplitNewLine(Arena *arena, String *str) {
   return result;
 }
 
-void StringToUpper(String *str) {
-  for (size_t i = 0; i < str->length; ++i) {
-    char currChar = str->data[i];
-    str->data[i] = toupper(currChar);
+void StrToUpper(String str) {
+  for (size_t i = 0; i < str.length; ++i) {
+    char currChar = str.data[i];
+    str.data[i] = toupper(currChar);
   }
 }
 
-void StrToLower(String *str) {
-  for (size_t i = 0; i < str->length; ++i) {
-    char currChar = str->data[i];
-    str->data[i] = tolower(currChar);
+void StrToLower(String str) {
+  for (size_t i = 0; i < str.length; ++i) {
+    char currChar = str.data[i];
+    str.data[i] = tolower(currChar);
   }
 }
 
@@ -963,23 +1098,24 @@ bool isSpace(char character) {
   return character == ' ' || character == '\n' || character == '\t' || character == '\r';
 }
 
-void StrTrim(String *str) {
+void StrTrim(String str) {
   char *firstChar = NULL;
   char *lastChar = NULL;
-  if (str->length == 0) {
+
+  if (str.length == 0) {
     return;
   }
 
-  if (str->length == 1) {
-    if (isSpace(str->data[0])) {
-      str->data[0] = '\0';
-      str->length = 0;
+  if (str.length == 1) {
+    if (isSpace(str.data[0])) {
+      str.data[0] = '\0';
+      str.length = 0;
     }
     return;
   }
 
-  for (size_t i = 0; i < str->length; ++i) {
-    char *currChar = &str->data[i];
+  for (size_t i = 0; i < str.length; ++i) {
+    char *currChar = &str.data[i];
     if (isSpace(*currChar)) {
       continue;
     }
@@ -991,31 +1127,33 @@ void StrTrim(String *str) {
   }
 
   if (firstChar == NULL || lastChar == NULL) {
-    str->data[0] = '\0';
-    str->length = 0;
-    addNullTerminator(str->data, 0);
+    str.data[0] = '\0';
+    str.length = 0;
+    addNullTerminator(str.data, 0);
     return;
   }
 
   size_t len = (lastChar - firstChar) + 1;
-  memcpy_s(str->data, str->length, firstChar, len);
-  str->length = len;
-  addNullTerminator(str->data, len);
+  errno_t err = memcpy_s(str.data, str.length, firstChar, len);
+  Assert(err == SUCCESS, "StrTrim: memcpy_s failed, err: %d", err);
+
+  str.length = len;
+  addNullTerminator(str.data, len);
 }
 
-String StrSlice(Arena *arena, String *str, size_t start, size_t end) {
-  assert(start >= 0 && "StrSlice: start index must be non-negative");
-  assert(start <= str->length && "StrSlice: start index out of bounds");
+String StrSlice(Arena *arena, String str, size_t start, size_t end) {
+  Assert(start >= 0, "StrSlice: start index must be non-negative");
+  Assert(start <= str.length, "StrSlice: start index out of bounds");
 
   if (end < 0) {
-    end = str->length + end;
+    end = str.length + end;
   }
 
-  assert(end >= start && "StrSlice: end must be greater than or equal to start");
-  assert(end <= str->length && "StrSlice: end index out of bounds");
+  Assert(end >= start, "StrSlice: end must be greater than or equal to start");
+  Assert(end <= str.length, "StrSlice: end index out of bounds");
 
   size_t len = end - start;
-  return StrNewSize(arena, str->data + start, len);
+  return StrNewSize(arena, str.data + start, len);
 }
 
 String F(Arena *arena, const char *format, ...) {
@@ -1032,18 +1170,16 @@ String F(Arena *arena, const char *format, ...) {
   return (String){.length = size - 1, .data = buffer};
 }
 
-String ConvertPath(Arena *arena, String path) {
-  String platform = GetPlatform();
+String NormalizePath(Arena *arena, String path) {
   String result;
-
   if (path.length >= 2 && path.data[0] == '.' && (path.data[1] == '/' || path.data[1] == '\\')) {
     result = StrNewSize(arena, path.data + 2, path.length - 2);
-    memcpy(result.data, path.data + 2, path.length - 2);
   } else {
     result = StrNewSize(arena, path.data, path.length);
   }
 
-  if (StrEqual(&platform, &S("linux")) || StrEqual(&platform, &S("macos"))) {
+  String platform = GetPlatform();
+  if (StrEq(platform, S("linux")) || StrEq(platform, S("macos"))) {
     return result;
   }
 
@@ -1056,12 +1192,50 @@ String ConvertPath(Arena *arena, String path) {
   return result;
 }
 
-String ParsePath(Arena *arena, String path) {
+String NormalizeExePath(Arena *arena, String path) {
+  String platform = GetPlatform();
   String result;
 
   if (path.length >= 2 && path.data[0] == '.' && (path.data[1] == '/' || path.data[1] == '\\')) {
     result = StrNewSize(arena, path.data + 2, path.length - 2);
-    memcpy(result.data, path.data + 2, path.length - 2);
+  } else {
+    result = StrNewSize(arena, path.data, path.length);
+  }
+
+  bool hasExe = false;
+  String exeExtension = S(".exe");
+  if (result.length >= exeExtension.length) {
+    String resultEnd = StrSlice(arena, result, result.length - exeExtension.length, result.length);
+    if (StrEq(resultEnd, exeExtension)) {
+      hasExe = true;
+    }
+  }
+
+  if (StrEq(platform, S("windows")) && !hasExe) {
+    result = StrConcat(arena, result, exeExtension);
+  }
+
+  if (StrEq(platform, S("linux")) || StrEq(platform, S("macos"))) {
+    if (hasExe) {
+      return StrSlice(arena, result, 0, result.length - exeExtension.length);
+    }
+    return result;
+  }
+
+  for (size_t i = 0; i < result.length; i++) {
+    if (result.data[i] == '/') {
+      result.data[i] = '\\';
+    }
+  }
+
+  return result;
+}
+
+String NormalizePathStart(Arena *arena, String path) {
+  String result;
+
+  if (path.length >= 2 && path.data[0] == '.' && (path.data[1] == '/' || path.data[1] == '\\')) {
+    result = StrNewSize(arena, path.data + 2, path.length - 2);
   } else {
     result = StrNewSize(arena, path.data, path.length);
   }
@@ -1069,41 +1243,42 @@ String ParsePath(Arena *arena, String path) {
   return result;
 }
 
-String ConvertExe(Arena *arena, String path) {
-  String platform = GetPlatform();
-  String exeExtension = S(".exe");
+StringBuilder StringBuilderCreate(Arena *arena) {
+  StringBuilder result = {0};
+  char *data = ArenaAllocChars(arena, 128);
 
-  bool hasExe = false;
-  if (path.length >= exeExtension.length) {
-    String pathEnd = StrSlice(arena, &path, path.length - exeExtension.length, path.length);
-    if (StrEqual(&pathEnd, &exeExtension)) {
-      hasExe = true;
-    }
+  result.capacity = 128;
+  result.buffer = (String){.data = data, .length = 0};
+  return result;
+}
+
+StringBuilder StringBuilderReserve(Arena *arena, size_t capacity) {
+  StringBuilder result = {0};
+  char *data = ArenaAllocChars(arena, capacity);
+
+  result.capacity = capacity;
+  result.buffer = (String){.data = data, .length = 0};
+  return result;
+}
+
+void StringBuilderAppend(Arena *arena, StringBuilder *builder, String *string) {
+  size_t newLength = builder->buffer.length + string->length;
+  if (newLength + 1 >= builder->capacity) {
+    size_t newCapacity = (newLength + 1) * 2;
+    char *data = ArenaAllocChars(arena, newCapacity);
+
+    memcpy(data, builder->buffer.data, builder->buffer.length);
+    builder->buffer.data = data;
+    builder->capacity = newCapacity;
   }
 
-  if (StrEqual(&platform, &S("windows"))) {
-    if (hasExe) {
-      return path;
-    }
-    return StrConcat(arena, &path, &exeExtension);
-  }
-
-  if (StrEqual(&platform, &S("linux")) || StrEqual(&platform, &S("macos"))) {
-    if (hasExe) {
-      return StrSlice(arena, &path, 0, path.length - exeExtension.length);
-    }
-    return path;
-  }
-
-  return path;
+  memcpy(builder->buffer.data + builder->buffer.length, string->data, string->length);
+  builder->buffer.length = newLength;
+  builder->buffer.data[builder->buffer.length] = '\0';
 }
 
 /* Random Implemenation */
 static u64 seed = 0;
-void RandomInit() {
-  seed = TimeNow();
-  srand(seed);
-}
 
 u64 RandomGetSeed() {
   return seed;
@@ -1111,11 +1286,12 @@ u64 RandomGetSeed() {
 
 void RandomSetSeed(u64 newSeed) {
   seed = newSeed;
+  srand(seed);
 }
 
 i32 RandomInteger(i32 min, i32 max) {
-  assert(min <= max && "RandomInteger: min should always be less than or equal to max");
-  assert(max - min <= INT32_MAX - 1 && "RandomInteger: range too large");
+  Assert(min <= max, "RandomInteger: min should always be less than or equal to max");
+  Assert(max - min <= INT32_MAX - 1, "RandomInteger: range too large");
 
   i32 range = max - min + 1;
 
@@ -1133,7 +1309,7 @@ i32 RandomInteger(i32 min, i32 max) {
 }
 
 f32 RandomFloat(f32 min, f32 max) {
-  assert(min <= max && "RandomFloat: min must be less than or equal to max");
+  Assert(min <= max, "RandomFloat: min must be less than or equal to max");
   f32 normalized = (f32)rand() / (f32)RAND_MAX;
   return min + normalized * (max - min);
 }
@@ -1144,7 +1320,7 @@ char *GetCwd() {
   static char currentPath[MAX_PATH];
   DWORD length = GetCurrentDirectory(MAX_PATH, currentPath);
   if (length == 0) {
-    LogError("Error getting current directory: %lu", GetLastError());
+    LogError("GetCwd: failed getting current directory, err: %lu", GetLastError());
     currentPath[0] = '\0';
   }
   return currentPath;
@@ -1153,138 +1329,36 @@ char *GetCwd() {
 void SetCwd(char *destination) {
   bool result = SetCurrentDirectory(destination);
   if (!result) {
-    LogError("Error setting cwd: %lu", GetLastError());
+    LogError("SetCwd: failed setting cwd for %s, err: %lu", destination, GetLastError());
   }
   GetCwd();
 }
 
-FileData *GetDirFiles() {
-  WIN32_FIND_DATA findData;
-  HANDLE hFind;
-  char searchPath[MAX_PATH];
-  FileData *fileData = NewFileData();
-  i32 result = snprintf(searchPath, MAX_PATH - 2, "%s\\*", GetCwd());
-  assert(result >= 0 && "GetDirFiles: sprint should not return error");
-
-  hFind = FindFirstFile(searchPath, &findData);
-  if (hFind == INVALID_HANDLE_VALUE) {
-    LogError("Error finding files: %lu", GetLastError());
-    return NULL;
-  }
-
-  do {
-    if (strcmp(findData.cFileName, ".") == 0 || strcmp(findData.cFileName, "..") == 0) {
-      continue;
+errno_t FileStats(String path, File *result) {
+  if (GetFileAttributesA(path.data) == INVALID_FILE_ATTRIBUTES) {
+    DWORD error = GetLastError();
+    if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
+      return FILE_STATS_FILE_NOT_EXIST;
     }
-
-    if (fileData->totalCount >= MAX_FILES) {
-      LogError("Warning: Maximum file count reached (%d). Some files might be skipped.", MAX_FILES);
-      break;
-    }
-
-    bool isDirectory = findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
-    File *currFile = &fileData->files[fileData->fileCount];
-    Folder *currFolder = &fileData->folders[fileData->folderCount];
-
-    if (isDirectory) {
-      currFolder->name = strdup(findData.cFileName);
-      fileData->folderCount++;
-    }
-
-    if (!isDirectory) {
-      char *dot = strrchr(findData.cFileName, '.');
-      if (dot != NULL) {
-        currFile->extension = strdup(dot + 1);
-
-        size_t baseNameLength = dot - findData.cFileName;
-        char *baseName = (char *)Malloc(baseNameLength + 1);
-        memcpy(baseName, findData.cFileName, baseNameLength);
-        baseName[baseNameLength] = '\0';
-        currFile->name = baseName;
-      }
-
-      if (dot == NULL) {
-        currFile->extension = strdup("");
-        currFile->name = strdup(findData.cFileName);
-      }
-
-      LARGE_INTEGER createTime, modifyTime;
-      createTime.LowPart = findData.ftCreationTime.dwLowDateTime;
-      createTime.HighPart = findData.ftCreationTime.dwHighDateTime;
-      modifyTime.LowPart = findData.ftLastWriteTime.dwLowDateTime;
-      modifyTime.HighPart = findData.ftLastWriteTime.dwHighDateTime;
-
-      const i64 WINDOWS_TICK = 10000000;
-      const i64 SEC_TO_UNIX_EPOCH = 11644473600LL;
-
-      currFile->createTime = createTime.QuadPart / WINDOWS_TICK - SEC_TO_UNIX_EPOCH;
-      currFile->modifyTime = modifyTime.QuadPart / WINDOWS_TICK - SEC_TO_UNIX_EPOCH;
-      currFile->size = (((i64)findData.nFileSizeHigh) << 32) | findData.nFileSizeLow;
-      fileData->fileCount++;
-    }
-
-    fileData->totalCount++;
-  } while (FindNextFile(hFind, &findData) != 0);
-
-  DWORD dwError = GetLastError();
-  if (dwError != ERROR_NO_MORE_FILES) {
-    LogError("Error searching for files: %lu", dwError);
-  }
-
-  FindClose(hFind);
-  return fileData;
-}
-
-FileData *NewFileData() {
-  FileData *fileData = (FileData *)Malloc(sizeof(FileData));
-  fileData->files = (File *)Malloc(MAX_FILES * sizeof(File));
-  fileData->fileCount = 0;
-  fileData->folders = (Folder *)Malloc(MAX_FILES * sizeof(Folder));
-  fileData->folderCount = 0;
-  fileData->totalCount = 0;
-  return fileData;
-};
-
-void FreeFileData(FileData *fileData) {
-  if (fileData->files == NULL && fileData->folders == NULL) return;
-
-  for (size_t i = 0; i < fileData->fileCount; i++) {
-    File currentFile = fileData->files[i];
-    Free(currentFile.name);
-    Free(currentFile.extension);
-  }
-
-  Free(fileData->files);
-
-  for (size_t i = 0; i < fileData->folderCount; i++) {
-    Folder currentFolder = fileData->folders[i];
-    Free(currentFolder.name);
-  }
-
-  Free(fileData->folders);
-  Free(fileData);
-}
-
-errno_t FileStats(String *path, File *result) {
-  WIN32_FILE_ATTRIBUTE_DATA fileAttr = {0};
-
-  if (!GetFileAttributesExA(path->data, GetFileExInfoStandard, &fileAttr)) {
     return FILE_GET_ATTRIBUTES_FAILED;
   }
 
-  char *nameStart = strrchr(path->data, '\\');
-  if (!nameStart) {
-    nameStart = strrchr(path->data, '/');
+  WIN32_FILE_ATTRIBUTE_DATA fileAttr = {0};
+  if (!GetFileAttributesExA(path.data, GetFileExInfoStandard, &fileAttr)) {
+    return FILE_GET_ATTRIBUTES_FAILED;
   }
 
+  char *nameStart = strrchr(path.data, '\\');
+  if (!nameStart) {
+    nameStart = strrchr(path.data, '/');
+  }
   if (nameStart) {
     nameStart++;
   } else {
-    nameStart = path->data;
+    nameStart = path.data;
   }
 
   result->name = strdup(nameStart);
-
   char *extStart = strrchr(nameStart, '.');
   if (extStart) {
     result->extension = strdup(extStart + 1);
@@ -1305,17 +1379,16 @@ errno_t FileStats(String *path, File *result) {
 
   const i64 WINDOWS_TICK = 10000000;
   const i64 SEC_TO_UNIX_EPOCH = 11644473600LL;
-
   result->createTime = createTime.QuadPart / WINDOWS_TICK - SEC_TO_UNIX_EPOCH;
   result->modifyTime = modifyTime.QuadPart / WINDOWS_TICK - SEC_TO_UNIX_EPOCH;
 
   return SUCCESS;
 }
 
-errno_t FileRead(Arena *arena, String *path, String *result) {
+errno_t FileRead(Arena *arena, String path, String *result) {
   HANDLE hFile = INVALID_HANDLE_VALUE;
 
-  hFile = CreateFileA(path->data, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+  hFile = CreateFileA(path.data, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
   if (hFile == INVALID_HANDLE_VALUE) {
     DWORD error = GetLastError();
@@ -1324,13 +1397,11 @@ errno_t FileRead(Arena *arena, String *path, String *result) {
       return FILE_NOT_EXIST;
     }
 
-    LogError("File open failed, for %s, err: %lu", path->data, error);
     return FILE_OPEN_FAILED;
   }
 
   LARGE_INTEGER fileSize;
   if (!GetFileSizeEx(hFile, &fileSize)) {
-    LogError("Failed to get file size: %lu\n", GetLastError());
     CloseHandle(hFile);
     return FILE_GET_SIZE_FAILED;
   }
@@ -1338,7 +1409,6 @@ errno_t FileRead(Arena *arena, String *path, String *result) {
   DWORD bytesRead;
   char *buffer = ArenaAllocChars(arena, fileSize.QuadPart);
   if (!ReadFile(hFile, buffer, (DWORD)fileSize.QuadPart, &bytesRead, NULL) || bytesRead != fileSize.QuadPart) {
-    LogError("Failed to read file: %lu", GetLastError());
     CloseHandle(hFile);
     return FILE_READ_FAILED;
   }
@@ -1349,14 +1419,13 @@ errno_t FileRead(Arena *arena, String *path, String *result) {
   return SUCCESS;
 }
 
-errno_t FileWrite(String *path, String *data) {
+errno_t FileWrite(String path, String data) {
   HANDLE hFile = INVALID_HANDLE_VALUE;
 
-  hFile = CreateFileA(path->data, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+  hFile = CreateFileA(path.data, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
   if (hFile == INVALID_HANDLE_VALUE) {
     DWORD error = GetLastError();
-    LogError("File open failed, for %s, err: %lu", path->data, error);
 
     switch (error) {
     case ERROR_ACCESS_DENIED:
@@ -1369,7 +1438,7 @@ errno_t FileWrite(String *path, String *data) {
   }
 
   DWORD bytesWritten;
-  if (!WriteFile(hFile, data->data, (DWORD)data->length, &bytesWritten, NULL) || bytesWritten != data->length) {
+  if (!WriteFile(hFile, data.data, (DWORD)data.length, &bytesWritten, NULL) || bytesWritten != data.length) {
     DWORD error = GetLastError();
     CloseHandle(hFile);
 
@@ -1386,12 +1455,11 @@ errno_t FileWrite(String *path, String *data) {
   return SUCCESS;
 }
 
-errno_t FileAdd(String *path, String *data) {
+errno_t FileAdd(String path, String data) {
   HANDLE hFile = INVALID_HANDLE_VALUE;
-  hFile = CreateFileA(path->data, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+  hFile = CreateFileA(path.data, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
   if (hFile == INVALID_HANDLE_VALUE) {
     DWORD error = GetLastError();
-    LogError("File open failed, for %s, err: %lu", path->data, error);
 
     switch (error) {
     case ERROR_ACCESS_DENIED:
@@ -1404,16 +1472,14 @@ errno_t FileAdd(String *path, String *data) {
   }
 
   if (SetFilePointer(hFile, 0, NULL, FILE_END) == INVALID_SET_FILE_POINTER) {
-    DWORD error = GetLastError();
-    LogError("FileAdd IO failed, for %s, err: %lu", path->data, error);
     CloseHandle(hFile);
     return FILE_ADD_IO_ERROR;
   }
 
-  char *newData = Malloc(data->length + 1); // NOTE: +1 for \n
-  memcpy(newData, data->data, data->length);
-  newData[data->length] = '\n';
-  DWORD newLength = (DWORD)data->length + 1;
+  char *newData = Malloc(data.length + 1); // NOTE: +1 for \n
+  memcpy(newData, data.data, data.length);
+  newData[data.length] = '\n';
+  DWORD newLength = (DWORD)data.length + 1;
   DWORD bytesWritten;
   if (!WriteFile(hFile, newData, newLength, &bytesWritten, NULL) || bytesWritten != newLength) {
     DWORD error = GetLastError();
@@ -1432,8 +1498,8 @@ errno_t FileAdd(String *path, String *data) {
   return SUCCESS;
 }
 
-errno_t FileDelete(String *path) {
-  if (!DeleteFileA(path->data)) {
+errno_t FileDelete(String path) {
+  if (!DeleteFileA(path.data)) {
     DWORD error = GetLastError();
     switch (error) {
     case ERROR_ACCESS_DENIED:
@@ -1448,8 +1514,8 @@ errno_t FileDelete(String *path) {
   return SUCCESS;
 }
 
-errno_t FileRename(String *oldPath, String *newPath) {
-  if (!MoveFileEx(oldPath->data, newPath->data, MOVEFILE_REPLACE_EXISTING)) {
+errno_t FileRename(String oldPath, String newPath) {
+  if (!MoveFileEx(oldPath.data, newPath.data, MOVEFILE_REPLACE_EXISTING)) {
     DWORD error = GetLastError();
     switch (error) {
     case ERROR_ACCESS_DENIED:
@@ -1477,7 +1543,7 @@ bool Mkdir(String path) {
     return true;
   }
 
-  LogError("Error meanwhile Mkdir() %llu", error);
+  LogError("Mkdir: failed for %s, err: %llu", path.data, error);
   return false;
 }
 
@@ -1492,7 +1558,7 @@ StringVector ListDir(Arena *arena, String path) {
 
   if (hFind == INVALID_HANDLE_VALUE) {
     DWORD error = GetLastError();
-    LogError("Directory listing failed for %s, err: %lu", path.data, error);
+    LogError("ListDir: failed for %s, err: %lu", path.data, error);
     return result;
   }
 
@@ -1508,7 +1574,7 @@ StringVector ListDir(Arena *arena, String path) {
 
   DWORD error = GetLastError();
   if (error != ERROR_NO_MORE_FILES) {
-    LogError("ListDir: error reading directory %s, err: %d", path.data, error);
+    LogError("ListDir: failed reading directory %s, err: %lu", path.data, error);
   }
 
   FindClose(hFind);
@@ -1518,7 +1584,7 @@ StringVector ListDir(Arena *arena, String path) {
 char *GetCwd() {
   static char currentPath[PATH_MAX];
   if (getcwd(currentPath, PATH_MAX) == NULL) {
-    LogError("Error getting current directory: %s", strerror(errno));
+    LogError("GetCwd: failed getting current directory, err: %s", strerror(errno));
     currentPath[0] = '\0';
   }
   return currentPath;
@@ -1526,25 +1592,26 @@ char *GetCwd() {
 
 void SetCwd(char *destination) {
   if (chdir(destination) != 0) {
-    LogError("Error setting cwd: %s", strerror(errno));
+    LogError("SetCwd: failed setting cwd for %s, err: %s", destination, strerror(errno));
   }
   GetCwd();
 }
 
-errno_t FileStats(String *path, File *result) {
+errno_t FileStats(String path, File *result) {
   struct stat fileStat;
-
-  if (stat(path->data, &fileStat) != 0) {
+  if (stat(path.data, &fileStat) != 0) {
+    if (errno == ENOENT) {
+      return FILE_STATS_FILE_NOT_EXIST;
+    }
     return FILE_GET_ATTRIBUTES_FAILED;
   }
 
-  char *nameStart = strrchr(path->data, '/');
+  char *nameStart = strrchr(path.data, '/');
   if (nameStart) {
     nameStart++;
   } else {
-    nameStart = path->data;
+    nameStart = path.data;
   }
-
   result->name = strdup(nameStart);
 
   char *extStart = strrchr(nameStart, '.');
@@ -1561,50 +1628,47 @@ errno_t FileStats(String *path, File *result) {
   return SUCCESS;
 }
 
-errno_t FileRead(Arena *arena, String *path, String *result) {
-  i32 fd = -1;
-
-  fd = open(path->data, O_RDONLY);
-  if (fd == -1) {
+errno_t FileRead(Arena *arena, String path, String *result) {
+  FILE *file = fopen(path.data, "r");
+  if (!file) {
     int error = errno;
-
     if (error == ENOENT) {
       return FILE_NOT_EXIST;
     }
-
-    LogError("File open failed, for %s, err: %lu", path->data, error);
     return FILE_OPEN_FAILED;
   }
 
-  struct stat fileStat;
-  if (fstat(fd, &fileStat) != 0) {
-    LogError("Failed to get file size: %d", errno);
-    close(fd);
+  if (fseek(file, 0, SEEK_END) != 0) {
+    fclose(file);
     return FILE_GET_SIZE_FAILED;
   }
 
-  off_t fileSize = fileStat.st_size;
+  long fileSize = ftell(file);
+  if (fileSize == -1) {
+    fclose(file);
+    return FILE_GET_SIZE_FAILED;
+  }
+
+  rewind(file);
+
   char *buffer = ArenaAllocChars(arena, fileSize);
-  ssize_t bytesRead = read(fd, buffer, fileSize);
-  if (bytesRead != fileSize) {
-    LogError("Failed to read file: %d", errno);
-    close(fd);
+  size_t bytesRead = fread(buffer, 1, fileSize, file);
+  if (bytesRead != (size_t)fileSize) {
+    fclose(file);
     return FILE_READ_FAILED;
   }
 
   *result = (String){.length = bytesRead, .data = buffer};
-
-  close(fd);
+  fclose(file);
   return SUCCESS;
 }
 
-errno_t FileWrite(String *path, String *data) {
+errno_t FileWrite(String path, String data) {
   i32 fd = -1;
 
-  fd = open(path->data, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  fd = open(path.data, O_WRONLY | O_CREAT | O_TRUNC, 0644);
   if (fd == -1) {
     i32 error = errno;
-    LogError("File open failed, for %s, err: %lu", path->data, error);
 
     switch (error) {
     case EACCES:
@@ -1616,8 +1680,8 @@ errno_t FileWrite(String *path, String *data) {
     }
   }
 
-  ssize_t bytesWritten = write(fd, data->data, data->length);
-  if (bytesWritten != data->length) {
+  ssize_t bytesWritten = write(fd, data.data, data.length);
+  if (bytesWritten != data.length) {
     int error = errno;
     close(fd);
 
@@ -1634,13 +1698,12 @@ errno_t FileWrite(String *path, String *data) {
   return SUCCESS;
 }
 
-errno_t FileAdd(String *path, String *data) {
+errno_t FileAdd(String path, String data) {
   i32 fd = -1;
 
-  fd = open(path->data, O_WRONLY | O_APPEND | O_CREAT, 0644);
+  fd = open(path.data, O_WRONLY | O_APPEND | O_CREAT, 0644);
   if (fd == -1) {
     int error = errno;
-    LogError("File open failed, for %s, err: %lu", path->data, error);
 
     switch (error) {
     case EACCES:
@@ -1652,10 +1715,10 @@ errno_t FileAdd(String *path, String *data) {
     }
   }
 
-  char *newData = Malloc(data->length + 1); // +1 for \n
-  memcpy(newData, data->data, data->length);
-  newData[data->length] = '\n';
-  size_t newLength = data->length + 1;
+  char *newData = Malloc(data.length + 1); // +1 for \n
+  memcpy(newData, data.data, data.length);
+  newData[data.length] = '\n';
+  size_t newLength = data.length + 1;
 
   ssize_t bytesWritten = write(fd, newData, newLength);
   if (bytesWritten != newLength) {
@@ -1676,8 +1739,8 @@ errno_t FileAdd(String *path, String *data) {
   return SUCCESS;
 }
 
-errno_t FileDelete(String *path) {
-  if (unlink(path->data) != 0) {
+errno_t FileDelete(String path) {
+  if (unlink(path.data) != 0) {
     int error = errno;
 
     switch (error) {
@@ -1693,8 +1756,8 @@ errno_t FileDelete(String *path) {
   return SUCCESS;
 }
 
-errno_t FileRename(String *oldPath, String *newPath) {
-  if (rename(oldPath->data, newPath->data) != 0) {
+errno_t FileRename(String oldPath, String newPath) {
+  if (rename(oldPath.data, newPath.data) != 0) {
     errno_t error = errno;
 
     switch (error) {
@@ -1720,115 +1783,12 @@ bool Mkdir(String path) {
 
   if (mkdir(path.data, 0755) != 0) {
     if (errno != EEXIST) {
-      LogError("Failed to create directory: %s", strerror(errno));
+      LogError("Mkdir: failed to create directory for %s, err: %s", path.data, strerror(errno));
       return false;
     }
   }
 
   return true;
-}
-
-FileData *NewFileData() {
-  FileData *data = (FileData *)Malloc(sizeof(FileData));
-
-  data->folders = (Folder *)Malloc(MAX_FILES * sizeof(Folder));
-  data->files = (File *)Malloc(MAX_FILES * sizeof(File));
-
-  data->folderCount = 0;
-  data->fileCount = 0;
-  data->totalCount = 0;
-
-  return data;
-}
-
-void FreeFileData(FileData *data) {
-  if (!data) return;
-
-  for (size_t i = 0; i < data->folderCount; i++) {
-    Free(data->folders[i].name);
-  }
-
-  for (size_t i = 0; i < data->fileCount; i++) {
-    Free(data->files[i].name);
-    Free(data->files[i].extension);
-  }
-
-  Free(data->folders);
-  Free(data->files);
-  Free(data);
-}
-
-FileData *GetDirFiles() {
-  FileData *data = NewFileData();
-  if (!data) {
-    return NULL;
-  }
-
-  DIR *dir = opendir(".");
-  if (!dir) {
-    LogError("Failed to open directory: %s", strerror(errno));
-    FreeFileData(data);
-    return NULL;
-  }
-
-  struct dirent *entry;
-  while ((entry = readdir(dir)) != NULL) {
-    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-      continue;
-    }
-
-    if (data->totalCount >= MAX_FILES) {
-      LogError("Maximum file count (%d) reached", MAX_FILES);
-      break;
-    }
-
-    struct stat entryStat;
-    if (stat(entry->d_name, &entryStat) != 0) {
-      LogError("Failed to stat entry %s: %s", entry->d_name, strerror(errno));
-      continue;
-    }
-
-    if (S_ISDIR(entryStat.st_mode)) {
-      data->folders[data->folderCount].name = strdup(entry->d_name);
-      if (!data->folders[data->folderCount].name) {
-        LogError("Failed to allocate memory for folder name");
-        continue;
-      }
-      data->folderCount++;
-    } else if (S_ISREG(entryStat.st_mode)) {
-      File *currentFile = &data->files[data->fileCount];
-
-      currentFile->name = strdup(entry->d_name);
-      if (!currentFile->name) {
-        LogError("Failed to allocate memory for file name");
-        continue;
-      }
-
-      char *extStart = strrchr(entry->d_name, '.');
-      if (extStart) {
-        currentFile->extension = strdup(extStart + 1);
-      } else {
-        currentFile->extension = strdup("");
-      }
-
-      if (!currentFile->extension) {
-        LogError("Failed to allocate memory for extension");
-        Free(currentFile->name);
-        continue;
-      }
-
-      currentFile->size = entryStat.st_size;
-      currentFile->createTime = entryStat.st_ctime;
-      currentFile->modifyTime = entryStat.st_mtime;
-
-      data->fileCount++;
-    }
-
-    data->totalCount++;
-  }
-
-  closedir(dir);
-  return data;
 }
 
 StringVector ListDir(Arena *arena, String path) {
@@ -1837,7 +1797,7 @@ StringVector ListDir(Arena *arena, String path) {
 
   if (dir == NULL) {
     errno_t error = errno;
-    LogError("Directory listing failed for %s, err: %d", path.data, error);
+    LogError("ListDir: failed opening directory for %s, err: %d", path.data, error);
     return result;
   }
 
@@ -1855,13 +1815,17 @@ StringVector ListDir(Arena *arena, String path) {
 
   if (errno != 0) {
     errno_t error = errno;
-    LogError("ListDir: error reading directory %s, err: %d", path.data, error);
+    LogError("ListDir: failed reading directory %s, err: %d", path.data, error);
   }
 
   closedir(dir);
   return result;
 }
 #  endif
+
+errno_t FileReset(String path) {
+  return FileWrite(path, S(""));
+}
 
 /* Logger Implemenation */
 void LogInfo(const char *format, ...) {
@@ -1911,30 +1875,31 @@ void LogInit() {
 }
 
 /* --- INI Parser Implementation --- */
-IniFile IniParse(String *path) {
-  IniFile result = {0};
-
+errno_t IniParse(String path, IniFile *result) {
   File stats = {0};
   errno_t err = FileStats(path, &stats);
+  if (err == FILE_STATS_FILE_NOT_EXIST) {
+    LogWarn("IniParse: %s does not exist, creating...", path.data);
+    errno_t fileResetErr = FileReset(path);
+    Assert(fileResetErr == SUCCESS, "IniParse: Failed creating file for path %s, err: %d", path.data, fileResetErr);
+
+    result->arena = ArenaCreate(sizeof(String) * 10); // Initialize arena
+    return SUCCESS;
+  }
+
   if (err != SUCCESS) {
-    LogWarn("%s does not exist, creating...", path->data);
-    FileWrite(path, &S(""));                         // Create empty file if not exist
-    result.arena = ArenaCreate(sizeof(String) * 10); // Initialize arena to 10 strings at least
-    return result;
+    return err;
   }
 
   String buffer;
-  result.arena = ArenaCreate(stats.size * 4);
-  err = FileRead(result.arena, path, &buffer);
+  result->arena = ArenaCreate(stats.size * 4);
+  err = FileRead(result->arena, path, &buffer);
   if (err != SUCCESS) {
-    LogError("IniParse: Error on FileRead: %d", err);
-    abort();
+    return err;
   }
 
-  StringVector iniSplit = StrSplitNewLine(result.arena, &buffer);
-  for (size_t i = 0; i < iniSplit.length; i++) {
-    String *currLine = VecAt(iniSplit, i);
-
+  StringVector iniSplit = StrSplitNewLine(result->arena, buffer);
+  VecForEach(iniSplit, currLine) {
     if (currLine->length == 0 || currLine->data[0] == ';') {
       continue;
     }
@@ -1951,15 +1916,32 @@ IniFile IniParse(String *path) {
       continue;
     }
 
-    String key = StrSlice(result.arena, currLine, 0, equalPos);
-    String value = StrSlice(result.arena, currLine, equalPos + 1, currLine->length);
+    String key = StrSlice(result->arena, *currLine, 0, equalPos);
+    String value = StrSlice(result->arena, *currLine, equalPos + 1, currLine->length);
 
     IniEntry entry = {.key = key, .value = value};
-    VecPush(result.data, entry);
+    VecPush(result->data, entry);
   }
 
   VecFree(iniSplit);
-  return result;
+  return SUCCESS;
+}
+
+errno_t IniWrite(String path, IniFile *iniFile) {
+  errno_t err = FileReset(path);
+  if (err != SUCCESS) {
+    return err;
+  }
+
+  VecForEach(iniFile->data, entry) {
+    String value = F(iniFile->arena, "%s=%s", entry->key.data, entry->value.data);
+    err = FileAdd(path, value);
+    if (err != SUCCESS) {
+      return err;
+    }
+  }
+
+  return SUCCESS;
 }
 
 void IniFree(IniFile *iniFile) {
@@ -1967,22 +1949,9 @@ void IniFree(IniFile *iniFile) {
   VecFree(iniFile->data);
 }
 
-bool IniWrite(String *path, IniFile *iniFile) {
-  FileWrite(path, &S("")); // Reset/Create file
-
-  for (size_t i = 0; i < iniFile->data.length; i++) {
-    IniEntry *entry = VecAt(iniFile->data, i);
-    String value = F(iniFile->arena, "%s=%s", entry->key.data, entry->value.data);
-    FileAdd(path, &value);
-  }
-
-  return true;
-}
-
-String IniGet(IniFile *ini, String *key) {
-  for (size_t i = 0; i < ini->data.length; i++) {
-    IniEntry *entry = VecAt(ini->data, i);
-    if (StrEqual(&entry->key, key)) {
+String IniGet(IniFile *ini, String key) {
+  VecForEach(ini->data, entry) {
+    if (StrEq(entry->key, key)) {
       return entry->value;
     }
   }
@@ -1991,9 +1960,8 @@ String IniGet(IniFile *ini, String *key) {
 }
 
 String IniSet(IniFile *ini, String key, String value) {
-  for (size_t i = 0; i < ini->data.length; i++) {
-    IniEntry *entry = VecAt(ini->data, i);
-    if (StrEqual(&entry->key, &key)) {
+  VecForEach(ini->data, entry) {
+    if (StrEq(entry->key, key)) {
       entry->value = value;
       return entry->value;
     }
@@ -2007,61 +1975,61 @@ String IniSet(IniFile *ini, String key, String value) {
   return newEntry.value;
 }
 
-i32 IniGetInt(IniFile *ini, String *key) {
+i32 IniGetInt(IniFile *ini, String key) {
   String value = IniGet(ini, key);
-  if (StrIsNull(&value)) {
+  if (StrIsNull(value)) {
     return 0;
   }
 
   char *endPtr;
   i32 result = (i32)strtol(value.data, &endPtr, 10);
   if (endPtr == value.data) {
-    LogWarn("Failed to convert key: %s, value: %s, to int", key->data, value.data);
+    LogWarn("IniGetLong: Failed to convert [key: %s, value: %s] to int", key.data, value.data);
     return 0;
   }
 
   return result;
 }
 
-i64 IniGetLong(IniFile *ini, String *key) {
+i64 IniGetLong(IniFile *ini, String key) {
   String value = IniGet(ini, key);
-  if (StrIsNull(&value)) {
+  if (StrIsNull(value)) {
     return 0;
   }
 
   char *endPtr;
   i64 result = strtoll(value.data, &endPtr, 10);
   if (endPtr == value.data) {
-    LogWarn("Failed to convert key: %s, value: %s, to int", key->data, value.data);
+    LogWarn("IniGetLong: Failed to convert [key: %s, value: %s] to long", key.data, value.data);
     return 0;
   }
 
   return result;
 }
 
-f64 IniGetDouble(IniFile *ini, String *key) {
+f64 IniGetDouble(IniFile *ini, String key) {
   String value = IniGet(ini, key);
-  if (StrIsNull(&value)) {
+  if (StrIsNull(value)) {
     return 0.0;
   }
 
   char *endPtr;
   f64 result = strtod(value.data, &endPtr);
   if (endPtr == value.data) {
-    LogWarn("Failed to convert key: %s, value: %s, to double", key->data, value.data);
+    LogWarn("IniGetLong: Failed to convert [key: %s, value: %s] to double", key.data, value.data);
     return 0.0;
   }
 
   return result;
 }
 
-bool IniGetBool(IniFile *ini, String *key) {
+bool IniGetBool(IniFile *ini, String key) {
   String value = IniGet(ini, key);
-  if (StrIsNull(&value)) {
+  if (StrIsNull(value)) {
     return false;
   }
 
-  return StrEqual(&value, &S("true"));
+  return StrEq(value, S("true"));
 }
 #endif
 
@@ -2076,8 +2044,9 @@ bool IniGetBool(IniFile *ini, String *key) {
    Guide on the `README.md`
 */
 typedef struct {
-  i32 lastBuild;
+  i64 lastBuild;
   bool samuraiBuild;
+  bool firstBuild;
 } MateCache;
 
 typedef struct {
@@ -2098,11 +2067,11 @@ typedef struct {
   // Cache
   MateCache mateCache;
   IniFile cache;
-  bool firstBuild;
 
   // Misc
   Arena *arena;
-  bool customConfig;
+  bool initConfig;
+
   i64 startTime;
   i64 totalTime;
 } MateConfig;
@@ -2156,10 +2125,17 @@ typedef struct {
   u8 std;
 } ExecutableOptions;
 
-void CreateConfig(MateOptions options);
 void StartBuild();
-void reBuild();
+void EndBuild();
+
+void CreateConfig(MateOptions options);
 void CreateExecutable(ExecutableOptions executableOptions);
+String InstallExecutable();
+
+WARN_UNUSED errno_t RunCommand(String command);
+
+enum CreateCompileCommandsError { COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMPILE_COMMANDS_FAILED_COMPDB };
+WARN_UNUSED errno_t CreateCompileCommands();
 
 #define AddLibraryPaths(...)                   \
   ({                                           \
@@ -2191,10 +2167,7 @@ static void addFile(String source);
 #define RemoveFile(source) removeFile(S(source));
 static bool removeFile(String source);
 
-String InstallExecutable();
-errno_t RunCommand(String command);
-void EndBuild();
-
+static void reBuild();
 static bool needRebuild();
 static void setDefaultState();
 
@@ -5122,8 +5095,8 @@ static void setDefaultState();
 static MateConfig state = {0};
 static Executable executable = {0};
 
-String FixPathExe(String str) {
-  String path = ConvertPath(state.arena, ConvertExe(state.arena, str));
+static String fixPathExe(String str) {
+  String path = NormalizeExePath(state.arena, str);
 #if defined(PLATFORM_WIN)
   return F(state.arena, "%s\\%s", GetCwd(), path.data);
 #else
@@ -5131,8 +5104,8 @@ String FixPathExe(String str) {
 #endif
 }
 
-String FixPath(String str) {
-  String path = ConvertPath(state.arena, str);
+static String fixPath(String str) {
+  String path = NormalizePath(state.arena, str);
 #if defined(PLATFORM_WIN)
   return F(state.arena, "%s\\%s", GetCwd(), path.data);
 #else
@@ -5154,10 +5127,11 @@ String ConvertNinjaPath(String str) {
 
 static void setDefaultState() {
   state.arena = ArenaCreate(20000 * sizeof(String));
-  state.mateExe = FixPath(S("./mate"));
   state.compiler = GetCompiler();
-  state.mateSource = FixPath(S("./mate.c"));
-  state.buildDirectory = FixPath(S("./build"));
+
+  state.mateExe = fixPathExe(S("./mate"));
+  state.mateSource = fixPath(S("./mate.c"));
+  state.buildDirectory = fixPath(S("./build"));
 }
 
 static MateConfig parseMateConfig(MateOptions options) {
@@ -5173,62 +5147,59 @@ void CreateConfig(MateOptions options) {
   setDefaultState();
   MateConfig config = parseMateConfig(options);
 
-  if (!StrIsNull(&config.mateSource)) {
-    state.mateSource = FixPath(config.mateSource);
+  if (!StrIsNull(config.mateExe)) {
+    state.mateExe = fixPathExe(config.mateExe);
   }
 
-  if (!StrIsNull(&config.mateExe)) {
-    state.mateExe = FixPath(config.mateExe);
+  if (!StrIsNull(config.mateSource)) {
+    state.mateSource = fixPath(config.mateSource);
   }
 
-  if (!StrIsNull(&config.buildDirectory)) {
-    state.buildDirectory = FixPath(config.buildDirectory);
+  if (!StrIsNull(config.buildDirectory)) {
+    state.buildDirectory = fixPath(config.buildDirectory);
   }
 
-  if (!StrIsNull(&config.compiler)) {
+  if (!StrIsNull(config.compiler)) {
     state.compiler = config.compiler;
   }
 
-  state.customConfig = true;
+  state.initConfig = true;
 }
 
 static void readCache() {
   String mateCachePath = F(state.arena, "%s/mate-cache.ini", state.buildDirectory.data);
-  state.cache = IniParse(&mateCachePath);
+  errno_t err = IniParse(mateCachePath, &state.cache);
+  Assert("MateReadCache: failed reading MateCache at %s, err: %d", mateCachePath.data, err);
 
-  i32 modifyTime = IniGetInt(&state.cache, &S("modify-time"));
-  if (modifyTime == 0) {
-    state.firstBuild = true;
+  state.mateCache.lastBuild = IniGetLong(&state.cache, S("modify-time"));
+  if (state.mateCache.lastBuild == 0) {
+    state.mateCache.firstBuild = true;
     state.mateCache.lastBuild = TimeNow() / 1000;
-    String modifyTime = F(state.arena, "%d", state.mateCache.lastBuild);
+
+    String modifyTime = F(state.arena, "%ld", state.mateCache.lastBuild);
     IniSet(&state.cache, S("modify-time"), modifyTime);
-  } else {
-    state.mateCache.lastBuild = modifyTime;
   }
 
-  state.mateCache.samuraiBuild = IniGetBool(&state.cache, &S("samurai-build"));
-#if !defined(PLATFORM_WIN)
+#if defined(PLATFORM_WIN)
+  if (state.mateCache.firstBuild) {
+    errno_t ninjaCheck = RunCommand(S("ninja --version > nul 2> nul"));
+    Assert(ninjaCheck == SUCCESS, "MateReadCache: Ninja build system not found. Please install Ninja and add it to your PATH.");
+  }
+#else
+  state.mateCache.samuraiBuild = IniGetBool(&state.cache, S("samurai-build"));
   if (state.mateCache.samuraiBuild == false) {
+    Assert(state.mateCache.firstBuild, "MateCache: This is not the first build and samurai is not compiled, a cache error, delete `./build` folder and rebuild `./mate.c`");
+
     String samuraiAmalgam = s(SAMURAI_AMALGAM);
     String sourcePath = F(state.arena, "%s/samurai.c", state.buildDirectory.data);
-    FileWrite(&sourcePath, &samuraiAmalgam);
+    errno_t errFileWrite = FileWrite(sourcePath, samuraiAmalgam);
+    Assert(errFileWrite == SUCCESS, "MateReadCache: failed writing samurai source code to path %s", sourcePath.data);
 
-    String compileCommand;
     String outputPath = F(state.arena, "%s/samurai", state.buildDirectory.data);
-    if (StrEqual(&state.compiler, &S("gcc"))) {
-      compileCommand = F(state.arena, "gcc \"%s\" -o \"%s\" -lrt -std=c99 -O2", sourcePath.data, outputPath.data);
-    }
-    if (StrEqual(&state.compiler, &S("clang"))) {
-      compileCommand = F(state.arena, "clang \"%s\" -o \"%s\" -lrt -std=c99 -O2", sourcePath.data, outputPath.data);
-    }
-    if (StrEqual(&state.compiler, &S("tcc"))) {
-      compileCommand = F(state.arena, "tcc \"%s\" -o \"%s\" -lrt -std=c99 -O2", sourcePath.data, outputPath.data);
-    }
+    String compileCommand = F(state.arena, "%s \"%s\" -o \"%s\" -lrt -std=c99", state.compiler.data, sourcePath.data, outputPath.data);
+
     errno_t err = RunCommand(compileCommand);
-    if (err != SUCCESS) {
-      LogError("Error meanwhile compiling samurai at %s, if you are seeing this please make an issue at github.com/TomasBorquez/mate.h", sourcePath.data);
-      abort();
-    }
+    Assert(err == SUCCESS, "MateReadCache: Error meanwhile compiling samurai at %s, if you are seeing this please make an issue at github.com/TomasBorquez/mate.h", sourcePath.data);
 
     LogSuccess("Successfully compiled samurai");
     state.mateCache.samuraiBuild = true;
@@ -5236,16 +5207,19 @@ static void readCache() {
   }
 #endif
 
-  IniWrite(&mateCachePath, &state.cache);
+  err = IniWrite(mateCachePath, &state.cache);
+  Assert(err == SUCCESS, "MateReadCache: Failed writing cache, err: %d", err);
 }
 
 void StartBuild() {
   LogInit();
-  if (!state.customConfig) {
+  if (!state.initConfig) {
     setDefaultState();
   }
 
+  state.initConfig = true;
   state.startTime = TimeNow();
+
   Mkdir(state.buildDirectory);
   readCache();
   reBuild();
@@ -5253,82 +5227,61 @@ void StartBuild() {
 
 static bool needRebuild() {
   File stats = {0};
-  errno_t result = FileStats(&state.mateSource, &stats);
-  if (result != SUCCESS) {
-    LogError("Could not read fileStats %d", result);
-    LogError("Aborting rebuild");
-    abort();
+  errno_t err = FileStats(state.mateSource, &stats);
+  Assert(err == SUCCESS, "Aborting rebuild: Could not read fileStats for %s, error: %d", state.mateSource.data, err);
+
+  if (stats.modifyTime <= state.mateCache.lastBuild) {
+    return false;
   }
 
-  if (stats.modifyTime > state.mateCache.lastBuild) {
-    String mateCachePath = F(state.arena, "%s/mate-cache.ini", state.buildDirectory.data);
-    String modifyTime = F(state.arena, "%llu", stats.modifyTime);
-    IniSet(&state.cache, S("modify-time"), modifyTime);
-    IniWrite(&mateCachePath, &state.cache);
-    return true;
-  }
+  String mateCachePath = F(state.arena, "%s/mate-cache.ini", state.buildDirectory.data);
+  String modifyTime = F(state.arena, "%ld", stats.modifyTime);
+  IniSet(&state.cache, S("modify-time"), modifyTime);
 
-  return false;
+  err = IniWrite(mateCachePath, &state.cache);
+  Assert(err == SUCCESS, "Aborting rebuild: Could not write cache for path %s, error: %d", mateCachePath.data, err);
+
+  return true;
 }
 
 void reBuild() {
-  if (state.firstBuild || !needRebuild()) {
+  if (state.mateCache.firstBuild || !needRebuild()) {
     return;
   }
 
-  String mateExeNew = ConvertExe(state.arena, F(state.arena, "%s/mate-new", state.buildDirectory.data));
-  String mateExeOld = ConvertExe(state.arena, F(state.arena, "%s/mate-old", state.buildDirectory.data));
-  String mateExe = ConvertExe(state.arena, state.mateExe);
+  String mateExeNew = NormalizeExePath(state.arena, F(state.arena, "%s/mate-new", state.buildDirectory.data));
+  String mateExeOld = NormalizeExePath(state.arena, F(state.arena, "%s/mate-old", state.buildDirectory.data));
+  String mateExe = NormalizeExePath(state.arena, state.mateExe);
 
   String compileCommand;
-  if (StrEqual(&state.compiler, &S("gcc"))) {
-    compileCommand = F(state.arena, "gcc \"%s\" -o \"%s\"", state.mateSource.data, mateExeNew.data);
-  }
-
-  if (StrEqual(&state.compiler, &S("clang"))) {
-    compileCommand = F(state.arena, "clang \"%s\" -o \"%s\"", state.mateSource.data, mateExeNew.data);
-  }
-
-  if (StrEqual(&state.compiler, &S("tcc"))) {
-    compileCommand = F(state.arena, "tcc \"%s\" -o \"%s\"", state.mateSource.data, mateExeNew.data);
-  }
-
-  if (StrEqual(&state.compiler, &S("MSVC"))) {
+  if (StrEq(state.compiler, S("MSVC"))) {
     compileCommand = F(state.arena, "cl.exe \"%s\" /Fe:\"%s\"", state.mateSource.data, mateExeNew.data);
+  } else {
+    compileCommand = F(state.arena, "%s \"%s\" -o \"%s\"", state.compiler.data, state.mateSource.data, mateExeNew.data);
   }
 
   LogWarn("%s changed rebuilding...", state.mateSource.data);
-  errno_t rebuildResult = RunCommand(compileCommand);
-  if (rebuildResult != 0) {
-    LogError("Rebuild failed, with error: %d", rebuildResult);
-    abort();
-  }
+  errno_t rebuildErr = RunCommand(compileCommand);
+  Assert(rebuildErr == SUCCESS, "MateRebuild: failed command %s, err: %d", compileCommand.data, rebuildErr);
 
-  errno_t renameResult = FileRename(&mateExe, &mateExeOld);
-  if (renameResult != SUCCESS) {
-    LogError("Error renaming original executable: %d", renameResult);
-    abort();
-  }
+  errno_t renameErr = FileRename(mateExe, mateExeOld);
+  Assert(renameErr == SUCCESS, "MateRebuild: failed renaming original executable failed, err: %d", renameErr);
 
-  renameResult = FileRename(&mateExeNew, &mateExe);
-  if (renameResult != SUCCESS) {
-    LogError("Error moving new executable into place: %d", renameResult);
-    FileRename(&mateExeOld, &state.mateExe);
-    abort();
-  }
+  renameErr = FileRename(mateExeNew, mateExe);
+  Assert(renameErr == SUCCESS, "MateRebuild: failed renaming new executable into old: %d", renameErr);
 
   LogInfo("Rebuild finished, running %s", mateExe.data);
-  errno_t result = RunCommand(mateExe);
-  return exit(result);
+  errno_t err = RunCommand(mateExe);
+  return exit(err);
 }
 
 void defaultExecutable() {
-  String executableOutput = ConvertExe(state.arena, S("main"));
-  executable.output = ConvertPath(state.arena, executableOutput);
-  executable.flags = S("");
-  executable.linkerFlags = S("");
-  executable.includes = S("");
+  String executableOutput = NormalizeExePath(state.arena, S("main"));
+  executable.output = NormalizePath(state.arena, executableOutput);
   executable.libs = S("");
+  executable.includes = S("");
+  executable.linkerFlags = S("");
+  executable.flags = S("");
 }
 
 static Executable parseExecutableOptions(ExecutableOptions options) {
@@ -5342,11 +5295,21 @@ static Executable parseExecutableOptions(ExecutableOptions options) {
 }
 
 void CreateExecutable(ExecutableOptions executableOptions) {
+  Assert(!StrEq(state.compiler, S("MSVC")), "CreateExecutable: MSVC compiler not yet implemented");
+  Assert(state.initConfig,
+         "CreateExecutable: before creating an executable you must use StartBuild(), like this: \n"
+         "\n"
+         "StartBuild()\n"
+         "{\n"
+         " // ...\n"
+         "}\n"
+         "EndBuild()");
+
   defaultExecutable();
   Executable options = parseExecutableOptions(executableOptions);
-  if (!StrIsNull(&options.output)) {
-    String executableOutput = ConvertExe(state.arena, options.output);
-    executable.output = ConvertPath(state.arena, executableOutput);
+  if (!StrIsNull(options.output)) {
+    String executableOutput = NormalizeExePath(state.arena, options.output);
+    executable.output = NormalizePath(state.arena, executableOutput);
   }
 
   String flagsStr = options.flags;
@@ -5478,56 +5441,55 @@ void CreateExecutable(ExecutableOptions executableOptions) {
       break;
     case FLAG_STD_C23:
     case FLAG_STD_C2X:
-      // MSVC doesn't have C23 yet
+      // NOTE: MSVC doesn't have C23 yet
       flagsStr = F(state.arena, "%s %s", flagsStr.data, "/std:clatest");
       break;
     }
 #endif
   }
 
-  if (!StrIsNull(&flagsStr)) {
+  if (!StrIsNull(flagsStr)) {
     executable.flags = flagsStr;
   }
-
-  if (!StrIsNull(&options.linkerFlags)) {
+  if (!StrIsNull(options.linkerFlags)) {
     executable.linkerFlags = options.linkerFlags;
   }
-  if (!StrIsNull(&options.includes)) {
+  if (!StrIsNull(options.includes)) {
     executable.includes = options.includes;
   }
-  if (!StrIsNull(&options.libs)) {
+  if (!StrIsNull(options.libs)) {
     executable.libs = options.libs;
   }
 }
 
-// TODO: Add error enum
 errno_t CreateCompileCommands() {
   FILE *ninjaPipe;
   FILE *outputFile;
   char buffer[4096];
   size_t bytes_read;
 
-  String compileCommandsPath = ConvertPath(state.arena, F(state.arena, "%s/compile_commands.json", state.buildDirectory.data));
-
+  String compileCommandsPath = NormalizePath(state.arena, F(state.arena, "%s/compile_commands.json", state.buildDirectory.data));
   errno_t err = fopen_s(&outputFile, compileCommandsPath.data, "w");
-  if (err != 0 || outputFile == NULL) {
-    LogError("Failed to open output file '%s': %s", compileCommandsPath.data, strerror(err));
-    return 1;
+  if (err != SUCCESS || outputFile == NULL) {
+    LogError("CreateCompileCommands: Failed to open file %s, err: %d", compileCommandsPath.data, err);
+    return COMPILE_COMMANDS_FAILED_OPEN_FILE;
   }
 
   String compdbCommand;
-  if (state.mateCache.samuraiBuild) {
+  if (state.mateCache.samuraiBuild == true) {
     String samuraiOutputPath = F(state.arena, "%s/samurai", state.buildDirectory.data);
-    compdbCommand = ConvertPath(state.arena, F(state.arena, "%s -f %s/build.ninja -t compdb", samuraiOutputPath.data, state.buildDirectory.data));
-  } else {
-    compdbCommand = ConvertPath(state.arena, F(state.arena, "ninja -f %s/build.ninja -t compdb", state.buildDirectory.data));
+    compdbCommand = NormalizePath(state.arena, F(state.arena, "%s -f %s/build.ninja -t compdb", samuraiOutputPath.data, state.buildDirectory.data));
+  }
+
+  if (state.mateCache.samuraiBuild == false) {
+    compdbCommand = NormalizePath(state.arena, F(state.arena, "ninja -f %s/build.ninja -t compdb", state.buildDirectory.data));
   }
 
   ninjaPipe = popen(compdbCommand.data, "r");
   if (ninjaPipe == NULL) {
-    LogError("Failed to run command");
+    LogError("CreateCompileCommands: Failed to run compdb command, %s", compdbCommand.data);
     fclose(outputFile);
-    return 1;
+    return COMPILE_COMMANDS_FAILED_COMPDB;
   }
 
   while ((bytes_read = fread(buffer, 1, sizeof(buffer), ninjaPipe)) > 0) {
@@ -5535,13 +5497,13 @@ errno_t CreateCompileCommands() {
   }
 
   fclose(outputFile);
-  i32 status = pclose(ninjaPipe);
-  if (status != 0) {
-    LogError("Command failed with status %d\n", status);
-    return status;
+  errno_t status = pclose(ninjaPipe);
+  if (status != SUCCESS) {
+    LogError("CreateCompileCommands: Command failed with status %d\n", status);
+    return COMPILE_COMMANDS_FAILED_COMPDB;
   }
 
-  LogSuccess("Successfully created %s\n", compileCommandsPath.data);
+  LogSuccess("Successfully created %s", compileCommandsPath.data);
   return SUCCESS;
 }
 
@@ -5550,10 +5512,10 @@ static bool globMatch(String pattern, String text) {
     return true;
   }
 
-  i32 p = 0;
-  i32 t = 0;
-  i32 starP = -1;
-  i32 starT = -1;
+  size_t p = 0;
+  size_t t = 0;
+  size_t starP = -1;
+  size_t starT = -1;
   while (t < text.length) {
     if (p < pattern.length && pattern.data[p] == text.data[t]) {
       p++;
@@ -5562,7 +5524,7 @@ static bool globMatch(String pattern, String text) {
       starP = p;
       starT = t;
       p++;
-    } else if (starP != -1) {
+    } else if (starP != (size_t)-1) {
       p = starP + 1;
       t = ++starT;
     } else {
@@ -5578,21 +5540,23 @@ static bool globMatch(String pattern, String text) {
 }
 
 static void addFile(String source) {
+  Assert(!StrIsNull(executable.output), "AddFile: Before adding a file you must first CreateExecutable()");
+
   bool isGlob = false;
-  for (int i = 0; i < source.length; i++) {
+  for (size_t i = 0; i < source.length; i++) {
     if (source.data[i] == '*') {
       isGlob = true;
       break;
     }
   }
 
-  if (source.length < 2 || source.data[0] != '.' || source.data[1] != '/') {
-    abort();
-  }
+  Assert(source.length > 2 && source.data[0] == '.' && source.data[1] == '/',
+         "AddFile: failed to a add file, to add a file it has to "
+         "contain the relative path, for example AddFile(\"./main.c\")");
 
-  if (source.length > 0 && source.data[source.length - 1] == '/') {
-    abort();
-  }
+  Assert(source.data[source.length - 1] != '/',
+         "AddFile: failed to add a file, you can't add a slash at the end of a path.\n"
+         "For example, valid: AddFile(\"./main.c\"), invalid: AddFile(\"./main.c/\")");
 
   if (!isGlob) {
     VecPush(executable.sources, source);
@@ -5601,17 +5565,17 @@ static void addFile(String source) {
 
   String directory = {0};
   i32 lastSlash = -1;
-  for (int i = 0; i < source.length; i++) {
+  for (size_t i = 0; i < source.length; i++) {
     if (source.data[i] == '/') {
       lastSlash = i;
     }
   }
 
-  directory = StrSlice(state.arena, &source, 0, lastSlash);
-  String pattern = StrSlice(state.arena, &source, lastSlash + 1, source.length);
+  directory = StrSlice(state.arena, source, 0, lastSlash);
+  String pattern = StrSlice(state.arena, source, lastSlash + 1, source.length);
 
   StringVector files = ListDir(state.arena, directory);
-  for (int i = 0; i < files.length; i++) {
+  for (size_t i = 0; i < files.length; i++) {
     String *file = VecAt(files, i);
 
     if (globMatch(pattern, *file)) {
@@ -5624,7 +5588,7 @@ static void addFile(String source) {
 static bool removeFile(String source) {
   for (size_t i = 0; i < executable.sources.length; i++) {
     String *currValue = VecAt(executable.sources, i);
-    if (StrEqual(&source, currValue)) {
+    if (StrEq(source, *currValue)) {
       currValue->data = NULL;
       currValue->length = 0;
       return true;
@@ -5636,17 +5600,20 @@ static bool removeFile(String source) {
 static StringVector outputTransformer(StringVector vector) {
   StringVector result = {0};
   for (size_t i = 0; i < vector.length; i++) {
-    String *currentExecutable = VecAt(vector, i);
+    String currentExecutable = *VecAt(vector, i);
     if (StrIsNull(currentExecutable)) continue;
 
-    String output = S("");
-    for (size_t j = currentExecutable->length - 1; j > 0; j--) {
-      String currentChar = StrNewSize(state.arena, &currentExecutable->data[j], 1);
-      if (currentChar.data[0] == '/') {
+    size_t lastCharIndex = 0;
+    for (size_t j = currentExecutable.length - 1; j > 0; j--) {
+      char currentChar = currentExecutable.data[j];
+      if (currentChar == '/') {
+        lastCharIndex = j;
         break;
       }
-      output = StrConcat(state.arena, &currentChar, &output);
     }
+    Assert(lastCharIndex != 0, "MateOutputTransformer: failed to transform %s, to an object file", currentExecutable.data);
+
+    String output = StrSlice(state.arena, currentExecutable, lastCharIndex + 1, currentExecutable.length);
     output.data[output.length - 1] = 'o';
     VecPush(result, output);
   }
@@ -5655,93 +5622,142 @@ static StringVector outputTransformer(StringVector vector) {
 }
 
 String InstallExecutable() {
-  if (executable.sources.length == 0) {
-    LogError("Executable has zero sources, add at least one with AddFile(\"./main.c\")");
-    abort();
+  Assert(executable.sources.length != 0, "InstallExecutable: Executable has zero sources, add at least one with AddFile(\"./main.c\")");
+  Assert(!StrIsNull(executable.output), "InstallExecutable: Before installing executable you must first CreateExecutable()");
+
+  StringBuilder builder = StringBuilderReserve(state.arena, 1024);
+
+  // Compiler
+  StringBuilderAppend(state.arena, &builder, &S("cc = "));
+  StringBuilderAppend(state.arena, &builder, &state.compiler);
+  StringBuilderAppend(state.arena, &builder, &S("\n"));
+
+  // Linker flags
+  if (executable.linkerFlags.length > 0) {
+    StringBuilderAppend(state.arena, &builder, &S("linker_flags = "));
+    StringBuilderAppend(state.arena, &builder, &executable.linkerFlags);
+    StringBuilderAppend(state.arena, &builder, &S("\n"));
   }
 
-  String linkCommand;
-  String compileCommand;
-  if (StrEqual(&state.compiler, &S("gcc"))) {
-    linkCommand = F(state.arena, "rule link\n  command = $cc $flags $linker_flags -o $out $in $libs\n");
-    compileCommand = F(state.arena, "rule compile\n  command = $cc $flags $includes -c $in -o $out\n");
+  // Compiler flags
+  if (executable.flags.length > 0) {
+    StringBuilderAppend(state.arena, &builder, &S("flags = "));
+    StringBuilderAppend(state.arena, &builder, &executable.flags);
+    StringBuilderAppend(state.arena, &builder, &S("\n"));
   }
 
-  if (StrEqual(&state.compiler, &S("clang"))) {
-    linkCommand = F(state.arena, "rule link\n  command = $cc $flags $linker_flags -o $out $in $libs\n");
-    compileCommand = F(state.arena, "rule compile\n  command = $cc $flags $includes -c $in -o $out\n");
+  // Include paths
+  if (executable.includes.length > 0) {
+    StringBuilderAppend(state.arena, &builder, &S("includes = "));
+    StringBuilderAppend(state.arena, &builder, &executable.includes);
+    StringBuilderAppend(state.arena, &builder, &S("\n"));
   }
 
-  if (StrEqual(&state.compiler, &S("tcc"))) {
-    linkCommand = F(state.arena, "rule link\n  command = $cc $flags $linker_flags -o $out $in $libs\n");
-    compileCommand = F(state.arena, "rule compile\n  command = $cc $flags $includes -c $in -o $out\n");
+  // Libraries
+  if (executable.libs.length > 0) {
+    StringBuilderAppend(state.arena, &builder, &S("libs = "));
+    StringBuilderAppend(state.arena, &builder, &executable.libs);
+    StringBuilderAppend(state.arena, &builder, &S("\n"));
   }
 
-  if (StrEqual(&state.compiler, &S("MSVC"))) {
-    LogError("MSVC not yet implemented");
-    abort();
-  }
+  // Current working directory
+  String cwd_path = ConvertNinjaPath(s(GetCwd()));
+  StringBuilderAppend(state.arena, &builder, &S("cwd = "));
+  StringBuilderAppend(state.arena, &builder, &cwd_path);
+  StringBuilderAppend(state.arena, &builder, &S("\n"));
 
-  String ninjaOutput = F(state.arena,
-                         "cc = %s\n"
-                         "linker_flags = %s\n"
-                         "flags = %s\n"
-                         "cwd = %s\n"
-                         "builddir = %s\n"
-                         "target = $builddir/%s\n"
-                         "includes = %s\n"
-                         "libs = %s\n"
-                         "\n"
-                         "%s\n"
-                         "%s\n",
-                         state.compiler.data,
-                         executable.linkerFlags.data,
-                         executable.flags.data,
-                         ConvertNinjaPath(StrNew(state.arena, GetCwd())).data,
-                         ConvertNinjaPath(state.buildDirectory).data,
-                         executable.output.data,
-                         executable.includes.data,
-                         executable.libs.data,
-                         linkCommand.data,
-                         compileCommand.data);
+  // Build directory
+  String build_dir_path = ConvertNinjaPath(state.buildDirectory);
+  StringBuilderAppend(state.arena, &builder, &S("builddir = "));
+  StringBuilderAppend(state.arena, &builder, &build_dir_path);
+  StringBuilderAppend(state.arena, &builder, &S("\n"));
+
+  // Target
+  StringBuilderAppend(state.arena, &builder, &S("target = $builddir/"));
+  StringBuilderAppend(state.arena, &builder, &executable.output);
+  StringBuilderAppend(state.arena, &builder, &S("\n\n"));
+
+  // Link command
+  StringBuilderAppend(state.arena, &builder, &S("rule link\n  command = $cc"));
+  if (executable.flags.length > 0) {
+    StringBuilderAppend(state.arena, &builder, &S(" $flags"));
+  }
+  if (executable.linkerFlags.length > 0) {
+    StringBuilderAppend(state.arena, &builder, &S(" $linker_flags"));
+  }
+  StringBuilderAppend(state.arena, &builder, &S(" -o $out $in"));
+  if (executable.libs.length > 0) {
+    StringBuilderAppend(state.arena, &builder, &S(" $libs"));
+  }
+  StringBuilderAppend(state.arena, &builder, &S("\n\n"));
+
+  // Compile command
+  StringBuilderAppend(state.arena, &builder, &S("rule compile\n  command = $cc"));
+  if (executable.flags.length > 0) {
+    StringBuilderAppend(state.arena, &builder, &S(" $flags"));
+  }
+  if (executable.includes.length > 0) {
+    StringBuilderAppend(state.arena, &builder, &S(" $includes"));
+  }
+  StringBuilderAppend(state.arena, &builder, &S(" -c $in -o $out\n\n"));
+
+  // Build individual source files
   StringVector outputFiles = outputTransformer(executable.sources);
+  StringBuilder outputBuilder = StringBuilderCreate(state.arena);
 
-  String outputString = S("");
   for (size_t i = 0; i < executable.sources.length; i++) {
-    String *currSource = VecAt(executable.sources, i);
+    String currSource = *VecAt(executable.sources, i);
     if (StrIsNull(currSource)) continue;
-    String sourceFile = ParsePath(state.arena, *currSource);
+
     String outputFile = *VecAt(outputFiles, i);
-    String source = F(state.arena, "build $builddir/%s: compile $cwd/%s\n", outputFile.data, sourceFile.data);
-    ninjaOutput = StrConcat(state.arena, &ninjaOutput, &source);
-    outputString = F(state.arena, "%s $builddir/%s", outputString.data, outputFile.data);
+    String sourceFile = NormalizePathStart(state.arena, currSource);
+
+    // Source build command
+    StringBuilderAppend(state.arena, &builder, &S("build $builddir/"));
+    StringBuilderAppend(state.arena, &builder, &outputFile);
+    StringBuilderAppend(state.arena, &builder, &S(": compile $cwd/"));
+    StringBuilderAppend(state.arena, &builder, &sourceFile);
+    StringBuilderAppend(state.arena, &builder, &S("\n"));
+
+    // Add to output files list
+    if (outputBuilder.buffer.length == 0) {
+      StringBuilderAppend(state.arena, &outputBuilder, &S("$builddir/"));
+      StringBuilderAppend(state.arena, &outputBuilder, &outputFile);
+    } else {
+      StringBuilderAppend(state.arena, &outputBuilder, &S(" $builddir/"));
+      StringBuilderAppend(state.arena, &outputBuilder, &outputFile);
+    }
   }
 
-  String target = F(state.arena,
-                    "build $target: link%s\n"
-                    "\n"
-                    "default $target\n",
-                    outputString.data);
-  ninjaOutput = StrConcat(state.arena, &ninjaOutput, &target);
+  // Build target
+  StringBuilderAppend(state.arena, &builder, &S("build $target: link "));
+  StringBuilderAppend(state.arena, &builder, &outputBuilder.buffer);
+  StringBuilderAppend(state.arena, &builder, &S("\n\n"));
 
-  String buildNinjaPath = F(state.arena, "%s/build.ninja", state.buildDirectory.data);
-  FileWrite(&buildNinjaPath, &ninjaOutput);
+  // Default target
+  StringBuilderAppend(state.arena, &builder, &S("default $target\n"));
 
-  errno_t result;
+  String buildNinjaPath;
+  buildNinjaPath = F(state.arena, "%s/build.ninja", state.buildDirectory.data);
+
+  errno_t errWrite = FileWrite(buildNinjaPath, builder.buffer);
+  Assert(errWrite == SUCCESS, "InstallExecutable: failed to write build.ninja for %s, err: %d", buildNinjaPath.data, errWrite);
+
+  i64 err;
+  String buildCommand;
   if (state.mateCache.samuraiBuild) {
     String samuraiOutputPath = F(state.arena, "%s/samurai", state.buildDirectory.data);
-    result = RunCommand(F(state.arena, "%s -f %s", samuraiOutputPath.data, buildNinjaPath.data));
+    buildCommand = F(state.arena, "%s -f %s", samuraiOutputPath.data, buildNinjaPath.data);
   } else {
-    result = RunCommand(F(state.arena, "ninja -f %s", buildNinjaPath.data));
+    buildCommand = F(state.arena, "ninja -f %s", buildNinjaPath.data);
   }
 
-  if (result != 0) {
-    LogError("Ninja file compilation failed with code: %d", result);
-    abort();
-  }
+  err = RunCommand(buildCommand);
+  Assert(err == SUCCESS, "InstallExecutable: Ninja file compilation failed with code: %lu", err);
 
   LogSuccess("Ninja file compilation done");
   state.totalTime = TimeNow() - state.startTime;
+
 #if defined(PLATFORM_WIN)
   return F(state.arena, "%s\\%s", state.buildDirectory.data, executable.output.data);
 #else
@@ -5753,47 +5769,68 @@ errno_t RunCommand(String command) {
   return system(command.data);
 }
 
-// TODO: Allocate total string size instead of concat
 // TODO: Do it depending on compiler
 static void addLibraryPaths(StringVector *vector) {
+  StringBuilder builder = StringBuilderCreate(state.arena);
   for (size_t i = 0; i < vector->length; i++) {
     String *currLib = VecAt((*vector), i);
     if (i == 0 && executable.libs.length == 0) {
-      executable.libs = F(state.arena, "-L\"%s\"", currLib->data);
+      String buffer = F(state.arena, "-L\"%s\"", currLib->data);
+      StringBuilderAppend(state.arena, &builder, &buffer);
       continue;
     }
 
-    executable.libs = F(state.arena, "%s -L\"%s\"", executable.libs.data, currLib->data);
+    String buffer = F(state.arena, " -L\"%s\"", currLib->data);
+    StringBuilderAppend(state.arena, &builder, &buffer);
   }
-}
 
-// TODO: Same thing here
-static void addIncludePaths(StringVector *vector) {
-  for (size_t i = 0; i < vector->length; i++) {
-    String *currInclude = VecAt((*vector), i);
-    if (i == 0 && executable.includes.length == 0) {
-      executable.includes = F(state.arena, "-I\"%s\"", currInclude->data);
-      continue;
-    }
-
-    executable.includes = F(state.arena, "%s -I\"%s\"", executable.includes.data, currInclude->data);
+  if (executable.libs.length) {
+    StringBuilderAppend(state.arena, &builder, &S(" "));
+    StringBuilderAppend(state.arena, &builder, &executable.libs);
   }
+  executable.libs = builder.buffer;
 }
 
 static void linkSystemLibraries(StringVector *vector) {
+  StringBuilder builder = StringBuilderCreate(state.arena);
   for (size_t i = 0; i < vector->length; i++) {
     String *currLib = VecAt((*vector), i);
     if (i == 0 && executable.libs.length == 0) {
-      executable.libs = F(state.arena, "-l%s", currLib->data);
+      String buffer = F(state.arena, "-l%s", currLib->data);
+      StringBuilderAppend(state.arena, &builder, &buffer);
       continue;
     }
 
-    executable.libs = F(state.arena, "%s -l%s", executable.libs.data, currLib->data);
+    String buffer = F(state.arena, " -l%s", currLib->data);
+    StringBuilderAppend(state.arena, &builder, &buffer);
   }
+
+  if (executable.libs.length) {
+    StringBuilderAppend(state.arena, &builder, &S(" "));
+    StringBuilderAppend(state.arena, &builder, &executable.libs);
+  }
+  executable.libs = builder.buffer;
+}
+
+static void addIncludePaths(StringVector *vector) {
+  StringBuilder builder = StringBuilderCreate(state.arena);
+  for (size_t i = 0; i < vector->length; i++) {
+    String *currInclude = VecAt((*vector), i);
+    if (i == 0 && executable.includes.length == 0) {
+      String buffer = F(state.arena, "-I\"%s\"", currInclude->data);
+      StringBuilderAppend(state.arena, &builder, &buffer);
+      continue;
+    }
+
+    String buffer = F(state.arena, " -I\"%s\"", currInclude->data);
+    StringBuilderAppend(state.arena, &builder, &buffer);
+  }
+
+  executable.includes = builder.buffer;
 }
 
 void EndBuild() {
-  LogInfo("Build took: %llums", state.totalTime);
+  LogInfo("Build took: %ldms", state.totalTime);
   ArenaFree(state.arena);
 }
 #endif
