@@ -1,4 +1,4 @@
-name: Run Examples
+name: Run Examples Linux
 on:
   push:
 permissions:
