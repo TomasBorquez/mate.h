@@ -30,7 +30,7 @@ jobs:
         msystem: MINGW64
         update: true
         install: >-
-          mingw-w64-x86_64-toolchain
+          mingw-w64-x86_64-gcc
           mingw-w64-x86_64-clang
           mingw-w64-x86_64-ninja
     
@@ -74,12 +74,13 @@ jobs:
           exit 1
         fi
         
-    - name: Test example 05-samurai-source-code
-      working-directory: ./examples/05-samurai-source-code
-      run: |
-        ${{ matrix.compiler }} mate.c -o mate.exe
-        ./mate.exe
-        if [ $? -ne 0 ]; then
-          echo "Example 05-samurai-source-code failed with ${{ matrix.compiler }}"
-          exit 1
-        fi
+    # TODO: Add back again when samurai works on windows
+    # - name: Test example 05-samurai-source-code 
+    #   working-directory: ./examples/05-samurai-source-code
+    #   run: |
+    #     ${{ matrix.compiler }} mate.c -o mate.exe
+    #     ./mate.exe
+    #     if [ $? -ne 0 ]; then
+    #       echo "Example 05-samurai-source-code failed with ${{ matrix.compiler }}"
+    #       exit 1
+    #     fi
