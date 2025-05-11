@@ -39,7 +39,7 @@ it will auto detect if you need to rebuild based on `mate-cache.ini`, so you can
 
 Under the hood we use [Samurai](https://github.com/michaelforney/samurai), a ninja rewrite in C, we added it to the source code and compile it on the first run, after that
 it is cached and thanks to it builds are extremely fast. So the first build usually takes a bit longer but on the second one it should be very fast. If you want even faster 
-builds, you can use [TCC](https://bellard.org/tcc/) just to run `mate.c`, on medium sized projects our builds go from `1_000ms` to `40ms` because `tcc` was made to be very fast
+builds, you can use [TCC](https://bellard.org/tcc/) just to run `mate.c`, on medium sized projects our builds go from `600ms` to `20ms` because `tcc` was made to be very fast
 to compile.
 
 ## Operating Systems
@@ -47,7 +47,7 @@ to compile.
 |---|---|---|
 | **Linux** | ✅ Supported | Uses [Samurai](https://github.com/michaelforney/samurai) under the hood |
 | **Windows** | ✅ Supported | Requires Ninja build system (Samurai [in progress](https://github.com/TomasBorquez/mate.h/issues/2)) |
-| **macOS** | ⚠️ Partially Supported | Limited testing available |
+| **macOS** | ⚠️ Partially Supported | Limited testing done |
 
 ## Compilers
 | Compiler | Status | Notes |
