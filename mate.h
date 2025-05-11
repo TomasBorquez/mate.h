@@ -260,14 +260,11 @@ void _custom_assert(const char *expr, const char *file, unsigned line, const cha
     size_t capacity;                  \
   } typeName
 
-#define VecCreate(vector, count)                                               \
-  ({                                                                           \
-    vector.capacity = count;                                                   \
-    vector.data = Malloc(vector.data, vector.capacity * sizeof(*vector.data)); \
-                                                                               \
-    vector.data[vector.length++] = value;                                      \
-    &vector.data[vector.length - 1];                                           \
-  })
+#define VecCreate(vector, count)                        \
+  do {                                                  \
+    vector.capacity = count;                            \
+    vector.data = Malloc(count * sizeof(*vector.data)); \
+  } while (0)
 
 // WARNING: Vector must always be initialized to zero `Vector vector = {0}` or `VecCreate()`
 #define VecPush(vector, value)                                                                                                        \
@@ -423,7 +420,7 @@ void StrToLower(String string1);
 void StrToUpper(String string1);
 
 bool StrIsNull(String string);
-void StrTrim(String string);
+void StrTrim(String *string);
 
 String StrSlice(Arena *arena, String str, size_t start, size_t end);
 
@@ -481,7 +478,7 @@ WARN_UNUSED errno_t FileAdd(String path, String data); // NOTE: Adds `\n` at the
 enum FileDeleteError { FILE_DELETE_ACCESS_DENIED = 500, FILE_DELETE_NOT_FOUND, FILE_DELETE_IO_ERROR };
 WARN_UNUSED errno_t FileDelete(String path);
 
-enum FileRenameError { FILE_RENAME_ACCESS_DENIED = 600, FILE_RENAME_NOT_FOUND, FILE_RENAME_EXISTS, FILE_RENAME_IO_ERROR };
+enum FileRenameError { FILE_RENAME_ACCESS_DENIED = 600, FILE_RENAME_NOT_FOUND, FILE_RENAME_IO_ERROR };
 WARN_UNUSED errno_t FileRename(String oldPath, String newPath);
 
 /* --- Logger --- */
@@ -773,8 +770,6 @@ String FileErrToStr(errno_t err) {
     return S("Access denied when renaming file");
   case FILE_RENAME_NOT_FOUND:
     return S("File not found for renaming");
-  case FILE_RENAME_EXISTS:
-    return S("Destination file already exists");
   case FILE_RENAME_IO_ERROR:
     return S("I/O error when renaming file");
 
@@ -815,18 +810,28 @@ void __ArenaNextChunk(Arena *arena, size_t bytes) {
 }
 
 void *ArenaAllocAligned(Arena *arena, size_t size, size_t al) {
-  // Align 'currPtr' forward to the specified alignment
-  intptr_t tail = arena->offset & (al - 1);
-  // WARNING: should be? `intptr_t aligned = tail ? arena->offset + al - tail : arena->offset;`
-  intptr_t aligned = tail ? arena->offset + al - arena->offset : arena->offset;
-  arena->offset = aligned + size;
+  void *current_pos = arena->current->buffer + arena->offset;
+  intptr_t mask = al - 1;
+  intptr_t misalignment = ((intptr_t)current_pos & mask);
+  intptr_t padding = misalignment ? al - misalignment : 0;
+
+  arena->offset += padding;
+
   void *result;
-  if (arena->offset > arena->current->cap) {
+  if (arena->offset + size > arena->current->cap) {
     size_t bytes = size > arena->chunkSize ? size : arena->chunkSize;
     __ArenaNextChunk(arena, bytes);
-    result = arena->current->buffer;
+
+    current_pos = arena->current->buffer;
+    misalignment = ((intptr_t)current_pos & mask);
+    padding = misalignment ? al - misalignment : 0;
+    arena->offset = padding;
+
+    result = arena->current->buffer + arena->offset;
+    arena->offset += size;
   } else {
-    result = arena->current->buffer + aligned;
+    result = arena->current->buffer + arena->offset;
+    arena->offset += size;
   }
 
   if (size) memset(result, 0, size);
@@ -916,6 +921,8 @@ void SetMaxStrSize(size_t size) {
 }
 
 String StrNewSize(Arena *arena, char *str, size_t len) {
+  Assert(str != NULL, "StrNewSize: failed, can't give a NULL str");
+
   const size_t memorySize = sizeof(char) * len + 1; // NOTE: Includes null terminator
   char *allocatedString = ArenaAllocChars(arena, memorySize);
 
@@ -1098,24 +1105,24 @@ bool isSpace(char character) {
   return character == ' ' || character == '\n' || character == '\t' || character == '\r';
 }
 
-void StrTrim(String str) {
+void StrTrim(String *str) {
   char *firstChar = NULL;
   char *lastChar = NULL;
 
-  if (str.length == 0) {
+  if (str->length == 0) {
     return;
   }
 
-  if (str.length == 1) {
-    if (isSpace(str.data[0])) {
-      str.data[0] = '\0';
-      str.length = 0;
+  if (str->length == 1) {
+    if (isSpace(str->data[0])) {
+      str->data[0] = '\0';
+      str->length = 0;
     }
     return;
   }
 
-  for (size_t i = 0; i < str.length; ++i) {
-    char *currChar = &str.data[i];
+  for (size_t i = 0; i < str->length; ++i) {
+    char *currChar = &str->data[i];
     if (isSpace(*currChar)) {
       continue;
     }
@@ -1127,18 +1134,18 @@ void StrTrim(String str) {
   }
 
   if (firstChar == NULL || lastChar == NULL) {
-    str.data[0] = '\0';
-    str.length = 0;
-    addNullTerminator(str.data, 0);
+    str->data[0] = '\0';
+    str->length = 0;
+    addNullTerminator(str->data, 0);
     return;
   }
 
   size_t len = (lastChar - firstChar) + 1;
-  errno_t err = memcpy_s(str.data, str.length, firstChar, len);
-  Assert(err == SUCCESS, "StrTrim: memcpy_s failed, err: %d", err);
+  errno_t err = memcpy_s(str->data, str->length, firstChar, len);
+  Assert(err == SUCCESS, "str->rim: memcpy_s failed, err: %d", err);
 
-  str.length = len;
-  addNullTerminator(str.data, len);
+  str->length = len;
+  addNullTerminator(str->data, len);
 }
 
 String StrSlice(Arena *arena, String str, size_t start, size_t end) {
@@ -1522,8 +1529,6 @@ errno_t FileRename(String oldPath, String newPath) {
       return FILE_RENAME_ACCESS_DENIED;
     case ERROR_FILE_NOT_FOUND:
       return FILE_RENAME_NOT_FOUND;
-    case ERROR_ALREADY_EXISTS:
-      return FILE_RENAME_EXISTS;
     default:
       return FILE_RENAME_IO_ERROR;
     }
@@ -1765,8 +1770,6 @@ errno_t FileRename(String oldPath, String newPath) {
       return FILE_RENAME_ACCESS_DENIED;
     case ENOENT:
       return FILE_RENAME_NOT_FOUND;
-    case EEXIST:
-      return FILE_RENAME_EXISTS;
     default:
       return FILE_RENAME_IO_ERROR;
     }
