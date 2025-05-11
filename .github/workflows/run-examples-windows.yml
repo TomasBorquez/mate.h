@@ -23,12 +23,13 @@ jobs:
         submodules: recursive
         fetch-depth: 0  
         token: ${{ secrets.GITHUB_TOKEN }}
-    
+
     - name: Setup MSYS2
       uses: msys2/setup-msys2@v2
       with:
         msystem: MINGW64
         update: true
+        cache: true
         install: >-
           mingw-w64-x86_64-gcc
           mingw-w64-x86_64-clang
