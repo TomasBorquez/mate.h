@@ -2134,6 +2134,7 @@ void EndBuild();
 void CreateConfig(MateOptions options);
 void CreateExecutable(ExecutableOptions executableOptions);
 String InstallExecutable();
+void ResetExecutable();
 
 WARN_UNUSED errno_t RunCommand(String command);
 
@@ -5624,6 +5625,10 @@ static StringVector outputTransformer(StringVector vector) {
   return result;
 }
 
+void ResetExecutable() {
+  executable = (Executable){0};
+}
+
 String InstallExecutable() {
   Assert(executable.sources.length != 0, "InstallExecutable: Executable has zero sources, add at least one with AddFile(\"./main.c\")");
   Assert(!StrIsNull(executable.output), "InstallExecutable: Before installing executable you must first CreateExecutable()");
@@ -5762,10 +5767,13 @@ String InstallExecutable() {
   state.totalTime = TimeNow() - state.startTime;
 
 #if defined(PLATFORM_WIN)
-  return F(state.arena, "%s\\%s", state.buildDirectory.data, executable.output.data);
+  String exePath = F(state.arena, "%s\\%s", state.buildDirectory.data, executable.output.data);
 #else
-  return F(state.arena, "%s/%s", state.buildDirectory.data, executable.output.data);
+  String exePath = F(state.arena, "%s/%s", state.buildDirectory.data, executable.output.data);
 #endif
+
+  ResetExecutable();
+  return exePath;
 }
 
 errno_t RunCommand(String command) {

@@ -20,7 +20,7 @@ i32 main() {
 #elif defined(PLATFORM_WIN)
     // Same thing but for windows
     AddIncludePaths("./vendor/raylib/include");
-    AddLibraryPaths("./vendor/raylib/lib/win64_mingw/");
+    AddLibraryPaths("./vendor/raylib/lib/win64_mingw");
     LinkSystemLibraries("raylib", "gdi32", "winmm", "m");
 #endif
 

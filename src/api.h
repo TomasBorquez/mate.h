@@ -58,8 +58,14 @@ typedef struct {
   String linkerFlags;
   String includes;
   String libs;
-  StringVector sources;
 } Executable;
+
+typedef struct {
+  String output;
+  String flags;
+  String arFlags;
+  String includes;
+} StaticLibrary;
 
 enum WarningsFlags {
   FLAG_WARNINGS_MINIMAL = 1, // -Wall
@@ -101,12 +107,30 @@ typedef struct {
   u8 std;
 } ExecutableOptions;
 
+typedef struct {
+  char *output;
+  char *flags;
+  char *arFlags;
+  char *includes;
+  char *libs;
+  u8 warnings;
+  u8 debug;
+  u8 optimization;
+  u8 std;
+} StaticLibraryOptions;
+
 void StartBuild();
 void EndBuild();
 
 void CreateConfig(MateOptions options);
+
 void CreateExecutable(ExecutableOptions executableOptions);
 String InstallExecutable();
+void ResetExecutable();
+
+void CreateStaticLibrary(StaticLibraryOptions staticLibraryOptions);
+String InstallStaticLibrary();
+void ResetStaticLibrary();
 
 WARN_UNUSED errno_t RunCommand(String command);
 
