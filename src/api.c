@@ -540,6 +540,7 @@ static bool removeFile(String source) {
   return false;
 }
 
+// TODO: Create something like NormalizeOutput
 static StringVector outputTransformer(StringVector vector) {
   StringVector result = {0};
 

@@ -1,7 +1,7 @@
 /* MIT License
 
   mate.h - A single-header library for compiling your C code in C
-  Version - 2025-05-10 (0.1.8):
+  Version - 2025-05-14 (0.1.9):
   https://github.com/TomasBorquez/mate.h
 
   Guide on the `README.md`
@@ -5709,6 +5709,7 @@ static bool removeFile(String source) {
   return false;
 }
 
+// TODO: Create something like NormalizeOutput
 static StringVector outputTransformer(StringVector vector) {
   StringVector result = {0};
 

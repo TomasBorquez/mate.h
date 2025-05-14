@@ -4,10 +4,11 @@
 i32 main() {
   StartBuild();
   {
+    // Add .exe to make sure it removes on linux builds
     if (isMSVC()) {
-      CreateExecutable((ExecutableOptions){.output = "main", .flags = "/MD /MACHINE:X64"});
+      CreateExecutable((ExecutableOptions){.output = "main.exe", .flags = "/MD /MACHINE:X64"});
     } else {
-      CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall -g"});
+      CreateExecutable((ExecutableOptions){.output = "main.exe", .flags = "-Wall -g"});
     }
 
     AddFile("./src/main.c");
@@ -22,7 +23,6 @@ i32 main() {
       AddIncludePaths("./vendor/raylib/include");
 
       if (isMSVC()) {
-        LogInfo("not here no?");
         AddLibraryPaths("./vendor/raylib/lib/win64_msvc");
         LinkSystemLibraries("raylib", "opengl32", "kernel32", "user32", "shell32", "gdi32", "winmm", "msvcrt");
       } else {
