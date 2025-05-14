@@ -5,7 +5,7 @@ i32 main() {
   StartBuild();
   {
     if (isMSVC()) {
-      CreateExecutable((ExecutableOptions){.output = "main", .linkerFlags = "/MD"});
+      CreateExecutable((ExecutableOptions){.output = "main", .flags = "/MD /MACHINE:X64"});
     } else {
       CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall -g"});
     }
@@ -22,7 +22,7 @@ i32 main() {
       AddIncludePaths("./vendor/raylib/include");
 
       if (isMSVC()) {
-        AddLibraryPaths("./vendor/raylib/lib/win86_msvc");
+        AddLibraryPaths("./vendor/raylib/lib/win64_msvc");
       } else {
         AddLibraryPaths("./vendor/raylib/lib/win64_mingw");
       }

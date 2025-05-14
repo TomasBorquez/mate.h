@@ -13,6 +13,10 @@ i32 main() {
     AddFile("./src/main.c");
     AddFile("./src/t_math.c");
 
+    if (isLinux()) {
+      LinkSystemLibraries("m");
+    }
+
     String exePath = InstallExecutable();
     errno_t errExe = RunCommand(exePath);
 

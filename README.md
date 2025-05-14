@@ -1,8 +1,8 @@
 <div align="center">
   <img src="https://img.shields.io/github/stars/TomasBorquez/mate.h?style=flat&color=blue&label=Stars" alt="Stars">
   <img src="https://img.shields.io/github/commit-activity/t/TomasBorquez/mate.h?style=flat&color=blue&label=Total%20Commits" alt="Commits">
-  <img src="https://img.shields.io/github/actions/workflow/status/TomasBorquez/mate.h/run-examples-linux.yml?style=flat&label=Linux%20Pipeline" alt="Linux Pipeline">
-  <img src="https://img.shields.io/github/actions/workflow/status/TomasBorquez/mate.h/run-examples-windows.yml?style=flat&label=Windows%20Pipeline" alt="Windows Pipeline">
+  <img src="https://img.shields.io/github/actions/workflow/status/TomasBorquez/mate.h/run-tests-linux.yml?style=flat&label=Linux%20Pipeline" alt="Linux Pipeline">
+  <img src="https://img.shields.io/github/actions/workflow/status/TomasBorquez/mate.h/run-tests-windows.yml?style=flat&label=Windows%20Pipeline" alt="Windows Pipeline">
 </div>
 
 # About
@@ -47,7 +47,7 @@ to compile.
 |---|---|---|
 | **Linux** | ✅ Supported | Uses [Samurai](https://github.com/michaelforney/samurai) under the hood |
 | **Windows** | ✅ Supported | Requires Ninja build system (Samurai [in progress](https://github.com/TomasBorquez/mate.h/issues/2)) |
-| **macOS** | ⚠️ Partially Supported | Limited testing done |
+| **macOS** | ⚠️ Supported | Limited testing done |
 
 ## Compilers
 | Compiler | Status | Notes |
@@ -55,7 +55,7 @@ to compile.
 | [**GCC**](https://gcc.gnu.org/) | ✅ Supported | Primary development target with best support |
 | [**Clang**](https://releases.llvm.org/) | ✅ Supported | Works perfectly well too |
 | [**TinyC**](https://bellard.org/tcc/) | ✅ Supported | Recommended if you want fast compile times |
-| [**MSVC**](https://visualstudio.microsoft.com/vs/features/cplusplus/) | ❌ Not supported yet | Alternative: Use MinGW with any supported compiler |
+| [**MSVC**](https://visualstudio.microsoft.com/vs/features/cplusplus/) | ⚠️ Supported | Limiting testing done, MinGW is recommended |
 
 ## Acknowledgments
 This project incorporates code from [Samurai](https://github.com/michaelforney/samurai), which is primarily licensed under ISC license by Michael Forney, 
