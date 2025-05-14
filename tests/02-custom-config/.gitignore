@@ -1,0 +1,7 @@
+custom-dir/
+mate
+# MSVC files
+mate.exe
+*.obj
+*.idb
+*.pdb

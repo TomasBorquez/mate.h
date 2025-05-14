@@ -147,6 +147,15 @@ static void reBuild();
 static bool needRebuild();
 static void setDefaultState();
 
+// Utility platform/compiler functions
+bool isWindows();
+bool isLinux();
+
+bool isMSVC();
+bool isGCC();
+bool isClang();
+bool isTCC();
+
 #define SAMURAI_AMALGAM "SAMURAI SOURCE"
 
 // --- MATE.H END ---

@@ -3,6 +3,42 @@
 static MateConfig state = {0};
 static Executable executable = {0};
 
+static const String MSVCStr = {.data = "cl.exe", .length = 6};
+bool isMSVC() {
+  return StrEq(state.compiler, MSVCStr);
+}
+
+static const String GCCStr = {.data = "gcc", .length = 3};
+bool isGCC() {
+  return StrEq(state.compiler, GCCStr);
+}
+
+static const String ClangStr = {.data = "clang", .length = 5};
+bool isClang() {
+  return StrEq(state.compiler, ClangStr);
+}
+
+static const String TCCStr = {.data = "tcc", .length = 3};
+bool isTCC() {
+  return StrEq(state.compiler, TCCStr);
+}
+
+bool isLinux() {
+#if defined(PLATFORM_LINUX)
+  return true;
+#else
+  return false;
+#endif
+}
+
+bool isWindows() {
+#if defined(PLATFORM_WIN)
+  return true;
+#else
+  return false;
+#endif
+}
+
 static String fixPathExe(String str) {
   String path = NormalizeExePath(state.arena, str);
 #if defined(PLATFORM_WIN)
@@ -162,7 +198,7 @@ void reBuild() {
   String mateExe = NormalizeExePath(state.arena, state.mateExe);
 
   String compileCommand;
-  if (StrEq(state.compiler, S("cl.exe"))) {
+  if (isMSVC()) {
     compileCommand = F(state.arena, "cl.exe \"%s\" /Fe:\"%s\"", state.mateSource.data, mateExeNew.data);
   } else {
     compileCommand = F(state.arena, "%s \"%s\" -o \"%s\"", state.compiler.data, state.mateSource.data, mateExeNew.data);
@@ -180,7 +216,7 @@ void reBuild() {
 
   LogInfo("Rebuild finished, running %s", mateExe.data);
   errno_t err = RunCommand(mateExe);
-  return exit(err);
+  exit(err);
 }
 
 void defaultExecutable() {
@@ -506,10 +542,37 @@ static bool removeFile(String source) {
 
 static StringVector outputTransformer(StringVector vector) {
   StringVector result = {0};
+
+  if (isMSVC()) {
+    for (size_t i = 0; i < vector.length; i++) {
+      String currentExecutable = VecAt(vector, i);
+      if (StrIsNull(currentExecutable)) continue;
+      size_t lastCharIndex = 0;
+      for (size_t j = currentExecutable.length - 1; j > 0; j--) {
+        char currentChar = currentExecutable.data[j];
+        if (currentChar == '/') {
+          lastCharIndex = j;
+          break;
+        }
+      }
+
+      Assert(lastCharIndex != 0, "MateOutputTransformer: failed to transform %s, to an object file", currentExecutable.data);
+      char *filenameStart = currentExecutable.data + lastCharIndex + 1;
+      size_t filenameLength = currentExecutable.length - (lastCharIndex + 1);
+
+      String objOutput = StrNewSize(state.arena, filenameStart, filenameLength + 2);
+      objOutput.data[objOutput.length - 3] = 'o';
+      objOutput.data[objOutput.length - 2] = 'b';
+      objOutput.data[objOutput.length - 1] = 'j';
+
+      VecPush(result, objOutput);
+    }
+    return result;
+  }
+
   for (size_t i = 0; i < vector.length; i++) {
     String currentExecutable = VecAt(vector, i);
     if (StrIsNull(currentExecutable)) continue;
-
     size_t lastCharIndex = 0;
     for (size_t j = currentExecutable.length - 1; j > 0; j--) {
       char currentChar = currentExecutable.data[j];
@@ -519,12 +582,10 @@ static StringVector outputTransformer(StringVector vector) {
       }
     }
     Assert(lastCharIndex != 0, "MateOutputTransformer: failed to transform %s, to an object file", currentExecutable.data);
-
     String output = StrSlice(state.arena, currentExecutable, lastCharIndex + 1, currentExecutable.length);
     output.data[output.length - 1] = 'o';
     VecPush(result, output);
   }
-
   return result;
 }
 
@@ -594,7 +655,7 @@ String InstallExecutable() {
     StringBuilderAppend(state.arena, &builder, &S(" $linker_flags"));
   }
 
-  if (StrEq(state.compiler, S("cl.exe"))) {
+  if (isMSVC()) {
     StringBuilderAppend(state.arena, &builder, &S(" /Fe:$out $in"));
   } else {
     StringBuilderAppend(state.arena, &builder, &S(" -o $out $in"));
@@ -614,7 +675,7 @@ String InstallExecutable() {
     StringBuilderAppend(state.arena, &builder, &S(" $includes"));
   }
 
-  if (StrEq(state.compiler, S("cl.exe"))) {
+  if (isMSVC()) {
     StringBuilderAppend(state.arena, &builder, &S(" /c $in /Fo:$out\n\n"));
   } else {
     StringBuilderAppend(state.arena, &builder, &S(" -c $in -o $out\n\n"));
@@ -691,15 +752,18 @@ errno_t RunCommand(String command) {
 static void addLibraryPaths(StringVector *vector) {
   StringBuilder builder = StringBuilderCreate(state.arena);
 
-  if (StrEq(state.compiler, S("cl.exe"))) {
+  if (isMSVC() && executable.libs.length == 0) {
+    StringBuilderAppend(state.arena, &builder, &S("/link"));
+  }
+
+  if (executable.libs.length) {
+    StringBuilderAppend(state.arena, &builder, &executable.libs);
+  }
+
+  if (isMSVC()) {
     // MSVC format: /LIBPATH:"path"
     for (size_t i = 0; i < vector->length; i++) {
       String currLib = VecAt((*vector), i);
-      if (i == 0 && executable.libs.length == 0) {
-        String buffer = F(state.arena, "/LIBPATH:\"%s\"", currLib.data);
-        StringBuilderAppend(state.arena, &builder, &buffer);
-        continue;
-      }
       String buffer = F(state.arena, " /LIBPATH:\"%s\"", currLib.data);
       StringBuilderAppend(state.arena, &builder, &buffer);
     }
@@ -707,7 +771,7 @@ static void addLibraryPaths(StringVector *vector) {
     // GCC/Clang format: -L"path"
     for (size_t i = 0; i < vector->length; i++) {
       String currLib = VecAt((*vector), i);
-      if (i == 0 && executable.libs.length == 0) {
+      if (i == 0 && builder.buffer.length == 0) {
         String buffer = F(state.arena, "-L\"%s\"", currLib.data);
         StringBuilderAppend(state.arena, &builder, &buffer);
         continue;
@@ -717,25 +781,24 @@ static void addLibraryPaths(StringVector *vector) {
     }
   }
 
-  if (executable.libs.length) {
-    StringBuilderAppend(state.arena, &builder, &S(" "));
-    StringBuilderAppend(state.arena, &builder, &executable.libs);
-  }
   executable.libs = builder.buffer;
 }
 
 static void linkSystemLibraries(StringVector *vector) {
   StringBuilder builder = StringBuilderCreate(state.arena);
 
-  if (StrEq(state.compiler, S("cl.exe"))) {
+  if (isMSVC() && executable.libs.length == 0) {
+    StringBuilderAppend(state.arena, &builder, &S("/link"));
+  }
+
+  if (executable.libs.length) {
+    StringBuilderAppend(state.arena, &builder, &executable.libs);
+  }
+
+  if (isMSVC()) {
     // MSVC format: library.lib
     for (size_t i = 0; i < vector->length; i++) {
       String currLib = VecAt((*vector), i);
-      if (i == 0 && executable.libs.length == 0) {
-        String buffer = F(state.arena, "%s.lib", currLib.data);
-        StringBuilderAppend(state.arena, &builder, &buffer);
-        continue;
-      }
       String buffer = F(state.arena, " %s.lib", currLib.data);
       StringBuilderAppend(state.arena, &builder, &buffer);
     }
@@ -743,7 +806,7 @@ static void linkSystemLibraries(StringVector *vector) {
     // GCC/Clang format: -llib
     for (size_t i = 0; i < vector->length; i++) {
       String currLib = VecAt((*vector), i);
-      if (i == 0 && executable.libs.length == 0) {
+      if (i == 0 && builder.buffer.length == 0) {
         String buffer = F(state.arena, "-l%s", currLib.data);
         StringBuilderAppend(state.arena, &builder, &buffer);
         continue;
@@ -753,21 +816,22 @@ static void linkSystemLibraries(StringVector *vector) {
     }
   }
 
-  if (executable.libs.length) {
-    StringBuilderAppend(state.arena, &builder, &S(" "));
-    StringBuilderAppend(state.arena, &builder, &executable.libs);
-  }
   executable.libs = builder.buffer;
 }
 
 static void addIncludePaths(StringVector *vector) {
   StringBuilder builder = StringBuilderCreate(state.arena);
 
-  if (StrEq(state.compiler, S("cl.exe"))) {
+  if (executable.includes.length) {
+    StringBuilderAppend(state.arena, &builder, &executable.includes);
+    StringBuilderAppend(state.arena, &builder, &S(" "));
+  }
+
+  if (isMSVC()) {
     // MSVC format: /I"path"
     for (size_t i = 0; i < vector->length; i++) {
       String currInclude = VecAt((*vector), i);
-      if (i == 0 && executable.includes.length == 0) {
+      if (i == 0 && builder.buffer.length == 0) {
         String buffer = F(state.arena, "/I\"%s\"", currInclude.data);
         StringBuilderAppend(state.arena, &builder, &buffer);
         continue;
@@ -779,7 +843,7 @@ static void addIncludePaths(StringVector *vector) {
     // GCC/Clang format: -I"path"
     for (size_t i = 0; i < vector->length; i++) {
       String currInclude = VecAt((*vector), i);
-      if (i == 0 && executable.includes.length == 0) {
+      if (i == 0 && builder.buffer.length == 0) {
         String buffer = F(state.arena, "-I\"%s\"", currInclude.data);
         StringBuilderAppend(state.arena, &builder, &buffer);
         continue;

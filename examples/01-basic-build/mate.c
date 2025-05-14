@@ -2,8 +2,6 @@
 #include "../../mate.h"
 
 i32 main() {
-  errno_t result = SUCCESS;
-
   StartBuild();
   {
     CreateExecutable((ExecutableOptions){
@@ -18,9 +16,7 @@ i32 main() {
     String exePath = InstallExecutable();
 
     // Runs `./build/main`
-    result = RunCommand(exePath);
+    RunCommand(exePath);
   }
   EndBuild();
-
-  return result; // result of running executable, 0 is success
 }

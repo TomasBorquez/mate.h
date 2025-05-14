@@ -62,9 +62,5 @@ int main() {
       A = increment_A(A);          // Increment rotation angle A
       B = increment_B(B);          // Increment rotation angle B
     }
-
-    exit(0); // Remove if you want to see the example working
   }
-
-  return 0;
 }

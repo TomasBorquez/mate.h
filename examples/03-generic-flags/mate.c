@@ -2,8 +2,6 @@
 #include "../../mate.h"
 
 i32 main() {
-  errno_t result;
-
   StartBuild();
   {
     // No matter the compiler (MSVC/GCC/CLANG), this would give "equivalent" flags
@@ -17,14 +15,12 @@ i32 main() {
 
     AddFile("./src/main.c");
 
-#if !defined(COMPILER_MSVC)
-    LinkSystemLibraries("m");
-#endif
+    if (isLinux()) {
+      LinkSystemLibraries("m"); // Add math only if on linux since MSVC includes this on STD
+    }
 
     String exePath = InstallExecutable();
-    result = RunCommand(exePath);
+    RunCommand(exePath);
   }
   EndBuild();
-
-  return result;
 }
