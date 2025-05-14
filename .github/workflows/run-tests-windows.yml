@@ -1,0 +1,84 @@
+name: Run Tests Windows
+on:
+  push:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  test-examples:
+    runs-on: windows-latest
+    
+    strategy:
+      matrix:
+        compiler: [gcc, clang, msvc]
+    
+    steps:
+    - name: Checkout code with submodules
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+        fetch-depth: 0  
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Setup MSYS2
+      if: matrix.compiler != 'msvc'
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        update: true
+        cache: true
+        install: >-
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-clang
+          mingw-w64-x86_64-ninja
+    
+    - name: Run tests with GCC/Clang
+      if: matrix.compiler != 'msvc'
+      shell: msys2 {0}
+      run: |
+        tests=(
+          "01-basic-build"
+          "02-custom-config"
+          "03-generic-flags"
+          "04-raylib-build"
+        )
+        
+        for test in "${tests[@]}"; do
+          echo "Running test $test with ${{ matrix.compiler }}..."
+          cd ./tests/$test
+          
+          ${{ matrix.compiler }} mate.c -o mate.exe
+          ./mate.exe
+          
+          if [ $? -ne 0 ]; then
+            echo "Test $test failed with ${{ matrix.compiler }}"
+            exit 1
+          fi
+          
+          cd - > /dev/null
+        done
+    
+    - name: Run tests with MSVC
+      if: matrix.compiler == 'msvc'
+      shell: cmd
+      run: |
+        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+        @echo off
+        setlocal enabledelayedexpansion
+        
+        set tests=01-basic-build 02-custom-config 03-generic-flags 04-raylib-build
+        
+        for %%t in (%tests%) do (
+          echo Running test %%t with MSVC...
+          cd .\tests\%%t
+          
+          cl.exe /Fe:mate.exe mate.c
+          mate.exe
+          
+          if !errorlevel! neq 0 (
+            echo "Test %%t failed with MSVC"
+            exit /b 1
+          )
+          
+          cd ..\..
+        )
