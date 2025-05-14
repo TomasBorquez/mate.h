@@ -22,12 +22,13 @@ i32 main() {
       AddIncludePaths("./vendor/raylib/include");
 
       if (isMSVC()) {
+        LogInfo("not here no?");
         AddLibraryPaths("./vendor/raylib/lib/win64_msvc");
+        LinkSystemLibraries("raylib", "opengl32", "kernel32", "user32", "shell32", "gdi32", "winmm", "msvcrt");
       } else {
         AddLibraryPaths("./vendor/raylib/lib/win64_mingw");
+        LinkSystemLibraries("raylib", "gdi32", "winmm");
       }
-
-      LinkSystemLibraries("raylib", "opengl32", "kernel32", "user32", "shell32", "gdi32", "winmm", "msvcrt");
     }
 
     String exePath = InstallExecutable();
