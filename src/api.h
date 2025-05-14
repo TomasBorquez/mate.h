@@ -114,27 +114,27 @@ enum CreateCompileCommandsError { COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMP
 WARN_UNUSED errno_t CreateCompileCommands();
 
 #define AddLibraryPaths(...)                   \
-  ({                                           \
+  do {                                         \
     StringVector vector = {0};                 \
     StringVectorPushMany(vector, __VA_ARGS__); \
     addLibraryPaths(&vector);                  \
-  })
+  } while (0)
 static void addLibraryPaths(StringVector *vector);
 
 #define AddIncludePaths(...)                   \
-  ({                                           \
+  do {                                         \
     StringVector vector = {0};                 \
     StringVectorPushMany(vector, __VA_ARGS__); \
     addIncludePaths(&vector);                  \
-  })
+  } while (0)
 static void addIncludePaths(StringVector *vector);
 
 #define LinkSystemLibraries(...)               \
-  ({                                           \
+  do {                                         \
     StringVector vector = {0};                 \
     StringVectorPushMany(vector, __VA_ARGS__); \
     linkSystemLibraries(&vector);              \
-  })
+  } while (0)
 static void linkSystemLibraries(StringVector *vector);
 
 #define AddFile(source) addFile(S(source));

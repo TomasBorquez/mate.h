@@ -21,15 +21,15 @@
     - [x] Use String builder function
     - [x] Remove unnecessary code
     - [x] Add comments on `api.h`
+
+### Last stage
 - [ ] Different targets apart from `executables`:
     - [ ] Static libs 
     - [ ] Shared libs
-
-### Last stage
 - [ ] Add `args` parser
 - [ ] Header tests like on `CMAKE`
 - [ ] Add `MacOS` support (find someone who is willing to help)
 - [ ] Make `samurai` windows compatible
 - [ ] Full `MSVC` support
-- [ ] Properly clean the state like and malloc operations
+- [ ] Properly clean the state of arenas and vectors
 - [ ] `clang-formatter` as a github action (when many contributions)

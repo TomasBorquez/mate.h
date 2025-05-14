@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 float A, B, C;
 
@@ -115,7 +114,5 @@ int main() {
     A += 0.05;
     B += 0.05;
     C += 0.01;
-
-    usleep(8000 * 2);
   }
 }

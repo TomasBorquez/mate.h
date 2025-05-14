@@ -1,4 +1,5 @@
 // NOTE: Run simply with `gcc amalgam-script.c -o amalgam-script && ./amalgam-script`
+// TODO: Add delimiter #ifdef cplusplus or whatever it is
 
 #define BASE_IMPLEMENTATION
 #include "vendor/base/base.h"
@@ -106,11 +107,11 @@ i32 main() {
 
       String pragmaOnce = S("#pragma once");
       for (size_t j = 0; j < vendorBaseSplit.length; j++) {
-        String *currLine = VecAt(vendorBaseSplit, j);
-        if (StrEq(*currLine, pragmaOnce)) {
+        String currLine = VecAt(vendorBaseSplit, j);
+        if (StrEq(currLine, pragmaOnce)) {
           continue;
         }
-        FileAdd(resultPath, *currLine);
+        FileAdd(resultPath, currLine);
       }
 
       FileAdd(resultPath, S("// --- BASE.H END ---"));
@@ -127,8 +128,8 @@ i32 main() {
       FileAdd(resultPath, mateImplementationStart);
 
       for (size_t j = 2; j < apiImpSplit.length; j++) {
-        String *currLine = VecAt(apiImpSplit, j);
-        FileAdd(resultPath, *currLine);
+        String currLine = VecAt(apiImpSplit, j);
+        FileAdd(resultPath, currLine);
       }
 
       FileAdd(resultPath, S("#endif"));
@@ -145,26 +146,26 @@ i32 main() {
       FileAdd(resultPath, S("* See LICENSE-SAMURAI.txt for the full license text."));
       FileAdd(resultPath, S("*/"));
       for (size_t j = 0; j < samuraiSourceSplit.length; j++) {
-        String *currLine = VecAt(samuraiSourceSplit, j);
+        String currLine = VecAt(samuraiSourceSplit, j);
 
         if (j == 0) {
-          String firstLine = F(arena, "#define SAMURAI_AMALGAM \"%s\\n\"  \\", currLine->data);
+          String firstLine = F(arena, "#define SAMURAI_AMALGAM \"%s\\n\"  \\", currLine.data);
           FileAdd(resultPath, firstLine);
           continue;
         }
 
         if (j == samuraiSourceSplit.length - 1) {
-          String escapedLine = escapeString(arena, currLine);
+          String escapedLine = escapeString(arena, &currLine);
           String lastLine = F(arena, "            \"%s\"", escapedLine.data);
           FileAdd(resultPath, lastLine);
           continue;
         }
 
-        if (currLine->length == 0 || (currLine->data[0] == '/' && currLine->data[1] == '/')) {
+        if (currLine.length == 0 || (currLine.data[0] == '/' && currLine.data[1] == '/')) {
           continue;
         }
 
-        String escapedLine = escapeString(arena, currLine);
+        String escapedLine = escapeString(arena, &currLine);
         String middleLine = F(arena, "            \"%s\\n\"\\", escapedLine.data);
         FileAdd(resultPath, middleLine);
       }

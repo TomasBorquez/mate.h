@@ -112,20 +112,15 @@ extern "C" {
 #  else
 #    error "Why C89 if you have C99"
 #  endif
-#endif
-
-#if defined(COMPILER_MSVC)
-#  if _MSVC_LANG >= 202000L
-#    define C_STANDARD_C23
-#    define C_STANDARD "C23"
-#  elif _MSVC_LANG >= 201704L
-#    define C_STANDARD_C17
-#    define C_STANDARD "C17"
-#  elif _MSVC_LANG >= 201103L
-#    define C_STANDARD_C11
-#    define C_STANDARD "C11"
-#  else
-#    error "How did you even get here?? Send an issue at github.com/TomasBorquez/mate.h"
+#else
+#  if defined(COMPILER_MSVC)
+#    if defined(_MSC_VER) && _MSC_VER >= 1920 // >= Visual Studio 2019
+#      define C_STANDARD_C17
+#      define C_STANDARD "C17"
+#    else
+#      define C_STANDARD_C11
+#      define C_STANDARD "C11"
+#    endif
 #  endif
 #endif
 
@@ -190,7 +185,6 @@ extern "C" {
 #    define snprintf _snprintf
 #    define vsnprintf _vsnprintf
 #  endif
-
 #endif
 
 /* --- Types and MACRO types --- */
@@ -250,8 +244,7 @@ typedef struct {
 void _custom_assert(const char *expr, const char *file, unsigned line, const char *format, ...) FORMAT_CHECK(4, 5);
 #define Assert(expression, ...) (void)((!!(expression)) || (_custom_assert(#expression, __FILE__, __LINE__, __VA_ARGS__), 0))
 
-/* --- Vector Macros --- */
-// TODO: Add MSVC like vector macros
+/* --- Vector --- */
 // TODO: `VecSort` implement some sorting algorithm for sorting the vector
 #define VEC_TYPE(typeName, valueType) \
   typedef struct {                    \
@@ -260,88 +253,29 @@ void _custom_assert(const char *expr, const char *file, unsigned line, const cha
     size_t capacity;                  \
   } typeName
 
-#define VecCreate(vector, count)                        \
+#define VecReserve(vector, count)                       \
   do {                                                  \
     vector.capacity = count;                            \
     vector.data = Malloc(count * sizeof(*vector.data)); \
   } while (0)
 
-// WARNING: Vector must always be initialized to zero `Vector vector = {0}` or `VecCreate()`
-#define VecPush(vector, value)                                                                                                        \
-  ({                                                                                                                                  \
-    Assert(vector.length <= vector.capacity, "VecPush: Possible memory corruption or vector not initialized, `Vector vector = {0}`"); \
-    if (vector.length >= vector.capacity) {                                                                                           \
-      if (vector.capacity == 0) vector.capacity = 128;                                                                                \
-      else vector.capacity *= 2;                                                                                                      \
-      vector.data = Realloc(vector.data, vector.capacity * sizeof(*vector.data));                                                     \
-    }                                                                                                                                 \
-    vector.data[vector.length++] = value;                                                                                             \
-    &vector.data[vector.length - 1];                                                                                                  \
-  })
+#define VecPush(vector, value) vecPush((void **)&(vector).data, &(vector).length, &(vector).capacity, sizeof(*vector.data), &(value));
 
-#define VecPop(vector)                                                 \
-  ({                                                                   \
-    Assert(vector.length > 0, "VecPop: Cannot pop from empty vector"); \
-    typeof(vector.data[0]) value = vector.data[vector.length - 1];     \
-    vector.length--;                                                   \
-    &value;                                                            \
-  })
+#define VecPop(vector) vecPop((vector).data, &(vector).length, sizeof(*vector.data));
 
-#define VecShift(vector)                                                                   \
-  ({                                                                                       \
-    Assert(vector.length != 0, "VecShift: Length should at least be >= 1");                \
-    typeof(vector.data[0]) value = vector.data[0];                                         \
-    memmove(&vector.data[0], &vector.data[1], (vector.length - 1) * sizeof(*vector.data)); \
-    vector.length--;                                                                       \
-    &value;                                                                                \
-  })
+#define VecShift(vector) vecShift((void **)&(vector).data, &(vector).length, sizeof(*vector.data))
 
-#define VecUnshift(vector, value)                                                      \
-  ({                                                                                   \
-    if (vector.length >= vector.capacity) {                                            \
-      if (vector.capacity == 0) vector.capacity = 2;                                   \
-      else vector.capacity *= 2;                                                       \
-      vector.data = Realloc(vector.data, vector.capacity * sizeof(*vector.data));      \
-    }                                                                                  \
-                                                                                       \
-    if (vector.length > 0) {                                                           \
-      memmove(&vector.data[1], &vector.data[0], vector.length * sizeof(*vector.data)); \
-    }                                                                                  \
-                                                                                       \
-    vector.data[0] = value;                                                            \
-    vector.length++;                                                                   \
-    &value;                                                                            \
-  })
+#define VecUnshift(vector, value) vecUnshift((void **)&(vector).data, &(vector).length, &(vector).capacity, sizeof(*vector.data), &(value))
 
-#define VecInsert(vector, value, index)                                                                    \
-  ({                                                                                                       \
-    Assert(index <= vector.length, "VecInsert: Index out of bounds for insertion");                        \
-    if (vector.length >= vector.capacity) {                                                                \
-      if (vector.capacity == 0) vector.capacity = 2;                                                       \
-      else vector.capacity *= 2;                                                                           \
-      vector.data = Realloc(vector.data, vector.capacity * sizeof(*vector.data));                          \
-    }                                                                                                      \
-    memmove(&vector.data[index + 1], &vector.data[index], (vector.length - index) * sizeof(*vector.data)); \
-    vector.data[index] = value;                                                                            \
-    vector.length++;                                                                                       \
-    &value;                                                                                                \
-  })
+#define VecInsert(vector, value, index) vecInsert((void **)&(vector).data, &(vector).length, &(vector).capacity, sizeof(*vector.data), &(value), index)
 
-#define VecAt(vector, index)                                                   \
-  ({                                                                           \
-    Assert(index >= 0 && index < vector.length, "VecAt: Index out of bounds"); \
-    &vector.data[index];                                                       \
-  })
+#define VecAt(vector, index) (*(__typeof__(*vector.data) *)vecAt((void **)&(vector).data, &(vector).length, index, sizeof(*vector.data)))
 
-#define VecFree(vector)        \
-  ({                           \
-    if (vector.data != NULL) { \
-      Free(vector.data);       \
-    }                          \
-    vector.data = NULL;        \
-  })
+#define VecAtPtr(vector, index) (vecAt((void **)&(vector).data, &(vector).length, index, sizeof(*vector.data)))
 
-#define VecForEach(vector, it) for (typeof(*vector.data) *it = vector.data; it < vector.data + vector.length; it++)
+#define VecFree(vector) vecFree((void **)&(vector).data)
+
+#define VecForEach(vector, it) for (__typeof__(*vector.data) *it = vector.data; it < vector.data + vector.length; it++)
 
 /* --- Time and Platforms --- */
 i64 TimeNow();
@@ -397,14 +331,15 @@ String s(char *msg);
 String F(Arena *arena, const char *format, ...) FORMAT_CHECK(2, 3);
 
 VEC_TYPE(StringVector, String);
-#define StringVectorPushMany(vector, ...)              \
-  ({                                                   \
-    char *values[] = {__VA_ARGS__};                    \
-    size_t count = sizeof(values) / sizeof(values[0]); \
-    for (size_t i = 0; i < count; i++) {               \
-      VecPush(vector, s(values[i]));                   \
-    }                                                  \
-  })
+#define StringVectorPushMany(vector, ...)           \
+  do {                                              \
+    char *values[] = {__VA_ARGS__};                 \
+    size_t count = sizeof(values) / sizeof(char *); \
+    for (size_t i = 0; i < count; i++) {            \
+      String value = s(values[i]);                  \
+      VecPush(vector, value);                       \
+    }                                               \
+  } while (0)
 
 void SetMaxStrSize(size_t size);
 String StrNew(Arena *arena, char *str);
@@ -426,6 +361,7 @@ String StrSlice(Arena *arena, String str, size_t start, size_t end);
 
 String NormalizePath(Arena *arena, String path);
 String NormalizeExePath(Arena *arena, String path);
+String NormalizeStaticLibPath(Arena *arena, String path);
 String NormalizePathStart(Arena *arena, String path);
 
 typedef struct {
@@ -498,12 +434,12 @@ void LogSuccess(const char *format, ...) FORMAT_CHECK(1, 2);
 #define Min(a, b) (((a) < (b)) ? (a) : (b))
 #define Max(a, b) (((a) > (b)) ? (a) : (b))
 #define Clamp(a, x, b) (((x) < (a)) ? (a) : ((b) < (x)) ? (b) : (x))
-#define Swap(a, b)      \
-  ({                    \
-    typeof(a) temp = a; \
-    a = b;              \
-    b = temp;           \
-  })
+#define Swap(a, b) \
+  do {             \
+    a ^= b;        \
+    b ^= a;        \
+    a ^= b;        \
+  } while (0);
 
 /* --- Defer Macros --- */
 #if defined(DEFER_MACRO) // NOTE: Optional since not all compilers support it and not all C versions do either
@@ -574,6 +510,79 @@ bool IniGetBool(IniFile *ini, String key);
 */
 
 #if defined(BASE_IMPLEMENTATION)
+// --- Vector Implementation ---
+static void vecPush(void **data, size_t *length, size_t *capacity, size_t element_size, void *value) {
+  // WARNING: Vector must always be initialized to zero `Vector vector = {0}`
+  Assert(*length <= *capacity, "VecPush: Possible memory corruption or vector not initialized, `Vector vector = {0}`");
+
+  if (*length >= *capacity) {
+    if (*capacity == 0) *capacity = 128;
+    else *capacity *= 2;
+
+    *data = realloc(*data, *capacity * element_size);
+  }
+
+  void *address = (char *)(*data) + (*length * element_size);
+  memcpy(address, value, element_size);
+
+  (*length)++;
+}
+
+static void *vecPop(void *data, size_t *length, size_t element_size) {
+  Assert(*length > 0, "VecPop: Cannot pop from empty vector");
+  (*length)--;
+  return (char *)data + (*length * element_size);
+}
+
+static void vecShift(void **data, size_t *length, size_t element_size) {
+  Assert(*length != 0, "VecShift: Length should at least be >= 1");
+  memmove(*data, (char *)(*data) + element_size, ((*length) - 1) * element_size);
+  (*length)--;
+}
+
+static void vecUnshift(void **data, size_t *length, size_t *capacity, size_t element_size, const void *value) {
+  if (*length >= *capacity) {
+    if (*capacity == 0) *capacity = 2;
+    else *capacity *= 2;
+    *data = realloc(*data, *capacity * element_size);
+  }
+
+  if (*length > 0) {
+    memmove((char *)(*data) + element_size, *data, (*length) * element_size);
+  }
+
+  memcpy(*data, value, element_size);
+  (*length)++;
+}
+
+static void vecInsert(void **data, size_t *length, size_t *capacity, size_t element_size, void *value, size_t index) {
+  Assert(index <= *length, "VecInsert: Index out of bounds for insertion");
+
+  if (*length >= *capacity) {
+    if (*capacity == 0) *capacity = 2;
+    else *capacity *= 2;
+    *data = realloc(*data, *capacity * element_size);
+  }
+
+  if (index < *length) {
+    memmove((char *)(*data) + ((index + 1) * element_size), (char *)(*data) + (index * element_size), (*length - index) * element_size);
+  }
+
+  memcpy((char *)(*data) + (index * element_size), value, element_size);
+  (*length)++;
+}
+
+static void *vecAt(void **data, size_t *length, size_t index, size_t elementSize) {
+  Assert(index >= 0 && index < *length, "VecAt: Index out of bounds");
+  void *address = (char *)(*data) + (index * elementSize);
+  return address;
+}
+
+static void vecFree(void **data) {
+  free(*data);
+  *data = NULL;
+}
+
 // --- Time and Platforms Implementation ---
 #  if !defined(PLATFORM_WIN)
 
@@ -643,7 +652,7 @@ String GetCompiler() {
 #  elif defined(COMPILER_TCC)
   return S("tcc");
 #  elif defined(COMPILER_MSVC)
-  return S("MSVC");
+  return S("cl.exe");
 #  endif
 }
 
@@ -1177,6 +1186,23 @@ String F(Arena *arena, const char *format, ...) {
   return (String){.length = size - 1, .data = buffer};
 }
 
+String normSlashes(String path) {
+#  if defined(PLATFORM_WIN)
+  for (size_t i = 0; i < path.length; i++) {
+    if (path.data[i] == '/') {
+      path.data[i] = '\\';
+    }
+  }
+#  else
+  for (size_t i = 0; i < path.length; i++) {
+    if (path.data[i] == '\\') {
+      path.data[i] = '/';
+    }
+  }
+#  endif
+  return path;
+}
+
 String NormalizePath(Arena *arena, String path) {
   String result;
   if (path.length >= 2 && path.data[0] == '.' && (path.data[1] == '/' || path.data[1] == '\\')) {
@@ -1185,18 +1211,7 @@ String NormalizePath(Arena *arena, String path) {
     result = StrNewSize(arena, path.data, path.length);
   }
 
-  String platform = GetPlatform();
-  if (StrEq(platform, S("linux")) || StrEq(platform, S("macos"))) {
-    return result;
-  }
-
-  for (size_t i = 0; i < result.length; i++) {
-    if (result.data[i] == '/') {
-      result.data[i] = '\\';
-    }
-  }
-
-  return result;
+  return normSlashes(result);
 }
 
 String NormalizeExePath(Arena *arena, String path) {
@@ -1218,24 +1233,74 @@ String NormalizeExePath(Arena *arena, String path) {
     }
   }
 
-  if (StrEq(platform, S("windows")) && !hasExe) {
-    result = StrConcat(arena, result, exeExtension);
-  }
-
-  if (StrEq(platform, S("linux")) || StrEq(platform, S("macos"))) {
-    if (hasExe) {
-      return StrSlice(arena, result, 0, result.length - exeExtension.length);
+  if (StrEq(platform, S("windows"))) {
+    if (!hasExe) {
+      result = StrConcat(arena, result, exeExtension);
     }
-    return result;
+
+    return normSlashes(result);
   }
 
-  for (size_t i = 0; i < result.length; i++) {
-    if (result.data[i] == '/') {
-      result.data[i] = '\\';
+  if (hasExe) {
+    result = StrSlice(arena, result, 0, result.length - exeExtension.length);
+  }
+
+  return normSlashes(result);
+}
+
+String NormalizeStaticLibPath(Arena *arena, String path) {
+  String platform = GetPlatform();
+  String result;
+
+  if (path.length >= 2 && path.data[0] == '.' && (path.data[1] == '/' || path.data[1] == '\\')) {
+    result = StrNewSize(arena, path.data + 2, path.length - 2);
+  } else {
+    result = StrNewSize(arena, path.data, path.length);
+  }
+
+  bool hasLibExt = false;
+  String libExtension;
+  String aExtension = S(".a");
+  String libWinExtension = S(".lib");
+  if (result.length >= aExtension.length) {
+    String resultEnd = StrSlice(arena, result, result.length - aExtension.length, result.length);
+    if (StrEq(resultEnd, aExtension)) {
+      hasLibExt = true;
+      libExtension = aExtension;
     }
   }
 
-  return result;
+  if (!hasLibExt && result.length >= libWinExtension.length) {
+    String resultEnd = StrSlice(arena, result, result.length - libWinExtension.length, result.length);
+    if (StrEq(resultEnd, libWinExtension)) {
+      hasLibExt = true;
+      libExtension = libWinExtension;
+    }
+  }
+
+  if (StrEq(platform, S("windows"))) {
+    if (hasLibExt && !StrEq(libExtension, libWinExtension)) {
+      result = StrSlice(arena, result, 0, result.length - libExtension.length);
+      hasLibExt = false;
+    }
+
+    if (!hasLibExt) {
+      result = StrConcat(arena, result, libWinExtension);
+    }
+
+    return normSlashes(result);
+  }
+
+  if (hasLibExt && !StrEq(libExtension, aExtension)) {
+    result = StrSlice(arena, result, 0, result.length - libExtension.length);
+    hasLibExt = false;
+  }
+
+  if (!hasLibExt) {
+    result = StrConcat(arena, result, aExtension);
+  }
+
+  return normSlashes(result);
 }
 
 String NormalizePathStart(Arena *arena, String path) {
@@ -2141,27 +2206,27 @@ enum CreateCompileCommandsError { COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMP
 WARN_UNUSED errno_t CreateCompileCommands();
 
 #define AddLibraryPaths(...)                   \
-  ({                                           \
+  do {                                         \
     StringVector vector = {0};                 \
     StringVectorPushMany(vector, __VA_ARGS__); \
     addLibraryPaths(&vector);                  \
-  })
+  } while (0)
 static void addLibraryPaths(StringVector *vector);
 
 #define AddIncludePaths(...)                   \
-  ({                                           \
+  do {                                         \
     StringVector vector = {0};                 \
     StringVectorPushMany(vector, __VA_ARGS__); \
     addIncludePaths(&vector);                  \
-  })
+  } while (0)
 static void addIncludePaths(StringVector *vector);
 
 #define LinkSystemLibraries(...)               \
-  ({                                           \
+  do {                                         \
     StringVector vector = {0};                 \
     StringVectorPushMany(vector, __VA_ARGS__); \
     linkSystemLibraries(&vector);              \
-  })
+  } while (0)
 static void linkSystemLibraries(StringVector *vector);
 
 #define AddFile(source) addFile(S(source));
@@ -5191,7 +5256,7 @@ static void readCache() {
 #else
   state.mateCache.samuraiBuild = IniGetBool(&state.cache, S("samurai-build"));
   if (state.mateCache.samuraiBuild == false) {
-    Assert(state.mateCache.firstBuild, "MateCache: This is not the first build and samurai is not compiled, a cache error, delete `./build` folder and rebuild `./mate.c`");
+    Assert(state.mateCache.firstBuild, "MateCache: This is not the first build and samurai is not compiled, could be a cache error, delete `./build` folder and rebuild `./mate.c`");
 
     String samuraiAmalgam = s(SAMURAI_AMALGAM);
     String sourcePath = F(state.arena, "%s/samurai.c", state.buildDirectory.data);
@@ -5257,7 +5322,7 @@ void reBuild() {
   String mateExe = NormalizeExePath(state.arena, state.mateExe);
 
   String compileCommand;
-  if (StrEq(state.compiler, S("MSVC"))) {
+  if (StrEq(state.compiler, S("cl.exe"))) {
     compileCommand = F(state.arena, "cl.exe \"%s\" /Fe:\"%s\"", state.mateSource.data, mateExeNew.data);
   } else {
     compileCommand = F(state.arena, "%s \"%s\" -o \"%s\"", state.compiler.data, state.mateSource.data, mateExeNew.data);
@@ -5298,7 +5363,6 @@ static Executable parseExecutableOptions(ExecutableOptions options) {
 }
 
 void CreateExecutable(ExecutableOptions executableOptions) {
-  Assert(!StrEq(state.compiler, S("MSVC")), "CreateExecutable: MSVC compiler not yet implemented");
   Assert(state.initConfig,
          "CreateExecutable: before creating an executable you must use StartBuild(), like this: \n"
          "\n"
@@ -5579,10 +5643,10 @@ static void addFile(String source) {
 
   StringVector files = ListDir(state.arena, directory);
   for (size_t i = 0; i < files.length; i++) {
-    String *file = VecAt(files, i);
+    String file = VecAt(files, i);
 
-    if (globMatch(pattern, *file)) {
-      String finalSource = F(state.arena, "%s/%s", directory.data, file->data);
+    if (globMatch(pattern, file)) {
+      String finalSource = F(state.arena, "%s/%s", directory.data, file.data);
       VecPush(executable.sources, finalSource);
     }
   }
@@ -5590,7 +5654,7 @@ static void addFile(String source) {
 
 static bool removeFile(String source) {
   for (size_t i = 0; i < executable.sources.length; i++) {
-    String *currValue = VecAt(executable.sources, i);
+    String *currValue = VecAtPtr(executable.sources, i);
     if (StrEq(source, *currValue)) {
       currValue->data = NULL;
       currValue->length = 0;
@@ -5603,7 +5667,7 @@ static bool removeFile(String source) {
 static StringVector outputTransformer(StringVector vector) {
   StringVector result = {0};
   for (size_t i = 0; i < vector.length; i++) {
-    String currentExecutable = *VecAt(vector, i);
+    String currentExecutable = VecAt(vector, i);
     if (StrIsNull(currentExecutable)) continue;
 
     size_t lastCharIndex = 0;
@@ -5685,10 +5749,17 @@ String InstallExecutable() {
   if (executable.flags.length > 0) {
     StringBuilderAppend(state.arena, &builder, &S(" $flags"));
   }
+
   if (executable.linkerFlags.length > 0) {
     StringBuilderAppend(state.arena, &builder, &S(" $linker_flags"));
   }
-  StringBuilderAppend(state.arena, &builder, &S(" -o $out $in"));
+
+  if (StrEq(state.compiler, S("cl.exe"))) {
+    StringBuilderAppend(state.arena, &builder, &S(" /Fe:$out $in"));
+  } else {
+    StringBuilderAppend(state.arena, &builder, &S(" -o $out $in"));
+  }
+
   if (executable.libs.length > 0) {
     StringBuilderAppend(state.arena, &builder, &S(" $libs"));
   }
@@ -5702,17 +5773,22 @@ String InstallExecutable() {
   if (executable.includes.length > 0) {
     StringBuilderAppend(state.arena, &builder, &S(" $includes"));
   }
-  StringBuilderAppend(state.arena, &builder, &S(" -c $in -o $out\n\n"));
+
+  if (StrEq(state.compiler, S("cl.exe"))) {
+    StringBuilderAppend(state.arena, &builder, &S(" /c $in /Fo:$out\n\n"));
+  } else {
+    StringBuilderAppend(state.arena, &builder, &S(" -c $in -o $out\n\n"));
+  }
 
   // Build individual source files
   StringVector outputFiles = outputTransformer(executable.sources);
   StringBuilder outputBuilder = StringBuilderCreate(state.arena);
 
   for (size_t i = 0; i < executable.sources.length; i++) {
-    String currSource = *VecAt(executable.sources, i);
+    String currSource = VecAt(executable.sources, i);
     if (StrIsNull(currSource)) continue;
 
-    String outputFile = *VecAt(outputFiles, i);
+    String outputFile = VecAt(outputFiles, i);
     String sourceFile = NormalizePathStart(state.arena, currSource);
 
     // Source build command
@@ -5772,19 +5848,33 @@ errno_t RunCommand(String command) {
   return system(command.data);
 }
 
-// TODO: Do it depending on compiler
 static void addLibraryPaths(StringVector *vector) {
   StringBuilder builder = StringBuilderCreate(state.arena);
-  for (size_t i = 0; i < vector->length; i++) {
-    String *currLib = VecAt((*vector), i);
-    if (i == 0 && executable.libs.length == 0) {
-      String buffer = F(state.arena, "-L\"%s\"", currLib->data);
-      StringBuilderAppend(state.arena, &builder, &buffer);
-      continue;
-    }
 
-    String buffer = F(state.arena, " -L\"%s\"", currLib->data);
-    StringBuilderAppend(state.arena, &builder, &buffer);
+  if (StrEq(state.compiler, S("cl.exe"))) {
+    // MSVC format: /LIBPATH:"path"
+    for (size_t i = 0; i < vector->length; i++) {
+      String currLib = VecAt((*vector), i);
+      if (i == 0 && executable.libs.length == 0) {
+        String buffer = F(state.arena, "/LIBPATH:\"%s\"", currLib.data);
+        StringBuilderAppend(state.arena, &builder, &buffer);
+        continue;
+      }
+      String buffer = F(state.arena, " /LIBPATH:\"%s\"", currLib.data);
+      StringBuilderAppend(state.arena, &builder, &buffer);
+    }
+  } else {
+    // GCC/Clang format: -L"path"
+    for (size_t i = 0; i < vector->length; i++) {
+      String currLib = VecAt((*vector), i);
+      if (i == 0 && executable.libs.length == 0) {
+        String buffer = F(state.arena, "-L\"%s\"", currLib.data);
+        StringBuilderAppend(state.arena, &builder, &buffer);
+        continue;
+      }
+      String buffer = F(state.arena, " -L\"%s\"", currLib.data);
+      StringBuilderAppend(state.arena, &builder, &buffer);
+    }
   }
 
   if (executable.libs.length) {
@@ -5796,16 +5886,31 @@ static void addLibraryPaths(StringVector *vector) {
 
 static void linkSystemLibraries(StringVector *vector) {
   StringBuilder builder = StringBuilderCreate(state.arena);
-  for (size_t i = 0; i < vector->length; i++) {
-    String *currLib = VecAt((*vector), i);
-    if (i == 0 && executable.libs.length == 0) {
-      String buffer = F(state.arena, "-l%s", currLib->data);
-      StringBuilderAppend(state.arena, &builder, &buffer);
-      continue;
-    }
 
-    String buffer = F(state.arena, " -l%s", currLib->data);
-    StringBuilderAppend(state.arena, &builder, &buffer);
+  if (StrEq(state.compiler, S("cl.exe"))) {
+    // MSVC format: library.lib
+    for (size_t i = 0; i < vector->length; i++) {
+      String currLib = VecAt((*vector), i);
+      if (i == 0 && executable.libs.length == 0) {
+        String buffer = F(state.arena, "%s.lib", currLib.data);
+        StringBuilderAppend(state.arena, &builder, &buffer);
+        continue;
+      }
+      String buffer = F(state.arena, " %s.lib", currLib.data);
+      StringBuilderAppend(state.arena, &builder, &buffer);
+    }
+  } else {
+    // GCC/Clang format: -llib
+    for (size_t i = 0; i < vector->length; i++) {
+      String currLib = VecAt((*vector), i);
+      if (i == 0 && executable.libs.length == 0) {
+        String buffer = F(state.arena, "-l%s", currLib.data);
+        StringBuilderAppend(state.arena, &builder, &buffer);
+        continue;
+      }
+      String buffer = F(state.arena, " -l%s", currLib.data);
+      StringBuilderAppend(state.arena, &builder, &buffer);
+    }
   }
 
   if (executable.libs.length) {
@@ -5817,16 +5922,31 @@ static void linkSystemLibraries(StringVector *vector) {
 
 static void addIncludePaths(StringVector *vector) {
   StringBuilder builder = StringBuilderCreate(state.arena);
-  for (size_t i = 0; i < vector->length; i++) {
-    String *currInclude = VecAt((*vector), i);
-    if (i == 0 && executable.includes.length == 0) {
-      String buffer = F(state.arena, "-I\"%s\"", currInclude->data);
-      StringBuilderAppend(state.arena, &builder, &buffer);
-      continue;
-    }
 
-    String buffer = F(state.arena, " -I\"%s\"", currInclude->data);
-    StringBuilderAppend(state.arena, &builder, &buffer);
+  if (StrEq(state.compiler, S("cl.exe"))) {
+    // MSVC format: /I"path"
+    for (size_t i = 0; i < vector->length; i++) {
+      String currInclude = VecAt((*vector), i);
+      if (i == 0 && executable.includes.length == 0) {
+        String buffer = F(state.arena, "/I\"%s\"", currInclude.data);
+        StringBuilderAppend(state.arena, &builder, &buffer);
+        continue;
+      }
+      String buffer = F(state.arena, " /I\"%s\"", currInclude.data);
+      StringBuilderAppend(state.arena, &builder, &buffer);
+    }
+  } else {
+    // GCC/Clang format: -I"path"
+    for (size_t i = 0; i < vector->length; i++) {
+      String currInclude = VecAt((*vector), i);
+      if (i == 0 && executable.includes.length == 0) {
+        String buffer = F(state.arena, "-I\"%s\"", currInclude.data);
+        StringBuilderAppend(state.arena, &builder, &buffer);
+        continue;
+      }
+      String buffer = F(state.arena, " -I\"%s\"", currInclude.data);
+      StringBuilderAppend(state.arena, &builder, &buffer);
+    }
   }
 
   executable.includes = builder.buffer;

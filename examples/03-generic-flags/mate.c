@@ -17,7 +17,9 @@ i32 main() {
 
     AddFile("./src/main.c");
 
+#if !defined(COMPILER_MSVC)
     LinkSystemLibraries("m");
+#endif
 
     String exePath = InstallExecutable();
     result = RunCommand(exePath);
