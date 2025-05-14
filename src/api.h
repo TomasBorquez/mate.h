@@ -55,10 +55,18 @@ typedef struct {
 typedef struct {
   String output;
   String flags;
+  String arFlags;
+  String includes;
+  String ninjaBuildPath;
+} StaticLib;
+
+typedef struct {
+  String output;
+  String flags;
   String linkerFlags;
   String includes;
   String libs;
-  StringVector sources;
+  String ninjaBuildPath;
 } Executable;
 
 enum WarningsFlags {
@@ -101,17 +109,35 @@ typedef struct {
   u8 std;
 } ExecutableOptions;
 
+typedef struct {
+  char *output;
+  char *flags;
+  char *arFlags;
+  char *includes;
+  char *libs;
+  u8 warnings;
+  u8 debug;
+  u8 optimization;
+  u8 std;
+} StaticLibOptions;
+
 void StartBuild();
 void EndBuild();
 
 void CreateConfig(MateOptions options);
-void CreateExecutable(ExecutableOptions executableOptions);
+
+String CreateExecutable(ExecutableOptions executableOptions);
 String InstallExecutable();
+void ResetExecutable();
+
+String CreateStaticLib(StaticLibOptions staticLibOptions);
+String InstallStaticLib();
+void ResetStaticLib();
 
 WARN_UNUSED errno_t RunCommand(String command);
 
 enum CreateCompileCommandsError { COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMPILE_COMMANDS_FAILED_COMPDB };
-WARN_UNUSED errno_t CreateCompileCommands();
+WARN_UNUSED errno_t CreateCompileCommands(String ninjaBuildPath);
 
 #define AddLibraryPaths(...)                   \
   do {                                         \

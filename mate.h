@@ -361,6 +361,7 @@ String StrSlice(Arena *arena, String str, size_t start, size_t end);
 
 String NormalizePath(Arena *arena, String path);
 String NormalizeExePath(Arena *arena, String path);
+String NormalizeExtension(Arena *arena, String path);
 String NormalizeStaticLibPath(Arena *arena, String path);
 String NormalizePathStart(Arena *arena, String path);
 
@@ -519,7 +520,7 @@ static void vecPush(void **data, size_t *length, size_t *capacity, size_t elemen
     if (*capacity == 0) *capacity = 128;
     else *capacity *= 2;
 
-    *data = realloc(*data, *capacity * element_size);
+    *data = Realloc(*data, *capacity * element_size);
   }
 
   void *address = (char *)(*data) + (*length * element_size);
@@ -544,7 +545,7 @@ static void vecUnshift(void **data, size_t *length, size_t *capacity, size_t ele
   if (*length >= *capacity) {
     if (*capacity == 0) *capacity = 2;
     else *capacity *= 2;
-    *data = realloc(*data, *capacity * element_size);
+    *data = Realloc(*data, *capacity * element_size);
   }
 
   if (*length > 0) {
@@ -561,7 +562,7 @@ static void vecInsert(void **data, size_t *length, size_t *capacity, size_t elem
   if (*length >= *capacity) {
     if (*capacity == 0) *capacity = 2;
     else *capacity *= 2;
-    *data = realloc(*data, *capacity * element_size);
+    *data = Realloc(*data, *capacity * element_size);
   }
 
   if (index < *length) {
@@ -1244,6 +1245,34 @@ String NormalizeExePath(Arena *arena, String path) {
   if (hasExe) {
     result = StrSlice(arena, result, 0, result.length - exeExtension.length);
   }
+
+  return normSlashes(result);
+}
+
+String NormalizeExtension(Arena *arena, String path) {
+  String result;
+
+  if (path.length >= 2 && path.data[0] == '.' && (path.data[1] == '/' || path.data[1] == '\\')) {
+    result = StrNewSize(arena, path.data + 2, path.length - 2);
+  } else {
+    result = StrNewSize(arena, path.data, path.length);
+  }
+
+  size_t lastIndex = 0;
+  for (size_t i = 0; i < result.length; i++) {
+    char currChar = result.data[i];
+    if (currChar == '.') {
+      lastIndex = i;
+      break;
+    }
+  }
+
+  if (lastIndex == 0) {
+    return normSlashes(result);
+  }
+
+  size_t filenameLength = result.length - (lastIndex + 1);
+  result = StrSlice(arena, result, 0, filenameLength + 1);
 
   return normSlashes(result);
 }
@@ -2147,10 +2176,18 @@ typedef struct {
 typedef struct {
   String output;
   String flags;
+  String arFlags;
+  String includes;
+  String ninjaBuildPath;
+} StaticLib;
+
+typedef struct {
+  String output;
+  String flags;
   String linkerFlags;
   String includes;
   String libs;
-  StringVector sources;
+  String ninjaBuildPath;
 } Executable;
 
 enum WarningsFlags {
@@ -2193,17 +2230,35 @@ typedef struct {
   u8 std;
 } ExecutableOptions;
 
+typedef struct {
+  char *output;
+  char *flags;
+  char *arFlags;
+  char *includes;
+  char *libs;
+  u8 warnings;
+  u8 debug;
+  u8 optimization;
+  u8 std;
+} StaticLibOptions;
+
 void StartBuild();
 void EndBuild();
 
 void CreateConfig(MateOptions options);
-void CreateExecutable(ExecutableOptions executableOptions);
+
+String CreateExecutable(ExecutableOptions executableOptions);
 String InstallExecutable();
+void ResetExecutable();
+
+String CreateStaticLib(StaticLibOptions staticLibOptions);
+String InstallStaticLib();
+void ResetStaticLib();
 
 WARN_UNUSED errno_t RunCommand(String command);
 
 enum CreateCompileCommandsError { COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMPILE_COMMANDS_FAILED_COMPDB };
-WARN_UNUSED errno_t CreateCompileCommands();
+WARN_UNUSED errno_t CreateCompileCommands(String ninjaBuildPath);
 
 #define AddLibraryPaths(...)                   \
   do {                                         \
@@ -5170,7 +5225,9 @@ bool isTCC();
 */
 #ifdef MATE_IMPLEMENTATION
 static MateConfig state = {0};
+static StringVector sources = {0};
 static Executable executable = {0};
+static StaticLib staticLib = {0};
 
 static const String MSVCStr = {.data = "cl.exe", .length = 6};
 bool isMSVC() {
@@ -5388,6 +5445,193 @@ void reBuild() {
   exit(err);
 }
 
+void defaultStaticLib() {
+  staticLib.output = S("");
+  staticLib.flags = S("");
+  staticLib.arFlags = S("rcs");
+  staticLib.includes = S("");
+}
+
+static StaticLib parseStaticLibOptions(StaticLibOptions options) {
+  StaticLib result = {0};
+  result.output = StrNew(state.arena, options.output);
+  Assert(!StrIsNull(result.output),
+         "MateParseStaticLibOptions: failed, StaticLibOptions.output should never be null, please define the output name like this: \n"
+         "\n"
+         "CreateStaticLib((StaticLibOptions) { .output = \"libexample\"});");
+  result.flags = StrNew(state.arena, options.flags);
+  result.arFlags = StrNew(state.arena, options.arFlags);
+  result.includes = StrNew(state.arena, options.includes);
+  return result;
+}
+
+String CreateStaticLib(StaticLibOptions staticLibOptions) {
+  Assert(!isMSVC(), "CreateStaticLib: MSVC compiler not yet implemented for static libraries");
+  Assert(state.initConfig,
+         "CreateStaticLib: before creating a static library you must use StartBuild(), like this: \n"
+         "\n"
+         "StartBuild()\n"
+         "{\n"
+         " // ...\n"
+         "}\n"
+         "EndBuild()");
+
+  defaultStaticLib();
+  StaticLib options = parseStaticLibOptions(staticLibOptions);
+
+  String staticLibOutput = NormalizeStaticLibPath(state.arena, options.output);
+  staticLib.output = NormalizePath(state.arena, staticLibOutput);
+
+  String flagsStr = options.flags;
+  if (flagsStr.data == NULL) {
+    flagsStr = S("");
+  }
+
+  if (staticLibOptions.warnings != 0) {
+#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
+    switch (staticLibOptions.warnings) {
+    case FLAG_WARNINGS_MINIMAL:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-Wall");
+      break;
+    case FLAG_WARNINGS:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-Wall -Wextra");
+      break;
+    case FLAG_WARNINGS_VERBOSE:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-Wall -Wextra -Wpedantic");
+      break;
+    }
+#elif defined(COMPILER_MSVC)
+    switch (executableOptions.warnings) {
+    case FLAG_WARNINGS_MINIMAL:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/W3");
+      break;
+    case FLAG_WARNINGS:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/W4");
+      break;
+    case FLAG_WARNINGS_VERBOSE:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/Wall");
+      break;
+    }
+#endif
+  }
+
+  if (staticLibOptions.debug != 0) {
+#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
+    switch (staticLibOptions.debug) {
+    case FLAG_DEBUG_MINIMAL:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-g1");
+      break;
+    case FLAG_DEBUG_MEDIUM:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-g2");
+      break;
+    case FLAG_DEBUG:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-g3");
+      break;
+    }
+#elif defined(COMPILER_MSVC)
+    switch (executableOptions.debug) {
+    case FLAG_DEBUG_MINIMAL:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/Zi");
+      break;
+    case FLAG_DEBUG_MEDIUM:
+    case FLAG_DEBUG:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/ZI");
+      break;
+    }
+#endif
+  }
+
+  if (staticLibOptions.optimization != 0) {
+#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
+    switch (staticLibOptions.optimization) {
+    case FLAG_OPTIMIZATION_NONE:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-O0");
+      break;
+    case FLAG_OPTIMIZATION_BASIC:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-O1");
+      break;
+    case FLAG_OPTIMIZATION:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-O2");
+      break;
+    case FLAG_OPTIMIZATION_SIZE:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-Os");
+      break;
+    case FLAG_OPTIMIZATION_AGGRESSIVE:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-O3");
+      break;
+    }
+#elif defined(COMPILER_MSVC)
+    switch (executableOptions.optimization) {
+    case FLAG_OPTIMIZATION_NONE:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/Od");
+      break;
+    case FLAG_OPTIMIZATION_BASIC:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/O1");
+      break;
+    case FLAG_OPTIMIZATION:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/O2");
+      break;
+    case FLAG_OPTIMIZATION_SIZE:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/O1");
+      break;
+    case FLAG_OPTIMIZATION_AGGRESSIVE:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/Ox");
+      break;
+    }
+#endif
+  }
+
+  if (staticLibOptions.std != 0) {
+#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
+    switch (staticLibOptions.std) {
+    case FLAG_STD_C99:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-std=c99");
+      break;
+    case FLAG_STD_C11:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-std=c11");
+      break;
+    case FLAG_STD_C17:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-std=c17");
+      break;
+    case FLAG_STD_C23:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-std=c2x");
+      break;
+    case FLAG_STD_C2X:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "-std=c2x");
+      break;
+    }
+#elif defined(COMPILER_MSVC)
+    switch (executableOptions.std) {
+    case FLAG_STD_C99:
+    case FLAG_STD_C11:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/std:c11");
+      break;
+    case FLAG_STD_C17:
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/std:c17");
+      break;
+    case FLAG_STD_C23:
+    case FLAG_STD_C2X:
+      // NOTE: MSVC doesn't have C23 yet
+      flagsStr = F(state.arena, "%s %s", flagsStr.data, "/std:clatest");
+      break;
+    }
+#endif
+  }
+
+  if (!StrIsNull(flagsStr)) {
+    staticLib.flags = flagsStr;
+  }
+  if (!StrIsNull(options.arFlags)) {
+    staticLib.arFlags = options.arFlags;
+  }
+  if (!StrIsNull(options.includes)) {
+    staticLib.includes = options.includes;
+  }
+
+  staticLib.ninjaBuildPath = F(state.arena, "%s/static-lib-%s.ninja", state.buildDirectory.data, NormalizeExtension(state.arena, staticLib.output).data);
+  return staticLib.ninjaBuildPath;
+}
+
 void defaultExecutable() {
   String executableOutput = NormalizeExePath(state.arena, S("main"));
   executable.output = NormalizePath(state.arena, executableOutput);
@@ -5407,7 +5651,7 @@ static Executable parseExecutableOptions(ExecutableOptions options) {
   return result;
 }
 
-void CreateExecutable(ExecutableOptions executableOptions) {
+String CreateExecutable(ExecutableOptions executableOptions) {
   Assert(state.initConfig,
          "CreateExecutable: before creating an executable you must use StartBuild(), like this: \n"
          "\n"
@@ -5572,9 +5816,12 @@ void CreateExecutable(ExecutableOptions executableOptions) {
   if (!StrIsNull(options.libs)) {
     executable.libs = options.libs;
   }
+
+  executable.ninjaBuildPath = F(state.arena, "%s/exe-%s.ninja", state.buildDirectory.data, NormalizeExtension(state.arena, executable.output).data);
+  return executable.ninjaBuildPath;
 }
 
-errno_t CreateCompileCommands() {
+errno_t CreateCompileCommands(String ninjaBuildPath) {
   FILE *ninjaPipe;
   FILE *outputFile;
   char buffer[4096];
@@ -5590,11 +5837,11 @@ errno_t CreateCompileCommands() {
   String compdbCommand;
   if (state.mateCache.samuraiBuild == true) {
     String samuraiOutputPath = F(state.arena, "%s/samurai", state.buildDirectory.data);
-    compdbCommand = NormalizePath(state.arena, F(state.arena, "%s -f %s/build.ninja -t compdb", samuraiOutputPath.data, state.buildDirectory.data));
+    compdbCommand = NormalizePath(state.arena, F(state.arena, "%s -f %s -t compdb", samuraiOutputPath.data, ninjaBuildPath.data));
   }
 
   if (state.mateCache.samuraiBuild == false) {
-    compdbCommand = NormalizePath(state.arena, F(state.arena, "ninja -f %s/build.ninja -t compdb", state.buildDirectory.data));
+    compdbCommand = NormalizePath(state.arena, F(state.arena, "ninja -f %s -t compdb", ninjaBuildPath.data));
   }
 
   ninjaPipe = popen(compdbCommand.data, "r");
@@ -5671,7 +5918,7 @@ static void addFile(String source) {
          "For example, valid: AddFile(\"./main.c\"), invalid: AddFile(\"./main.c/\")");
 
   if (!isGlob) {
-    VecPush(executable.sources, source);
+    VecPush(sources, source);
     return;
   }
 
@@ -5692,14 +5939,14 @@ static void addFile(String source) {
 
     if (globMatch(pattern, file)) {
       String finalSource = F(state.arena, "%s/%s", directory.data, file.data);
-      VecPush(executable.sources, finalSource);
+      VecPush(sources, finalSource);
     }
   }
 }
 
 static bool removeFile(String source) {
-  for (size_t i = 0; i < executable.sources.length; i++) {
-    String *currValue = VecAtPtr(executable.sources, i);
+  for (size_t i = 0; i < sources.length; i++) {
+    String *currValue = VecAtPtr(sources, i);
     if (StrEq(source, *currValue)) {
       currValue->data = NULL;
       currValue->length = 0;
@@ -5759,8 +6006,13 @@ static StringVector outputTransformer(StringVector vector) {
   return result;
 }
 
+void ResetExecutable() {
+  executable = (Executable){0};
+  VecFree(sources);
+}
+
 String InstallExecutable() {
-  Assert(executable.sources.length != 0, "InstallExecutable: Executable has zero sources, add at least one with AddFile(\"./main.c\")");
+  Assert(sources.length != 0, "InstallExecutable: Executable has zero sources, add at least one with AddFile(\"./main.c\")");
   Assert(!StrIsNull(executable.output), "InstallExecutable: Before installing executable you must first CreateExecutable()");
 
   StringBuilder builder = StringBuilderReserve(state.arena, 1024);
@@ -5852,11 +6104,10 @@ String InstallExecutable() {
   }
 
   // Build individual source files
-  StringVector outputFiles = outputTransformer(executable.sources);
+  StringVector outputFiles = outputTransformer(sources);
   StringBuilder outputBuilder = StringBuilderCreate(state.arena);
-
-  for (size_t i = 0; i < executable.sources.length; i++) {
-    String currSource = VecAt(executable.sources, i);
+  for (size_t i = 0; i < sources.length; i++) {
+    String currSource = VecAt(sources, i);
     if (StrIsNull(currSource)) continue;
 
     String outputFile = VecAt(outputFiles, i);
@@ -5887,19 +6138,17 @@ String InstallExecutable() {
   // Default target
   StringBuilderAppend(state.arena, &builder, &S("default $target\n"));
 
-  String buildNinjaPath;
-  buildNinjaPath = F(state.arena, "%s/build.ninja", state.buildDirectory.data);
-
-  errno_t errWrite = FileWrite(buildNinjaPath, builder.buffer);
-  Assert(errWrite == SUCCESS, "InstallExecutable: failed to write build.ninja for %s, err: %d", buildNinjaPath.data, errWrite);
+  String ninjaBuildPath = executable.ninjaBuildPath;
+  errno_t errWrite = FileWrite(ninjaBuildPath, builder.buffer);
+  Assert(errWrite == SUCCESS, "InstallExecutable: failed to write build.ninja for %s, err: %d", ninjaBuildPath.data, errWrite);
 
   i64 err;
   String buildCommand;
   if (state.mateCache.samuraiBuild) {
     String samuraiOutputPath = F(state.arena, "%s/samurai", state.buildDirectory.data);
-    buildCommand = F(state.arena, "%s -f %s", samuraiOutputPath.data, buildNinjaPath.data);
+    buildCommand = F(state.arena, "%s -f %s", samuraiOutputPath.data, ninjaBuildPath.data);
   } else {
-    buildCommand = F(state.arena, "ninja -f %s", buildNinjaPath.data);
+    buildCommand = F(state.arena, "ninja -f %s", ninjaBuildPath.data);
   }
 
   err = RunCommand(buildCommand);
@@ -5909,10 +6158,149 @@ String InstallExecutable() {
   state.totalTime = TimeNow() - state.startTime;
 
 #if defined(PLATFORM_WIN)
-  return F(state.arena, "%s\\%s", state.buildDirectory.data, executable.output.data);
+  String path = F(state.arena, "%s\\%s", state.buildDirectory.data, executable.output.data);
 #else
-  return F(state.arena, "%s/%s", state.buildDirectory.data, executable.output.data);
+  String path = F(state.arena, "%s/%s", state.buildDirectory.data, executable.output.data);
 #endif
+
+  ResetExecutable();
+  return path;
+}
+
+void ResetStaticLib() {
+  staticLib = (StaticLib){0};
+  VecFree(sources);
+}
+
+String InstallStaticLib() {
+  Assert(sources.length != 0, "InstallStaticLib: Static Library has zero sources, add at least one with AddFile(\"./main.c\")");
+  Assert(!StrIsNull(staticLib.output), "InstallStaticLib: Before installing static library you must first CreateStaticLib()");
+
+  StringBuilder builder = StringBuilderReserve(state.arena, 1024);
+
+  // Compiler
+  StringBuilderAppend(state.arena, &builder, &S("cc = "));
+  StringBuilderAppend(state.arena, &builder, &state.compiler);
+  StringBuilderAppend(state.arena, &builder, &S("\n"));
+
+  // Archive
+  StringBuilderAppend(state.arena, &builder, &S("ar = ar\n")); // TODO: Add different ar for MSVC
+
+  // Compiler flags
+  if (staticLib.flags.length > 0) {
+    StringBuilderAppend(state.arena, &builder, &S("flags = "));
+    StringBuilderAppend(state.arena, &builder, &staticLib.flags);
+    StringBuilderAppend(state.arena, &builder, &S("\n"));
+  }
+
+  // Archive flags
+  if (staticLib.arFlags.length > 0) {
+    StringBuilderAppend(state.arena, &builder, &S("ar_flags = "));
+    StringBuilderAppend(state.arena, &builder, &staticLib.arFlags);
+    StringBuilderAppend(state.arena, &builder, &S("\n"));
+  }
+
+  // Include paths
+  if (staticLib.includes.length > 0) {
+    StringBuilderAppend(state.arena, &builder, &S("includes = "));
+    StringBuilderAppend(state.arena, &builder, &staticLib.includes);
+    StringBuilderAppend(state.arena, &builder, &S("\n"));
+  }
+
+  // Current working directory
+  String cwd_path = ConvertNinjaPath(s(GetCwd()));
+  StringBuilderAppend(state.arena, &builder, &S("cwd = "));
+  StringBuilderAppend(state.arena, &builder, &cwd_path);
+  StringBuilderAppend(state.arena, &builder, &S("\n"));
+
+  // Build directory
+  String build_dir_path = ConvertNinjaPath(state.buildDirectory);
+  StringBuilderAppend(state.arena, &builder, &S("builddir = "));
+  StringBuilderAppend(state.arena, &builder, &build_dir_path);
+  StringBuilderAppend(state.arena, &builder, &S("\n"));
+
+  // Target
+  StringBuilderAppend(state.arena, &builder, &S("target = $builddir/"));
+  StringBuilderAppend(state.arena, &builder, &staticLib.output);
+  StringBuilderAppend(state.arena, &builder, &S("\n\n"));
+
+  // Archive command
+  StringBuilderAppend(state.arena, &builder, &S("rule archive\n  command = $ar $ar_flags $out $in\n\n"));
+
+  // Compile command
+  StringBuilderAppend(state.arena, &builder, &S("rule compile\n  command = $cc"));
+  if (staticLib.flags.length > 0) {
+    StringBuilderAppend(state.arena, &builder, &S(" $flags"));
+  }
+  if (staticLib.includes.length > 0) {
+    StringBuilderAppend(state.arena, &builder, &S(" $includes"));
+  }
+  StringBuilderAppend(state.arena, &builder, &S(" -c $in -o $out\n\n"));
+
+  // Build individual source files
+  StringVector outputFiles = outputTransformer(sources);
+  StringBuilder outputBuilder = StringBuilderCreate(state.arena);
+
+  for (size_t i = 0; i < sources.length; i++) {
+    String currSource = VecAt(sources, i);
+    if (StrIsNull(currSource)) continue;
+
+    String outputFile = VecAt(outputFiles, i);
+    String sourceFile = NormalizePathStart(state.arena, currSource);
+
+    // Source build command
+    StringBuilderAppend(state.arena, &builder, &S("build $builddir/"));
+    StringBuilderAppend(state.arena, &builder, &outputFile);
+    StringBuilderAppend(state.arena, &builder, &S(": compile $cwd/"));
+    StringBuilderAppend(state.arena, &builder, &sourceFile);
+    StringBuilderAppend(state.arena, &builder, &S("\n"));
+
+    // Add to output files list
+    if (outputBuilder.buffer.length == 0) {
+      StringBuilderAppend(state.arena, &outputBuilder, &S("$builddir/"));
+      StringBuilderAppend(state.arena, &outputBuilder, &outputFile);
+    } else {
+      StringBuilderAppend(state.arena, &outputBuilder, &S(" $builddir/"));
+      StringBuilderAppend(state.arena, &outputBuilder, &outputFile);
+    }
+  }
+
+  // Build target
+  StringBuilderAppend(state.arena, &builder, &S("build $target: archive "));
+  StringBuilderAppend(state.arena, &builder, &outputBuilder.buffer);
+  StringBuilderAppend(state.arena, &builder, &S("\n\n"));
+
+  // Default target
+  StringBuilderAppend(state.arena, &builder, &S("default $target\n"));
+
+  String ninjaBuildPath = executable.ninjaBuildPath;
+
+  errno_t errWrite = FileWrite(ninjaBuildPath, builder.buffer);
+  Assert(errWrite == SUCCESS, "InstallStaticLib: failed to write build-static-library.ninja for %s, err: %d", ninjaBuildPath.data, errWrite);
+
+  i64 err;
+  String buildCommand;
+  if (state.mateCache.samuraiBuild) {
+    String samuraiOutputPath = F(state.arena, "%s/samurai", state.buildDirectory.data);
+    buildCommand = F(state.arena, "%s -f %s", samuraiOutputPath.data, ninjaBuildPath.data);
+  } else {
+    buildCommand = F(state.arena, "ninja -f %s", ninjaBuildPath.data);
+  }
+
+  err = RunCommand(buildCommand);
+  Assert(err == SUCCESS, "InstallStaticLib: Ninja file compilation failed with code: %lu", err);
+
+  LogSuccess("Ninja file compilation done");
+  state.totalTime = TimeNow() - state.startTime;
+
+#if defined(PLATFORM_WIN)
+  String path = F(state.arena, "%s\\%s", state.buildDirectory.data, staticLib.output.data);
+#else
+  String path = F(state.arena, "%s/%s", state.buildDirectory.data, staticLib.output.data);
+#endif
+
+  ResetStaticLib();
+  return path;
 }
 
 errno_t RunCommand(String command) {

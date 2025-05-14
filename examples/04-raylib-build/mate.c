@@ -26,7 +26,6 @@ i32 main() {
 
     String exePath = InstallExecutable();
     RunCommand(exePath);
-    CreateCompileCommands();
   }
   EndBuild();
 }

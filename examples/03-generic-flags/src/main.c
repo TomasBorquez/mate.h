@@ -54,8 +54,6 @@ void calculateForSurface(float cubeX, float cubeY, float cubeZ, int ch) {
 }
 
 int main() {
-  exit(0); // Remove if you want it to run
-
   printf("\x1b[2J");
   while (1) {
     memset(buffer, backgroundASCIICode, width * height);

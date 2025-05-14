@@ -7,7 +7,7 @@ i32 main() {
 
   StartBuild();
   {
-    CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall -g"});
+    String ninjaPath = CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall -g"});
 
     AddFile("./src/main.c");
     AddFile("./src/t_math.c");
@@ -21,7 +21,7 @@ i32 main() {
     RunCommand(exePath);
 
     // Create compile commands for better LSP support
-    CreateCompileCommands();
+    CreateCompileCommands(ninjaPath); // ninjaPath is the path where the build.ninja is at, here is where we grab all the commands from
   }
   EndBuild();
 }
