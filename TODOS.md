@@ -21,10 +21,10 @@
     - [x] Use String builder function
     - [x] Remove unnecessary code
     - [x] Add comments on `api.h`
-- [x] Full `MSVC` support
-- [ ] Different targets apart from `executables`:
-    - [ ] Static libs 
-    - [ ] Shared libs
+- [x] Semi Support for `MSVC` 
+- [x] Static libs 
+- [ ] Shared libs
+- [ ] Full `MSVC` support on static/shared libs
 
 ### Last stage
 - [ ] Add `args` parser

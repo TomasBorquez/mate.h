@@ -8,7 +8,7 @@ i32 main() {
 
   StartBuild();
   {
-    CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall -g"});
+    String buildNinjaPath = CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall -g"});
 
     AddFile("./src/main.c");
     AddFile("./src/t_math.c");
@@ -20,7 +20,7 @@ i32 main() {
     String exePath = InstallExecutable();
     errno_t errExe = RunCommand(exePath);
 
-    errno_t errCompileCmd = CreateCompileCommands();
+    errno_t errCompileCmd = CreateCompileCommands(buildNinjaPath);
     result = (errExe == SUCCESS && errCompileCmd == SUCCESS) ? SUCCESS : 1;
   }
   EndBuild();

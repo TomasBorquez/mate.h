@@ -5,10 +5,11 @@ i32 main() {
   StartBuild();
   {
     // Add .exe to make sure it removes on linux builds
+    String buildNinjaPath;
     if (isMSVC()) {
-      CreateExecutable((ExecutableOptions){.output = "main.exe", .flags = "/MD /MACHINE:X64"});
+      buildNinjaPath = CreateExecutable((ExecutableOptions){.output = "main.exe", .flags = "/MD /MACHINE:X64"});
     } else {
-      CreateExecutable((ExecutableOptions){.output = "main.exe", .flags = "-Wall -g"});
+      buildNinjaPath = CreateExecutable((ExecutableOptions){.output = "main.exe", .flags = "-Wall -g"});
     }
 
     AddFile("./src/main.c");
@@ -33,7 +34,7 @@ i32 main() {
 
     String exePath = InstallExecutable();
     RunCommand(exePath);
-    CreateCompileCommands();
+    CreateCompileCommands(buildNinjaPath);
   }
   EndBuild();
 }
