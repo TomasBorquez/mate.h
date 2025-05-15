@@ -1,5 +1,5 @@
 # Mate
-Still not super stable but there are tests for most platforms. It's already useable and should serve 99% of your builds as far as your manage dependencies.
+Still not super stable but there are running tests for most platforms. It's already useable and should serve 99% of your builds as far as your manage dependencies.
 <div align="left">
   <img src="https://img.shields.io/github/stars/TomasBorquez/mate.h?style=flat&color=blue&label=Stars" alt="Stars">
   <img src="https://img.shields.io/github/commit-activity/t/TomasBorquez/mate.h?style=flat&color=blue&label=Total%20Commits" alt="Commits">
