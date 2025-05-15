@@ -16,8 +16,7 @@ i32 main() {
     String exePath = InstallExecutable();
 
     // Runs `./build/main`
-    errno_t err = RunCommand(exePath);
-    LogInfo("err: %d", err);
+    RunCommand(exePath);
   }
   EndBuild();
 }

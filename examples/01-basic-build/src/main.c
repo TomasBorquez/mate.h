@@ -2,5 +2,5 @@
 
 int main() {
   printf("Hellope\n");
-  return 69;
+  return 0;
 }
