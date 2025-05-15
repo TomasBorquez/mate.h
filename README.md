@@ -8,6 +8,10 @@ Still not super stable but there are running tests for most platforms. It's alre
   <img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="License: MIT">
 </div>
 
+<br>
+
+[![Discord](https://discord.com/api/guilds/1372689586341285979/widget.png?style=banner2)](https://discord.gg/TSuGhzas5V)
+
 ## About
 Mate is a build system for C in C and all you need to run it is a C compiler, if you want to learn more about it check out our [examples](./examples) which should
 teach you everything you need to know to use it, here is a simple example of a `mate.c`:
