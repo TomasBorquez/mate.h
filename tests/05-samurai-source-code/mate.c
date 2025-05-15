@@ -1,7 +1,7 @@
 #define MATE_IMPLEMENTATION
 #include "../../mate.h"
 
-#define SAMU_NO_SUCH_FILE_OR_DIR 256
+#define SAMU_VERSION_OUTPUT 2
 
 i32 main() {
   errno_t result;
@@ -21,8 +21,8 @@ i32 main() {
     LinkSystemLibraries("rt");
 
     String exePath = InstallExecutable();
-    errno_t err = RunCommand(exePath);
-    result = err == SAMU_NO_SUCH_FILE_OR_DIR ? SUCCESS : 1; // NOTE: "samu: open build.ninja: No such file or directory"
+    errno_t err = RunCommand(F(state.arena, "%s -version", exePath.data));
+    result = err == SAMU_VERSION_OUTPUT ? SUCCESS : 1;
   }
   EndBuild();
 
