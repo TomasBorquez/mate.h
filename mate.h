@@ -5519,7 +5519,7 @@ String CreateStaticLib(StaticLibOptions staticLibOptions) {
       break;
     }
 #elif defined(COMPILER_MSVC)
-    switch (executableOptions.warnings) {
+    switch (staticLibOptions.warnings) {
     case FLAG_WARNINGS_MINIMAL:
       flagsStr = F(state.arena, "%s %s", flagsStr.data, "/W3");
       break;
@@ -5547,7 +5547,7 @@ String CreateStaticLib(StaticLibOptions staticLibOptions) {
       break;
     }
 #elif defined(COMPILER_MSVC)
-    switch (executableOptions.debug) {
+    switch (staticLibOptions.debug) {
     case FLAG_DEBUG_MINIMAL:
       flagsStr = F(state.arena, "%s %s", flagsStr.data, "/Zi");
       break;
@@ -5579,7 +5579,7 @@ String CreateStaticLib(StaticLibOptions staticLibOptions) {
       break;
     }
 #elif defined(COMPILER_MSVC)
-    switch (executableOptions.optimization) {
+    switch (staticLibOptions.optimization) {
     case FLAG_OPTIMIZATION_NONE:
       flagsStr = F(state.arena, "%s %s", flagsStr.data, "/Od");
       break;
@@ -5619,7 +5619,7 @@ String CreateStaticLib(StaticLibOptions staticLibOptions) {
       break;
     }
 #elif defined(COMPILER_MSVC)
-    switch (executableOptions.std) {
+    switch (staticLibOptions.std) {
     case FLAG_STD_C99:
     case FLAG_STD_C11:
       flagsStr = F(state.arena, "%s %s", flagsStr.data, "/std:c11");
