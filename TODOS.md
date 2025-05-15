@@ -23,10 +23,10 @@
     - [x] Add comments on `api.h`
 - [x] Semi Support for `MSVC` 
 - [x] Static libs 
-- [ ] Shared libs
-- [ ] Full `MSVC` support on static/shared libs
 
 ### Last stage
+- [ ] Shared libs
+- [ ] Full `MSVC` support on static/shared libs
 - [ ] Add `args` parser
 - [ ] Header tests like on `CMAKE`
 - [ ] Add `MacOS` support (find someone who is willing to help)

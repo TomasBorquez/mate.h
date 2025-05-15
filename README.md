@@ -55,7 +55,7 @@ to compile.
 | [**GCC**](https://gcc.gnu.org/) | ✅ Supported | Primary development target with best support |
 | [**Clang**](https://releases.llvm.org/) | ✅ Supported | Works perfectly well too |
 | [**TinyC**](https://bellard.org/tcc/) | ✅ Supported | Recommended if you want fast compile times |
-| [**MSVC**](https://visualstudio.microsoft.com/vs/features/cplusplus/) | ⚠️ Supported | Limiting testing done, MinGW is recommended instead with any of the compilers above |
+| [**MSVC**](https://visualstudio.microsoft.com/vs/features/cplusplus/) | ⚠️ Supported | Limiting testing done, MinGW is recommended instead |
 
 ## Acknowledgments
 This project incorporates code from [Samurai](https://github.com/michaelforney/samurai), which is primarily licensed under ISC license by Michael Forney, 
