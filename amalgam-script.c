@@ -1,6 +1,5 @@
 // NOTE: Run simply with `gcc amalgam-script.c -o amalgam-script && ./amalgam-script`
 // TODO: Add delimiter #ifdef cplusplus or whatever it is
-
 #define BASE_IMPLEMENTATION
 #include "vendor/base/base.h"
 

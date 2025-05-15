@@ -16,7 +16,7 @@
 /* MIT License
 
   base.h - Better cross-platform STD
-  Version - 2025-05-14 (0.1.17):
+  Version - 2025-05-15 (0.1.18):
   https://github.com/TomasBorquez/base.h
 
   Usage:
@@ -516,6 +516,7 @@ bool IniGetBool(IniFile *ini, String key);
 static void vecPush(void **data, size_t *length, size_t *capacity, size_t element_size, void *value) {
   // WARNING: Vector must always be initialized to zero `Vector vector = {0}`
   Assert(*length <= *capacity, "VecPush: Possible memory corruption or vector not initialized, `Vector vector = {0}`");
+  Assert(!(*length > 0 && *data == NULL), "VecPush: Possible memory corruption, data should be NULL only if length == 0");
 
   if (*length >= *capacity) {
     if (*capacity == 0) *capacity = 128;
