@@ -1,11 +1,14 @@
-<div align="center">
+# Mate
+Still not super stable but there are tests for most platforms. It's already useable and should serve 99% of your builds as far as your manage dependencies.
+<div align="left">
   <img src="https://img.shields.io/github/stars/TomasBorquez/mate.h?style=flat&color=blue&label=Stars" alt="Stars">
   <img src="https://img.shields.io/github/commit-activity/t/TomasBorquez/mate.h?style=flat&color=blue&label=Total%20Commits" alt="Commits">
   <img src="https://img.shields.io/github/actions/workflow/status/TomasBorquez/mate.h/run-tests-linux.yml?style=flat&label=Linux%20Pipeline" alt="Linux Pipeline">
   <img src="https://img.shields.io/github/actions/workflow/status/TomasBorquez/mate.h/run-tests-windows.yml?style=flat&label=Windows%20Pipeline" alt="Windows Pipeline">
+  <img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="License: MIT">
 </div>
 
-# About
+## About
 Mate is a build system for C in C and all you need to run it is a C compiler, if you want to learn more about it check out our [examples](./examples) which should
 teach you everything you need to know to use it, here is a simple example of a `mate.c`:
 
