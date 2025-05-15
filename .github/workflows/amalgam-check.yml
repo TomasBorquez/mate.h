@@ -2,6 +2,9 @@ name: Amalgam Script
 
 on:
   push:
+    paths:
+      - '**/*.c'
+      - '**/*.h'
 
 permissions:
   contents: write 

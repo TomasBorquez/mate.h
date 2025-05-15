@@ -1,9 +1,14 @@
 name: Run Tests Linux
 on:
   push:
+    paths:
+      - '**/*.c'
+      - '**/*.h'
+
 permissions:
   contents: read
   actions: read
+
 jobs:
   test-examples:
     runs-on: ubuntu-latest

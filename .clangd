@@ -1,2 +1,2 @@
 CompileFlags:
-  Add: [-std=gnu99, -Wall, -Wextra, -DBASE_IMPLEMENTATION, -DMATE_IMPLEMENTATION]
+  Add: [-Wall, -Wextra, -DBASE_IMPLEMENTATION, -DMATE_IMPLEMENTATION]
