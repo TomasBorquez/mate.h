@@ -34,6 +34,7 @@ jobs:
           "03-generic-flags"
           "04-raylib-build"
           "05-samurai-source-code"
+          "06-lua-source-code"
         )
         
         for test in "${tests[@]}"; do

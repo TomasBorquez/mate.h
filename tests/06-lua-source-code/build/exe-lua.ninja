@@ -1,0 +1,17 @@
+cc = gcc
+flags = -DLUA_USE_LINUX -fno-stack-protector -fno-common -march=native -Wall -Wextra -std=c99
+libs = -L"./build/" -llua -lm -ldl
+cwd = /mnt/c/Users/Lewboski/Desktop/Programming/learn/mate/tests/06-lua-source-code
+builddir = /mnt/c/Users/Lewboski/Desktop/Programming/learn/mate/tests/06-lua-source-code/build
+target = $builddir/lua
+
+rule link
+  command = $cc $flags -o $out $in $libs
+
+rule compile
+  command = $cc $flags -c $in -o $out
+
+build $builddir/lua.o: compile $cwd/src/lua.c
+build $target: link $builddir/lua.o
+
+default $target

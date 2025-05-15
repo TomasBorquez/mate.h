@@ -404,7 +404,7 @@ String CreateStaticLib(StaticLibOptions staticLibOptions) {
     staticLib.includes = options.includes;
   }
 
-  staticLib.ninjaBuildPath = F(state.arena, "%s/static-lib-%s.ninja", state.buildDirectory.data, NormalizeExtension(state.arena, staticLib.output).data);
+  staticLib.ninjaBuildPath = F(state.arena, "%s/static-%s.ninja", state.buildDirectory.data, NormalizeExtension(state.arena, staticLib.output).data);
   return staticLib.ninjaBuildPath;
 }
 
@@ -638,7 +638,7 @@ errno_t CreateCompileCommands(String ninjaBuildPath) {
     return COMPILE_COMMANDS_FAILED_COMPDB;
   }
 
-  LogSuccess("Successfully created %s", compileCommandsPath.data);
+  LogSuccess("Successfully created %s", NormalizePathEnd(state.arena, compileCommandsPath).data);
   return SUCCESS;
 }
 
@@ -675,8 +675,6 @@ static bool globMatch(String pattern, String text) {
 }
 
 static void addFile(String source) {
-  Assert(!StrIsNull(executable.output), "AddFile: Before adding a file you must first CreateExecutable()");
-
   bool isGlob = false;
   for (size_t i = 0; i < source.length; i++) {
     if (source.data[i] == '*') {
@@ -721,6 +719,8 @@ static void addFile(String source) {
 }
 
 static bool removeFile(String source) {
+  Assert(sources.length > 0, "RemoveFile: Before removing a file you must first add a file, use: AddFile()");
+
   for (size_t i = 0; i < sources.length; i++) {
     String *currValue = VecAtPtr(sources, i);
     if (StrEq(source, *currValue)) {
@@ -739,7 +739,11 @@ static StringVector outputTransformer(StringVector vector) {
   if (isMSVC()) {
     for (size_t i = 0; i < vector.length; i++) {
       String currentExecutable = VecAt(vector, i);
-      if (StrIsNull(currentExecutable)) continue;
+      if (StrIsNull(currentExecutable)) {
+        VecPush(result, S(""));
+        continue;
+      }
+
       size_t lastCharIndex = 0;
       for (size_t j = currentExecutable.length - 1; j > 0; j--) {
         char currentChar = currentExecutable.data[j];
@@ -765,7 +769,11 @@ static StringVector outputTransformer(StringVector vector) {
 
   for (size_t i = 0; i < vector.length; i++) {
     String currentExecutable = VecAt(vector, i);
-    if (StrIsNull(currentExecutable)) continue;
+    if (StrIsNull(currentExecutable)) {
+      VecPush(result, S(""));
+      continue;
+    }
+
     size_t lastCharIndex = 0;
     for (size_t j = currentExecutable.length - 1; j > 0; j--) {
       char currentChar = currentExecutable.data[j];
@@ -918,7 +926,6 @@ String InstallExecutable() {
   errno_t errWrite = FileWrite(ninjaBuildPath, builder.buffer);
   Assert(errWrite == SUCCESS, "InstallExecutable: failed to write build.ninja for %s, err: %d", ninjaBuildPath.data, errWrite);
 
-  i64 err;
   String buildCommand;
   if (state.mateCache.samuraiBuild) {
     String samuraiOutputPath = F(state.arena, "%s/samurai", state.buildDirectory.data);
@@ -927,10 +934,10 @@ String InstallExecutable() {
     buildCommand = F(state.arena, "ninja -f %s", ninjaBuildPath.data);
   }
 
-  err = RunCommand(buildCommand);
+  i64 err = RunCommand(buildCommand);
   Assert(err == SUCCESS, "InstallExecutable: Ninja file compilation failed with code: %lu", err);
 
-  LogSuccess("Ninja file compilation done");
+  LogSuccess("Ninja file compilation done for %s", NormalizePathEnd(state.arena, ninjaBuildPath).data);
   state.totalTime = TimeNow() - state.startTime;
 
 #if defined(PLATFORM_WIN)
@@ -1016,7 +1023,6 @@ String InstallStaticLib() {
   // Build individual source files
   StringVector outputFiles = outputTransformer(sources);
   StringBuilder outputBuilder = StringBuilderCreate(state.arena);
-
   for (size_t i = 0; i < sources.length; i++) {
     String currSource = VecAt(sources, i);
     if (StrIsNull(currSource)) continue;
@@ -1049,12 +1055,10 @@ String InstallStaticLib() {
   // Default target
   StringBuilderAppend(state.arena, &builder, &S("default $target\n"));
 
-  String ninjaBuildPath = executable.ninjaBuildPath;
-
+  String ninjaBuildPath = staticLib.ninjaBuildPath;
   errno_t errWrite = FileWrite(ninjaBuildPath, builder.buffer);
   Assert(errWrite == SUCCESS, "InstallStaticLib: failed to write build-static-library.ninja for %s, err: %d", ninjaBuildPath.data, errWrite);
 
-  i64 err;
   String buildCommand;
   if (state.mateCache.samuraiBuild) {
     String samuraiOutputPath = F(state.arena, "%s/samurai", state.buildDirectory.data);
@@ -1063,10 +1067,10 @@ String InstallStaticLib() {
     buildCommand = F(state.arena, "ninja -f %s", ninjaBuildPath.data);
   }
 
-  err = RunCommand(buildCommand);
+  i64 err = RunCommand(buildCommand);
   Assert(err == SUCCESS, "InstallStaticLib: Ninja file compilation failed with code: %lu", err);
 
-  LogSuccess("Ninja file compilation done");
+  LogSuccess("Ninja file compilation done for %s", NormalizePathEnd(state.arena, ninjaBuildPath).data);
   state.totalTime = TimeNow() - state.startTime;
 
 #if defined(PLATFORM_WIN)
@@ -1080,7 +1084,11 @@ String InstallStaticLib() {
 }
 
 errno_t RunCommand(String command) {
+#if defined(PLATFORM_LINUX)
+  return system(command.data) >> 8;
+#else
   return system(command.data);
+#endif
 }
 
 static void addLibraryPaths(StringVector *vector) {
