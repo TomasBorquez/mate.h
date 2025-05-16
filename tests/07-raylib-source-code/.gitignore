@@ -1,0 +1,8 @@
+build/
+mate
+# MSVC files
+mate.exe
+*.obj
+*.idb
+*.pdb
+

@@ -1,7 +1,7 @@
 /* MIT License
 
   mate.h - A single-header library for compiling your C code in C
-  Version - 2025-05-14 (0.1.9):
+  Version - 2025-05-16 (0.1.10):
   https://github.com/TomasBorquez/mate.h
 
   Guide on the `README.md`
@@ -56,7 +56,6 @@ typedef struct {
   String output;
   String flags;
   String arFlags;
-  String includes;
   String ninjaBuildPath;
 } StaticLib;
 
@@ -64,8 +63,6 @@ typedef struct {
   String output;
   String flags;
   String linkerFlags;
-  String includes;
-  String libs;
   String ninjaBuildPath;
 } Executable;
 

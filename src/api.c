@@ -1,7 +1,13 @@
 #include "api.h"
 
+// TODO: state -> mateState
 static MateConfig state = {0};
+
+// TODO: add all to mateState
+static String includes = {0};
+static String libs = {0};
 static StringVector sources = {0};
+
 static Executable executable = {0};
 static StaticLib staticLib = {0};
 
@@ -225,7 +231,6 @@ void defaultStaticLib() {
   staticLib.output = S("");
   staticLib.flags = S("");
   staticLib.arFlags = S("rcs");
-  staticLib.includes = S("");
 }
 
 static StaticLib parseStaticLibOptions(StaticLibOptions options) {
@@ -237,7 +242,6 @@ static StaticLib parseStaticLibOptions(StaticLibOptions options) {
          "CreateStaticLib((StaticLibOptions) { .output = \"libexample\"});");
   result.flags = StrNew(state.arena, options.flags);
   result.arFlags = StrNew(state.arena, options.arFlags);
-  result.includes = StrNew(state.arena, options.includes);
   return result;
 }
 
@@ -400,8 +404,15 @@ String CreateStaticLib(StaticLibOptions staticLibOptions) {
   if (!StrIsNull(options.arFlags)) {
     staticLib.arFlags = options.arFlags;
   }
-  if (!StrIsNull(options.includes)) {
-    staticLib.includes = options.includes;
+
+  String optionIncludes = s(staticLibOptions.includes);
+  if (!StrIsNull(optionIncludes)) {
+    includes = optionIncludes;
+  }
+
+  String optionLibs = s(staticLibOptions.libs);
+  if (!StrIsNull(optionLibs)) {
+    includes = optionLibs;
   }
 
   staticLib.ninjaBuildPath = F(state.arena, "%s/static-%s.ninja", state.buildDirectory.data, NormalizeExtension(state.arena, staticLib.output).data);
@@ -411,8 +422,6 @@ String CreateStaticLib(StaticLibOptions staticLibOptions) {
 void defaultExecutable() {
   String executableOutput = NormalizeExePath(state.arena, S("main"));
   executable.output = NormalizePath(state.arena, executableOutput);
-  executable.libs = S("");
-  executable.includes = S("");
   executable.linkerFlags = S("");
   executable.flags = S("");
 }
@@ -422,8 +431,6 @@ static Executable parseExecutableOptions(ExecutableOptions options) {
   result.output = StrNew(state.arena, options.output);
   result.flags = StrNew(state.arena, options.flags);
   result.linkerFlags = StrNew(state.arena, options.linkerFlags);
-  result.includes = StrNew(state.arena, options.includes);
-  result.libs = StrNew(state.arena, options.libs);
   return result;
 }
 
@@ -586,11 +593,15 @@ String CreateExecutable(ExecutableOptions executableOptions) {
   if (!StrIsNull(options.linkerFlags)) {
     executable.linkerFlags = options.linkerFlags;
   }
-  if (!StrIsNull(options.includes)) {
-    executable.includes = options.includes;
+
+  String optionIncludes = s(executableOptions.includes);
+  if (!StrIsNull(optionIncludes)) {
+    includes = optionIncludes;
   }
-  if (!StrIsNull(options.libs)) {
-    executable.libs = options.libs;
+
+  String optionLibs = s(executableOptions.libs);
+  if (!StrIsNull(optionLibs)) {
+    includes = optionLibs;
   }
 
   executable.ninjaBuildPath = F(state.arena, "%s/exe-%s.ninja", state.buildDirectory.data, NormalizeExtension(state.arena, executable.output).data);
@@ -821,16 +832,16 @@ String InstallExecutable() {
   }
 
   // Include paths
-  if (executable.includes.length > 0) {
+  if (includes.length > 0) {
     StringBuilderAppend(state.arena, &builder, &S("includes = "));
-    StringBuilderAppend(state.arena, &builder, &executable.includes);
+    StringBuilderAppend(state.arena, &builder, &includes);
     StringBuilderAppend(state.arena, &builder, &S("\n"));
   }
 
   // Libraries
-  if (executable.libs.length > 0) {
+  if (libs.length > 0) {
     StringBuilderAppend(state.arena, &builder, &S("libs = "));
-    StringBuilderAppend(state.arena, &builder, &executable.libs);
+    StringBuilderAppend(state.arena, &builder, &libs);
     StringBuilderAppend(state.arena, &builder, &S("\n"));
   }
 
@@ -867,7 +878,7 @@ String InstallExecutable() {
     StringBuilderAppend(state.arena, &builder, &S(" -o $out $in"));
   }
 
-  if (executable.libs.length > 0) {
+  if (libs.length > 0) {
     StringBuilderAppend(state.arena, &builder, &S(" $libs"));
   }
   StringBuilderAppend(state.arena, &builder, &S("\n\n"));
@@ -877,7 +888,7 @@ String InstallExecutable() {
   if (executable.flags.length > 0) {
     StringBuilderAppend(state.arena, &builder, &S(" $flags"));
   }
-  if (executable.includes.length > 0) {
+  if (includes.length > 0) {
     StringBuilderAppend(state.arena, &builder, &S(" $includes"));
   }
 
@@ -984,9 +995,9 @@ String InstallStaticLib() {
   }
 
   // Include paths
-  if (staticLib.includes.length > 0) {
+  if (includes.length > 0) {
     StringBuilderAppend(state.arena, &builder, &S("includes = "));
-    StringBuilderAppend(state.arena, &builder, &staticLib.includes);
+    StringBuilderAppend(state.arena, &builder, &includes);
     StringBuilderAppend(state.arena, &builder, &S("\n"));
   }
 
@@ -1015,7 +1026,7 @@ String InstallStaticLib() {
   if (staticLib.flags.length > 0) {
     StringBuilderAppend(state.arena, &builder, &S(" $flags"));
   }
-  if (staticLib.includes.length > 0) {
+  if (includes.length > 0) {
     StringBuilderAppend(state.arena, &builder, &S(" $includes"));
   }
   StringBuilderAppend(state.arena, &builder, &S(" -c $in -o $out\n\n"));
@@ -1094,12 +1105,12 @@ errno_t RunCommand(String command) {
 static void addLibraryPaths(StringVector *vector) {
   StringBuilder builder = StringBuilderCreate(state.arena);
 
-  if (isMSVC() && executable.libs.length == 0) {
+  if (isMSVC() && libs.length == 0) {
     StringBuilderAppend(state.arena, &builder, &S("/link"));
   }
 
-  if (executable.libs.length) {
-    StringBuilderAppend(state.arena, &builder, &executable.libs);
+  if (libs.length) {
+    StringBuilderAppend(state.arena, &builder, &libs);
   }
 
   if (isMSVC()) {
@@ -1123,18 +1134,18 @@ static void addLibraryPaths(StringVector *vector) {
     }
   }
 
-  executable.libs = builder.buffer;
+  libs = builder.buffer;
 }
 
 static void linkSystemLibraries(StringVector *vector) {
   StringBuilder builder = StringBuilderCreate(state.arena);
 
-  if (isMSVC() && executable.libs.length == 0) {
+  if (isMSVC() && libs.length == 0) {
     StringBuilderAppend(state.arena, &builder, &S("/link"));
   }
 
-  if (executable.libs.length) {
-    StringBuilderAppend(state.arena, &builder, &executable.libs);
+  if (libs.length) {
+    StringBuilderAppend(state.arena, &builder, &libs);
   }
 
   if (isMSVC()) {
@@ -1158,14 +1169,14 @@ static void linkSystemLibraries(StringVector *vector) {
     }
   }
 
-  executable.libs = builder.buffer;
+  libs = builder.buffer;
 }
 
 static void addIncludePaths(StringVector *vector) {
   StringBuilder builder = StringBuilderCreate(state.arena);
 
-  if (executable.includes.length) {
-    StringBuilderAppend(state.arena, &builder, &executable.includes);
+  if (includes.length) {
+    StringBuilderAppend(state.arena, &builder, &includes);
     StringBuilderAppend(state.arena, &builder, &S(" "));
   }
 
@@ -1195,7 +1206,7 @@ static void addIncludePaths(StringVector *vector) {
     }
   }
 
-  executable.includes = builder.buffer;
+  includes = builder.buffer;
 }
 
 void EndBuild() {
