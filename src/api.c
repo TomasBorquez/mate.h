@@ -43,7 +43,7 @@ static String fixPathExe(String str) {
 #if defined(PLATFORM_WIN)
   return F(mateState.arena, "%s\\%s", GetCwd(), path.data);
 #else
-  return F(state.arena, "%s/%s", GetCwd(), path.data);
+  return F(mateState.arena, "%s/%s", GetCwd(), path.data);
 #endif
 }
 
@@ -52,7 +52,7 @@ static String fixPath(String str) {
 #if defined(PLATFORM_WIN)
   return F(mateState.arena, "%s\\%s", GetCwd(), path.data);
 #else
-  return F(state.arena, "%s/%s", GetCwd(), path.data);
+  return F(mateState.arena, "%s/%s", GetCwd(), path.data);
 #endif
 }
 
@@ -1090,7 +1090,7 @@ String InstallStaticLib() {
 #if defined(PLATFORM_WIN)
   String path = F(mateState.arena, "%s\\%s", mateState.buildDirectory.data, mateState.staticLib.output.data);
 #else
-  String path = F(state.arena, "%s/%s", mateState.buildDirectory.data, mateState.staticLib.output.data);
+  String path = F(mateState.arena, "%s/%s", mateState.buildDirectory.data, mateState.staticLib.output.data);
 #endif
 
   ResetStaticLib();
