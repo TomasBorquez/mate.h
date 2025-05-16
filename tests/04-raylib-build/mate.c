@@ -7,9 +7,9 @@ i32 main() {
     // Add .exe to make sure it removes on linux builds
     String buildNinjaPath;
     if (isMSVC()) {
-      buildNinjaPath = CreateExecutable((ExecutableOptions){.output = "main.exe", .flags = "/MD /MACHINE:X64"});
+      buildNinjaPath = CreateExecutable((ExecutableOptions){.output = "main.exe", .warnings = FLAG_WARNINGS_NONE, .flags = "/MD /MACHINE:X64"});
     } else {
-      buildNinjaPath = CreateExecutable((ExecutableOptions){.output = "main.exe", .flags = "-Wall -g"});
+      buildNinjaPath = CreateExecutable((ExecutableOptions){.output = "main.exe", .warnings = FLAG_WARNINGS_NONE, .flags = "-Wall -g"});
     }
 
     AddFile("./src/main.c");

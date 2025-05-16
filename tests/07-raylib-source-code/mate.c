@@ -1,12 +1,12 @@
 #define MATE_IMPLEMENTATION
-#include "mate.h"
+#include "../../mate.h"
 
 i32 main() {
   StartBuild();
   {
     {
       char *cflags = "-fno-sanitize=undefined -D_GNU_SOURCE -DGL_SILENCE_DEPRECATION=199309L -DPLATFORM_DESKTOP -DPLATFORM_DESKTOP_GLFW -D_GLFW_X11";
-      CreateStaticLib((StaticLibOptions){.output = "libraylib", .std = FLAG_STD_C99, .warnings = FLAG_WARNINGS, .flags = cflags});
+      CreateStaticLib((StaticLibOptions){.output = "libraylib", .std = FLAG_STD_C99, .warnings = FLAG_WARNINGS_NONE, .flags = cflags});
 
       AddFile("./src/rcore.c");
       AddFile("./src/utils.c");
@@ -27,7 +27,11 @@ i32 main() {
     }
 
     {
-      CreateExecutable((ExecutableOptions){.output = "basic-example", .std = FLAG_STD_C99, .warnings = FLAG_WARNINGS});
+      CreateExecutable((ExecutableOptions){
+          .output = "basic-example",
+          .std = FLAG_STD_C99,
+          .warnings = FLAG_WARNINGS_NONE,
+      });
 
       AddFile("./src/basic-example.c");
 

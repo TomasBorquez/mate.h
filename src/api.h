@@ -33,7 +33,28 @@ typedef struct {
 } MateOptions;
 
 typedef struct {
+  String output;
+  String flags;
+  String arFlags;
+  String ninjaBuildPath;
+} StaticLib;
+
+typedef struct {
+  String output;
+  String flags;
+  String linkerFlags;
+  String ninjaBuildPath;
+} Executable;
+
+typedef struct {
   String compiler;
+
+  // Build State
+  String libs;
+  String includes;
+  StringVector sources;
+  Executable executable;
+  StaticLib staticLib;
 
   // Paths
   String buildDirectory;
@@ -52,24 +73,11 @@ typedef struct {
   i64 totalTime;
 } MateConfig;
 
-typedef struct {
-  String output;
-  String flags;
-  String arFlags;
-  String ninjaBuildPath;
-} StaticLib;
-
-typedef struct {
-  String output;
-  String flags;
-  String linkerFlags;
-  String ninjaBuildPath;
-} Executable;
-
 enum WarningsFlags {
-  FLAG_WARNINGS_MINIMAL = 1, // -Wall
-  FLAG_WARNINGS,             // -Wall -Wextra
-  FLAG_WARNINGS_VERBOSE,     // -Wall -Wextra -Wpedantic
+  FLAG_WARNINGS_NONE = 1, // -w
+  FLAG_WARNINGS_MINIMAL,  // -Wall
+  FLAG_WARNINGS,          // -Wall -Wextra
+  FLAG_WARNINGS_VERBOSE,  // -Wall -Wextra -Wpedantic
 };
 
 enum DebugFlags {

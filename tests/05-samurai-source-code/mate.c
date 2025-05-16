@@ -12,6 +12,7 @@ i32 main() {
         .output = "samu",
         .optimization = FLAG_OPTIMIZATION,
         .std = FLAG_STD_C99,
+        .warnings = FLAG_WARNINGS_NONE,
     });
 
     AddFile("./src/*.c");
@@ -21,7 +22,7 @@ i32 main() {
     LinkSystemLibraries("rt");
 
     String exePath = InstallExecutable();
-    errno_t err = RunCommand(F(state.arena, "%s -version", exePath.data));
+    errno_t err = RunCommand(F(mateState.arena, "%s -version", exePath.data));
     result = err == SAMU_VERSION_OUTPUT ? SUCCESS : 1;
   }
   EndBuild();
