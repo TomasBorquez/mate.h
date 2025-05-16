@@ -23,13 +23,33 @@
     - [x] Add comments on `api.h`
 - [x] Semi Support for `MSVC` 
 - [x] Static libs 
+- [ ] `FlagBuilder` and `AddFlag(builder, ...)`:
+    - [ ] Similar to `StringBuilder` but it uses `mateState.arena` and `AddFlag` can add many flags plus they have a `" "` by default
+    - [ ] Use when parsing flags in `CreateStaticLib` and `CreateExecutable`
+    - [ ] Move to it in flag parsing for `./tests/07-raylib-source-code`
+- [ ] Shared libs
+- [ ] Add `args` parser
+- [ ] Platforms
+    - [ ] PLATFORM_DRM
+    - [ ] `GetPlatform()` should return enum of platforms
+    - [ ] `isLinux()` should be on base
+    - [ ] `isWindows()` as well
+    - [ ] add `isAndroid()`
+    - [ ] add `isMacOs()`
+    - [ ] add `isEmscripten()`
+- [ ] raylib-source-code
+    - [ ] option shared (`-fPIC`, `-DBUILD_LIBTYPE_SHARED`)
+    - [ ] option linux_backend (`wayland/x11`)
+    - [ ] option optional modules such as `rshapes`, `rtextures`, etc
+    - [ ] option platform such as `glfw`, `SDL`, etc
+    - [ ] option opengl version
+    - [ ] default config from `src/config.h` else `-DEXTERNAL_CONFIG_FLAGS`
+- [ ] `InstallHeader()` and other various library builder functions
 
 ### Last stage
-- [ ] Shared libs
+- [ ] `clang-formatter` as a github action (when many contributions)
 - [ ] Full `MSVC` support on static/shared libs
-- [ ] Add `args` parser
 - [ ] Header tests like on `CMAKE`
 - [ ] Add `MacOS` support (find someone who is willing to help)
 - [ ] Make `samurai` windows compatible
 - [ ] Properly clean the state of arenas and vectors
-- [ ] `clang-formatter` as a github action (when many contributions)
