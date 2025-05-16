@@ -47,6 +47,7 @@ jobs:
           "02-custom-config"
           "03-generic-flags"
           "04-raylib-build"
+          "07-raylib-source-code"
         )
         
         for test in "${tests[@]}"; do
