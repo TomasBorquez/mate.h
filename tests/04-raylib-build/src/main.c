@@ -15,8 +15,6 @@ int main(void) {
       DrawText("HELLOPE", 300, 200, 40, LIGHTGRAY);
     }
     EndDrawing();
-
-    exit(0); // Remove if you want to see the example working
   }
 
   CloseWindow();
