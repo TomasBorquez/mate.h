@@ -5,6 +5,7 @@ on:
     paths:
       - '**/*.c'
       - '**/*.h'
+      - '.github/workflows/*.yml'
 
 permissions:
   contents: write 
