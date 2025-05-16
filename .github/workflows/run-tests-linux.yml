@@ -25,10 +25,14 @@ jobs:
         fetch-depth: 0  
         token: ${{ secrets.GITHUB_TOKEN }}
     
+    - name: Install dependencies
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends libx11-dev libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev libxext-dev libxfixes-dev libxrender-dev libgl1-mesa-dev
+
     - name: Install TCC
       if: matrix.compiler == 'tcc'
       run: |
-        sudo apt-get update
         sudo apt-get install -y tcc
     
     - name: Run tests
