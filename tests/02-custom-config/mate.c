@@ -2,9 +2,7 @@
 #include "../../mate.h"
 
 i32 main() {
-  errno_t result;
-
-  CreateConfig((MateOptions){.compiler = "gcc", .buildDirectory = "./custom-dir"});
+  CreateConfig((MateOptions){.compiler = CLANG, .buildDirectory = "./custom-dir"});
 
   StartBuild();
   {
@@ -21,9 +19,7 @@ i32 main() {
     errno_t errExe = RunCommand(exePath);
 
     errno_t errCompileCmd = CreateCompileCommands(buildNinjaPath);
-    result = (errExe == SUCCESS && errCompileCmd == SUCCESS) ? SUCCESS : 1;
+    Assert(errExe == SUCCESS && errCompileCmd == SUCCESS, "Failed, RunCommand and errCompileCmd should be SUCCESS");
   }
   EndBuild();
-
-  return result;
 }

@@ -2,8 +2,6 @@
 #include "../../mate.h"
 
 i32 main() {
-  errno_t result;
-
   StartBuild();
   {
     char *cflags = "-DLUA_USE_LINUX -fno-stack-protector -fno-common -march=native";
@@ -24,9 +22,7 @@ i32 main() {
 
     errno_t errExe = RunCommand(F(mateState.arena, "%s -e \"os.exit(69)\"", exePath.data));
     errno_t errCompileCommands = CreateCompileCommands(ninjaPath);
-    result = (errExe == 69 && errCompileCommands == SUCCESS) ? SUCCESS : 1;
+    Assert(errExe == 69 && errCompileCommands == SUCCESS, "Failed, errExe equal %d should be 69, errCompileCommands equal %d should be SUCCESS", errExe, errCompileCommands);
   }
   EndBuild();
-
-  return result;
 }

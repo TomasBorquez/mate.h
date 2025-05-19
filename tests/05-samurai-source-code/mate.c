@@ -4,8 +4,6 @@
 #define SAMU_VERSION_OUTPUT 2
 
 i32 main() {
-  errno_t result;
-
   StartBuild();
   {
     CreateExecutable((ExecutableOptions){
@@ -23,9 +21,7 @@ i32 main() {
 
     String exePath = InstallExecutable();
     errno_t err = RunCommand(F(mateState.arena, "%s -version", exePath.data));
-    result = err == SAMU_VERSION_OUTPUT ? SUCCESS : 1;
+    Assert(err == SAMU_VERSION_OUTPUT, "Failed, output did not equal SAMU_VERSION_OUTPUT");
   }
   EndBuild();
-
-  return result;
 }

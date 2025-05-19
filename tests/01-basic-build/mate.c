@@ -2,8 +2,6 @@
 #include "../../mate.h"
 
 i32 main() {
-  errno_t result = SUCCESS;
-
   StartBuild();
   {
     CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall -g"});
@@ -12,9 +10,8 @@ i32 main() {
 
     String exePath = InstallExecutable();
 
-    result = RunCommand(exePath);
+    errno_t result = RunCommand(exePath);
+    Assert(result == SUCCESS, "Failed, RunCommand should be SUCCESS");
   }
   EndBuild();
-
-  return result;
 }

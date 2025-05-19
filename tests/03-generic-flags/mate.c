@@ -2,8 +2,6 @@
 #include "../../mate.h"
 
 i32 main() {
-  errno_t result;
-
   StartBuild();
   {
     CreateExecutable((ExecutableOptions){
@@ -16,14 +14,13 @@ i32 main() {
 
     AddFile("./src/main.c");
 
-#if defined(PLATFORM_LINUX)
-    LinkSystemLibraries("m");
-#endif
+    if (isLinux()) {
+      LinkSystemLibraries("m");
+    }
 
     String exePath = InstallExecutable();
-    result = RunCommand(exePath);
+    errno_t result = RunCommand(exePath);
+    Assert(result == SUCCESS, "Failed, RunCommand should be SUCCESS");
   }
   EndBuild();
-
-  return result;
 }

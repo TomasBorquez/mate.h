@@ -3,7 +3,7 @@
 
 i32 main() {
   // You can create a config that allows you to use different compilers as well as build directories
-  CreateConfig((MateOptions){.compiler = "clang", .buildDirectory = "./custom-dir"});
+  CreateConfig((MateOptions){.compiler = CLANG, .buildDirectory = "./custom-dir"});
 
   StartBuild();
   {
