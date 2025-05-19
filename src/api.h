@@ -1,7 +1,7 @@
 /* MIT License
 
   mate.h - A single-header library for compiling your C code in C
-  Version - 2025-05-16 (0.1.10):
+  Version - 2025-05-19 (0.1.11):
   https://github.com/TomasBorquez/mate.h
 
   Guide on the `README.md`
@@ -73,57 +73,64 @@ typedef struct {
   i64 totalTime;
 } MateConfig;
 
-enum WarningsFlags {
+typedef enum {
   FLAG_WARNINGS_NONE = 1, // -w
   FLAG_WARNINGS_MINIMAL,  // -Wall
   FLAG_WARNINGS,          // -Wall -Wextra
   FLAG_WARNINGS_VERBOSE,  // -Wall -Wextra -Wpedantic
-};
+} WarningsFlag;
 
-enum DebugFlags {
+typedef enum {
   FLAG_DEBUG_MINIMAL = 1, // -g1
   FLAG_DEBUG_MEDIUM,      // -g/g2
   FLAG_DEBUG,             // -g3
-};
+} DebugFlag;
 
-enum OptimizationFlags {
+typedef enum {
   FLAG_OPTIMIZATION_NONE = 1,  // -O0
   FLAG_OPTIMIZATION_BASIC,     // -O1
   FLAG_OPTIMIZATION,           // -O2
   FLAG_OPTIMIZATION_SIZE,      // -Os
   FLAG_OPTIMIZATION_AGGRESSIVE // -O3
-};
+} OptimizationFlag;
 
-enum StandardFlags {
+typedef enum {
   FLAG_STD_C99 = 1, // -std=c99
   FLAG_STD_C11,     // -std=c11
   FLAG_STD_C17,     // -std=c17
   FLAG_STD_C23,     // -std=c23
   FLAG_STD_C2X      // -std=c2x
-};
+} STDFlag;
+
+typedef enum {
+  FLAG_ERROR,    // -fdiagnostics-color=always
+  FLAG_ERROR_MAX // -fdiagnostics-color=always -fcolor-diagnostics ...
+} ErrorFormatFlag;
 
 typedef struct {
-  char *output;
+  char *output; // WARNING: Required
   char *flags;
   char *linkerFlags;
   char *includes;
   char *libs;
-  u8 warnings;
-  u8 debug;
-  u8 optimization;
-  u8 std;
+  WarningsFlag warnings;
+  DebugFlag debug;
+  OptimizationFlag optimization;
+  STDFlag std;
+  ErrorFormatFlag error;
 } ExecutableOptions;
 
 typedef struct {
-  char *output;
+  char *output; // WARNING: Required
   char *flags;
   char *arFlags;
   char *includes;
   char *libs;
-  u8 warnings;
-  u8 debug;
-  u8 optimization;
-  u8 std;
+  WarningsFlag warnings;
+  DebugFlag debug;
+  OptimizationFlag optimization;
+  STDFlag std;
+  ErrorFormatFlag error;
 } StaticLibOptions;
 
 void StartBuild();
@@ -133,11 +140,11 @@ void CreateConfig(MateOptions options);
 
 String CreateExecutable(ExecutableOptions executableOptions);
 String InstallExecutable();
-void ResetExecutable();
+void __mate_reset_executable();
 
 String CreateStaticLib(StaticLibOptions staticLibOptions);
 String InstallStaticLib();
-void ResetStaticLib();
+void __mate_reset_static_lib();
 
 bool isMSVC();
 bool isGCC();
@@ -153,53 +160,55 @@ WARN_UNUSED errno_t CreateCompileCommands(String ninjaBuildPath);
   do {                                         \
     StringVector vector = {0};                 \
     StringVectorPushMany(vector, __VA_ARGS__); \
-    addLibraryPaths(&vector);                  \
+    __mate_add_library_paths(&vector);         \
   } while (0)
-static void addLibraryPaths(StringVector *vector);
+void __mate_add_library_paths(StringVector *vector);
 
 #define AddIncludePaths(...)                   \
   do {                                         \
     StringVector vector = {0};                 \
     StringVectorPushMany(vector, __VA_ARGS__); \
-    addIncludePaths(&vector);                  \
+    __mate_add_include_paths(&vector);         \
   } while (0)
-static void addIncludePaths(StringVector *vector);
+void __mate_add_include_paths(StringVector *vector);
 
 #define LinkSystemLibraries(...)               \
   do {                                         \
     StringVector vector = {0};                 \
     StringVectorPushMany(vector, __VA_ARGS__); \
-    linkSystemLibraries(&vector);              \
+    __mate_link_system_libraries(&vector);     \
   } while (0)
-static void linkSystemLibraries(StringVector *vector);
+void __mate_link_system_libraries(StringVector *vector);
 
-#define AddFile(source) addFile(S(source));
-static void addFile(String source);
+#define AddFile(source) __mate_add_file(S(source));
+void __mate_add_file(String source);
 
-#define RemoveFile(source) removeFile(S(source));
-static bool removeFile(String source);
+#define RemoveFile(source) __mate_remove_file(S(source));
+bool __mate_remove_file(String source);
 
-static void reBuild();
-static bool needRebuild();
-static void setDefaultState();
+void __mate_rebuild();
+bool __mate_need_rebuild();
+void __mate_set_default_state();
 
 typedef StringBuilder FlagBuilder;
 
 StringBuilder FlagBuilderCreate();
 
-#define FlagBuilderReserve(count) flagBuilderReserve(count);
-static FlagBuilder flagBuilderReserve(size_t count);
+#define FlagBuilderReserve(count) __mate_flag_builder_reserve(count);
+FlagBuilder __mate_flag_builder_reserve(size_t count);
 
-#define FlagBuilderAdd(builder, flag) flagBuilderAdd(builder, &S(flag));
-static void flagBuilderAdd(FlagBuilder *builder, String *flag);
+#define FlagBuilderAdd(builder, flag) __mate_flag_builder_add(builder, &S(flag));
+void __mate_flag_builder_add(FlagBuilder *builder, String *flag);
 
-#define FlagBuilderAddMany(builder, ...)       \
-  do {                                         \
-    StringVector _flags = {0};                 \
-    StringVectorPushMany(_flags, __VA_ARGS__); \
-    flagBuilderAddMany(builder, _flags);       \
+void FlagBuilderAddString(FlagBuilder *builder, String *flag);
+
+#define FlagBuilderAddMany(builder, ...)           \
+  do {                                             \
+    StringVector _flags = {0};                     \
+    StringVectorPushMany(_flags, __VA_ARGS__);     \
+    __mate_flag_builder_add_many(builder, _flags); \
   } while (0)
-static void flagBuilderAddMany(FlagBuilder *builder, StringVector flags);
+void __mate_flag_builder_add_many(FlagBuilder *builder, StringVector flags);
 
 #define SAMURAI_AMALGAM "SAMURAI SOURCE"
 

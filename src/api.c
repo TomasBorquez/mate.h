@@ -35,7 +35,7 @@ String CompilerToStr(Compiler compiler) {
   }
 }
 
-static String fixPathExe(String str) {
+String __mate_fix_path_exe(String str) {
   String path = NormalizeExePath(mateState.arena, str);
 #if defined(PLATFORM_WIN)
   return F(mateState.arena, "%s\\%s", GetCwd(), path.data);
@@ -44,7 +44,7 @@ static String fixPathExe(String str) {
 #endif
 }
 
-static String fixPath(String str) {
+String __mate_fix_path(String str) {
   String path = NormalizePath(mateState.arena, str);
 #if defined(PLATFORM_WIN)
   return F(mateState.arena, "%s\\%s", GetCwd(), path.data);
@@ -57,11 +57,25 @@ FlagBuilder FlagBuilderCreate() {
   return StringBuilderCreate(mateState.arena);
 }
 
-static FlagBuilder flagBuilderReserve(size_t count) {
+FlagBuilder __mate_flag_builder_reserve(size_t count) {
   return StringBuilderReserve(mateState.arena, count);
 }
 
-static void flagBuilderAdd(FlagBuilder *builder, String *flag) {
+void __mate_flag_builder_add(FlagBuilder *builder, String *flag) {
+  if (mateState.compiler == MSVC) {
+    Assert(flag->data[0] != '/', "FlagBuilderAdd: failed, flag should not contain /, e.g usage FlagBuilderAdd(\"W4\")");
+    if (builder->buffer.length == 0) {
+      StringBuilderAppend(mateState.arena, builder, &S("/"));
+      StringBuilderAppend(mateState.arena, builder, flag);
+      return;
+    }
+
+    StringBuilderAppend(mateState.arena, builder, &S(" /"));
+    StringBuilderAppend(mateState.arena, builder, flag);
+    return;
+  }
+
+  Assert(flag->data[0] != '-', "FlagBuilderAdd: failed, flag should not contain -, e.g usage FlagBuilderAdd(\"Wall\")");
   if (builder->buffer.length == 0) {
     StringBuilderAppend(mateState.arena, builder, &S("-"));
     StringBuilderAppend(mateState.arena, builder, flag);
@@ -72,8 +86,32 @@ static void flagBuilderAdd(FlagBuilder *builder, String *flag) {
   StringBuilderAppend(mateState.arena, builder, flag);
 }
 
-static void flagBuilderAddMany(FlagBuilder *builder, StringVector flags) {
+void FlagBuilderAddString(FlagBuilder *builder, String *flag) {
+  StringBuilderAppend(mateState.arena, builder, flag);
+}
+
+void __mate_flag_builder_add_many(FlagBuilder *builder, StringVector flags) {
   size_t count = 0;
+  if (mateState.compiler == MSVC) {
+    String *first = VecAtPtr(flags, 0);
+    Assert(first->data[0] != '/', "FlagBuilderAdd: failed, flag should not contain /, e.g usage FlagBuilderAdd(\"W4\")");
+
+    if (builder->buffer.length == 0) {
+      StringBuilderAppend(mateState.arena, builder, &S("/"));
+      StringBuilderAppend(mateState.arena, builder, first);
+      count = 1;
+    }
+
+    for (size_t i = count; i < flags.length; i++) {
+      StringBuilderAppend(mateState.arena, builder, &S(" /"));
+      StringBuilderAppend(mateState.arena, builder, VecAtPtr(flags, i));
+    }
+    return;
+  }
+
+  String *first = VecAtPtr(flags, 0);
+  Assert(first->data[0] != '-', "FlagBuilderAdd: failed, flag should not contain -, e.g usage FlagBuilderAdd(\"Wall\")");
+
   if (builder->buffer.length == 0) {
     StringBuilderAppend(mateState.arena, builder, &S("-"));
     StringBuilderAppend(mateState.arena, builder, VecAtPtr(flags, 0));
@@ -98,16 +136,16 @@ String ConvertNinjaPath(String str) {
 #endif
 }
 
-static void setDefaultState() {
+void __mate_set_default_state() {
   mateState.arena = ArenaCreate(20000 * sizeof(String));
   mateState.compiler = GetCompiler();
 
-  mateState.mateExe = fixPathExe(S("./mate"));
-  mateState.mateSource = fixPath(S("./mate.c"));
-  mateState.buildDirectory = fixPath(S("./build"));
+  mateState.mateExe = __mate_fix_path_exe(S("./mate"));
+  mateState.mateSource = __mate_fix_path(S("./mate.c"));
+  mateState.buildDirectory = __mate_fix_path(S("./build"));
 }
 
-static MateConfig parseMateConfig(MateOptions options) {
+MateConfig parseMateConfig(MateOptions options) {
   MateConfig result;
   result.compiler = options.compiler;
   result.mateExe = StrNew(mateState.arena, options.mateExe);
@@ -117,19 +155,19 @@ static MateConfig parseMateConfig(MateOptions options) {
 }
 
 void CreateConfig(MateOptions options) {
-  setDefaultState();
+  __mate_set_default_state();
   MateConfig config = parseMateConfig(options);
 
   if (!StrIsNull(config.mateExe)) {
-    mateState.mateExe = fixPathExe(config.mateExe);
+    mateState.mateExe = __mate_fix_path_exe(config.mateExe);
   }
 
   if (!StrIsNull(config.mateSource)) {
-    mateState.mateSource = fixPath(config.mateSource);
+    mateState.mateSource = __mate_fix_path(config.mateSource);
   }
 
   if (!StrIsNull(config.buildDirectory)) {
-    mateState.buildDirectory = fixPath(config.buildDirectory);
+    mateState.buildDirectory = __mate_fix_path(config.buildDirectory);
   }
 
   if (config.compiler != 0) {
@@ -139,7 +177,7 @@ void CreateConfig(MateOptions options) {
   mateState.initConfig = true;
 }
 
-static void readCache() {
+void __mate_read_cache() {
   String mateCachePath = F(mateState.arena, "%s/mate-cache.ini", mateState.buildDirectory.data);
   errno_t err = IniParse(mateCachePath, &mateState.cache);
   Assert("MateReadCache: failed reading MateCache at %s, err: %d", mateCachePath.data, err);
@@ -149,7 +187,7 @@ static void readCache() {
     mateState.mateCache.firstBuild = true;
     mateState.mateCache.lastBuild = TimeNow() / 1000;
 
-    String modifyTime = F(mateState.arena, "%ld", mateState.mateCache.lastBuild);
+    String modifyTime = F(mateState.arena, FMT_I64, mateState.mateCache.lastBuild);
     IniSet(&mateState.cache, S("modify-time"), modifyTime);
   }
 
@@ -187,18 +225,18 @@ static void readCache() {
 void StartBuild() {
   LogInit();
   if (!mateState.initConfig) {
-    setDefaultState();
+    __mate_set_default_state();
   }
 
   mateState.initConfig = true;
   mateState.startTime = TimeNow();
 
   Mkdir(mateState.buildDirectory);
-  readCache();
-  reBuild();
+  __mate_read_cache();
+  __mate_rebuild();
 }
 
-static bool needRebuild() {
+bool __mate_need_rebuild() {
   File stats = {0};
   errno_t err = FileStats(mateState.mateSource, &stats);
   Assert(err == SUCCESS, "Aborting rebuild: Could not read fileStats for %s, error: %d", mateState.mateSource.data, err);
@@ -208,7 +246,7 @@ static bool needRebuild() {
   }
 
   String mateCachePath = F(mateState.arena, "%s/mate-cache.ini", mateState.buildDirectory.data);
-  String modifyTime = F(mateState.arena, "%ld", stats.modifyTime);
+  String modifyTime = F(mateState.arena, FMT_I64, stats.modifyTime);
   IniSet(&mateState.cache, S("modify-time"), modifyTime);
 
   err = IniWrite(mateCachePath, &mateState.cache);
@@ -217,8 +255,8 @@ static bool needRebuild() {
   return true;
 }
 
-void reBuild() {
-  if (mateState.mateCache.firstBuild || !needRebuild()) {
+void __mate_rebuild() {
+  if (mateState.mateCache.firstBuild || !__mate_need_rebuild()) {
     return;
   }
 
@@ -248,13 +286,13 @@ void reBuild() {
   exit(err);
 }
 
-void defaultStaticLib() {
+void __mate_default_staticLib() {
   mateState.staticLib.output = S("");
   mateState.staticLib.flags = S("");
   mateState.staticLib.arFlags = S("rcs");
 }
 
-static StaticLib parseStaticLibOptions(StaticLibOptions options) {
+StaticLib __mate_parse_static_lib_options(StaticLibOptions options) {
   StaticLib result = {0};
   result.output = StrNew(mateState.arena, options.output);
   Assert(!StrIsNull(result.output),
@@ -277,47 +315,75 @@ String CreateStaticLib(StaticLibOptions staticLibOptions) {
          "}\n"
          "EndBuild()");
 
-  defaultStaticLib();
-  StaticLib options = parseStaticLibOptions(staticLibOptions);
+  __mate_default_staticLib();
+  StaticLib options = __mate_parse_static_lib_options(staticLibOptions);
 
   String staticLibOutput = NormalizeStaticLibPath(mateState.arena, options.output);
   mateState.staticLib.output = NormalizePath(mateState.arena, staticLibOutput);
 
-  String flagsStr = options.flags;
-  if (flagsStr.data == NULL) {
-    flagsStr = S("");
+  FlagBuilder flagBuilder = FlagBuilderCreate();
+  if (!StrIsNull(options.flags)) {
+    FlagBuilderAddString(&flagBuilder, &options.flags);
   }
 
-  // TODO: Add better defaults for colored errors
+  if (mateState.compiler == GCC) {
+    switch (staticLibOptions.error) {
+    case FLAG_ERROR:
+      FlagBuilderAdd(&flagBuilder, "fdiagnostics-color=always");
+      break;
+    case FLAG_ERROR_MAX:
+      FlagBuilderAddMany(&flagBuilder, "fdiagnostics-color=always", "fdiagnostics-show-caret", "fdiagnostics-show-option", "fdiagnostics-generate-patch");
+      break;
+    }
+  } else if (mateState.compiler == CLANG) {
+    switch (staticLibOptions.error) {
+    case FLAG_ERROR:
+      FlagBuilderAdd(&flagBuilder, "fcolor-diagnostics");
+      break;
+    case FLAG_ERROR_MAX:
+      FlagBuilderAddMany(&flagBuilder, "fcolor-diagnostics", "fcaret-diagnostics", "fdiagnostics-fixit-info", "fdiagnostics-show-option");
+      break;
+    }
+  } else if (mateState.compiler == MSVC) {
+    switch (staticLibOptions.error) {
+    case FLAG_ERROR:
+      FlagBuilderAdd(&flagBuilder, "nologo");
+      break;
+    case FLAG_ERROR_MAX:
+      FlagBuilderAddMany(&flagBuilder, "nologo", "diagnostics:caret");
+      break;
+    }
+  }
+
   if (staticLibOptions.warnings != 0) {
     if (mateState.compiler == MSVC) {
       switch (staticLibOptions.warnings) {
       case FLAG_WARNINGS_NONE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W0");
+        FlagBuilderAdd(&flagBuilder, "W0");
         break;
       case FLAG_WARNINGS_MINIMAL:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W3");
+        FlagBuilderAdd(&flagBuilder, "W3");
         break;
       case FLAG_WARNINGS:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W4");
+        FlagBuilderAdd(&flagBuilder, "W4");
         break;
       case FLAG_WARNINGS_VERBOSE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Wall");
+        FlagBuilderAdd(&flagBuilder, "Wall");
         break;
       }
     } else {
       switch (staticLibOptions.warnings) {
       case FLAG_WARNINGS_NONE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-w");
+        FlagBuilderAdd(&flagBuilder, "w");
         break;
       case FLAG_WARNINGS_MINIMAL:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall");
+        FlagBuilderAdd(&flagBuilder, "Wall");
         break;
       case FLAG_WARNINGS:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra");
+        FlagBuilderAddMany(&flagBuilder, "Wall", "Wextra");
         break;
       case FLAG_WARNINGS_VERBOSE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra -Wpedantic");
+        FlagBuilderAddMany(&flagBuilder, "Wall", "Wextra", "Wpedantic");
         break;
       }
     }
@@ -327,23 +393,23 @@ String CreateStaticLib(StaticLibOptions staticLibOptions) {
     if (mateState.compiler == MSVC) {
       switch (staticLibOptions.debug) {
       case FLAG_DEBUG_MINIMAL:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Zi");
+        FlagBuilderAdd(&flagBuilder, "Zi");
         break;
       case FLAG_DEBUG_MEDIUM:
       case FLAG_DEBUG:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/ZI");
+        FlagBuilderAdd(&flagBuilder, "ZI");
         break;
       }
     } else {
       switch (staticLibOptions.debug) {
       case FLAG_DEBUG_MINIMAL:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g1");
+        FlagBuilderAdd(&flagBuilder, "g1");
         break;
       case FLAG_DEBUG_MEDIUM:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g2");
+        FlagBuilderAdd(&flagBuilder, "g2");
         break;
       case FLAG_DEBUG:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g3");
+        FlagBuilderAdd(&flagBuilder, "g3");
         break;
       }
     }
@@ -353,37 +419,37 @@ String CreateStaticLib(StaticLibOptions staticLibOptions) {
     if (mateState.compiler == MSVC) {
       switch (staticLibOptions.optimization) {
       case FLAG_OPTIMIZATION_NONE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Od");
+        FlagBuilderAdd(&flagBuilder, "Od");
         break;
       case FLAG_OPTIMIZATION_BASIC:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
+        FlagBuilderAdd(&flagBuilder, "O1");
         break;
       case FLAG_OPTIMIZATION:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O2");
+        FlagBuilderAdd(&flagBuilder, "O2");
         break;
       case FLAG_OPTIMIZATION_SIZE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
+        FlagBuilderAdd(&flagBuilder, "O1");
         break;
       case FLAG_OPTIMIZATION_AGGRESSIVE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Ox");
+        FlagBuilderAdd(&flagBuilder, "Ox");
         break;
       }
     } else {
       switch (staticLibOptions.optimization) {
       case FLAG_OPTIMIZATION_NONE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O0");
+        FlagBuilderAdd(&flagBuilder, "O0");
         break;
       case FLAG_OPTIMIZATION_BASIC:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O1");
+        FlagBuilderAdd(&flagBuilder, "O1");
         break;
       case FLAG_OPTIMIZATION:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O2");
+        FlagBuilderAdd(&flagBuilder, "O2");
         break;
       case FLAG_OPTIMIZATION_SIZE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Os");
+        FlagBuilderAdd(&flagBuilder, "Os");
         break;
       case FLAG_OPTIMIZATION_AGGRESSIVE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O3");
+        FlagBuilderAdd(&flagBuilder, "O3");
         break;
       }
     }
@@ -394,41 +460,41 @@ String CreateStaticLib(StaticLibOptions staticLibOptions) {
       switch (staticLibOptions.std) {
       case FLAG_STD_C99:
       case FLAG_STD_C11:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c11");
+        FlagBuilderAdd(&flagBuilder, "std:c11");
         break;
       case FLAG_STD_C17:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c17");
+        FlagBuilderAdd(&flagBuilder, "std:c17");
         break;
       case FLAG_STD_C23:
       case FLAG_STD_C2X:
-        // NOTE: MSVC doesn't have C23 yet
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:clatest");
+        FlagBuilderAdd(&flagBuilder, "std:clatest"); // NOTE: MSVC doesn't have C23 yet
         break;
       }
     } else {
       switch (staticLibOptions.std) {
       case FLAG_STD_C99:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c99");
+        FlagBuilderAdd(&flagBuilder, "std=c99");
         break;
       case FLAG_STD_C11:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c11");
+        FlagBuilderAdd(&flagBuilder, "std=c11");
         break;
       case FLAG_STD_C17:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c17");
+        FlagBuilderAdd(&flagBuilder, "std=c17");
         break;
       case FLAG_STD_C23:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
+        FlagBuilderAdd(&flagBuilder, "std=c2x");
         break;
       case FLAG_STD_C2X:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
+        FlagBuilderAdd(&flagBuilder, "std=c2x");
         break;
       }
     }
   }
 
-  if (!StrIsNull(flagsStr)) {
-    mateState.staticLib.flags = flagsStr;
+  if (!StrIsNull(flagBuilder.buffer)) {
+    mateState.staticLib.flags = flagBuilder.buffer;
   }
+
   if (!StrIsNull(options.arFlags)) {
     mateState.staticLib.arFlags = options.arFlags;
   }
@@ -447,14 +513,14 @@ String CreateStaticLib(StaticLibOptions staticLibOptions) {
   return mateState.staticLib.ninjaBuildPath;
 }
 
-void defaultExecutable() {
+void __mate_default_executable() {
   String executableOutput = NormalizeExePath(mateState.arena, S("main"));
   mateState.executable.output = NormalizePath(mateState.arena, executableOutput);
   mateState.executable.linkerFlags = S("");
   mateState.executable.flags = S("");
 }
 
-static Executable parseExecutableOptions(ExecutableOptions options) {
+Executable __mate_parse_executable_options(ExecutableOptions options) {
   Executable result;
   result.output = StrNew(mateState.arena, options.output);
   result.flags = StrNew(mateState.arena, options.flags);
@@ -472,47 +538,76 @@ String CreateExecutable(ExecutableOptions executableOptions) {
          "}\n"
          "EndBuild()");
 
-  defaultExecutable();
-  Executable options = parseExecutableOptions(executableOptions);
+  __mate_default_executable();
+  Executable options = __mate_parse_executable_options(executableOptions);
   if (!StrIsNull(options.output)) {
     String executableOutput = NormalizeExePath(mateState.arena, options.output);
     mateState.executable.output = NormalizePath(mateState.arena, executableOutput);
   }
 
-  String flagsStr = options.flags;
-  if (flagsStr.data == NULL) {
-    flagsStr = S("");
+  FlagBuilder flagBuilder = FlagBuilderCreate();
+  if (!StrIsNull(options.flags)) {
+    FlagBuilderAddString(&flagBuilder, &options.flags);
+  }
+
+  if (mateState.compiler == GCC) {
+    switch (executableOptions.error) {
+    case FLAG_ERROR:
+      FlagBuilderAdd(&flagBuilder, "fdiagnostics-color=always");
+      break;
+    case FLAG_ERROR_MAX:
+      FlagBuilderAddMany(&flagBuilder, "fdiagnostics-color=always", "fdiagnostics-show-caret", "fdiagnostics-show-option", "fdiagnostics-generate-patch");
+      break;
+    }
+  } else if (mateState.compiler == CLANG) {
+    switch (executableOptions.error) {
+    case FLAG_ERROR:
+      FlagBuilderAdd(&flagBuilder, "fcolor-diagnostics");
+      break;
+    case FLAG_ERROR_MAX:
+      FlagBuilderAddMany(&flagBuilder, "fcolor-diagnostics", "fcaret-diagnostics", "fdiagnostics-fixit-info", "fdiagnostics-show-option");
+      break;
+    }
+  } else if (mateState.compiler == MSVC) {
+    switch (executableOptions.error) {
+    case FLAG_ERROR:
+      FlagBuilderAdd(&flagBuilder, "nologo");
+      break;
+    case FLAG_ERROR_MAX:
+      FlagBuilderAddMany(&flagBuilder, "nologo", "diagnostics:caret");
+      break;
+    }
   }
 
   if (executableOptions.warnings != 0) {
     if (mateState.compiler == MSVC) {
       switch (executableOptions.warnings) {
       case FLAG_WARNINGS_NONE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W0");
+        FlagBuilderAdd(&flagBuilder, "W0");
         break;
       case FLAG_WARNINGS_MINIMAL:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W3");
+        FlagBuilderAdd(&flagBuilder, "W3");
         break;
       case FLAG_WARNINGS:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W4");
+        FlagBuilderAdd(&flagBuilder, "W4");
         break;
       case FLAG_WARNINGS_VERBOSE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Wall");
+        FlagBuilderAdd(&flagBuilder, "Wall");
         break;
       }
     } else {
       switch (executableOptions.warnings) {
       case FLAG_WARNINGS_NONE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-w");
+        FlagBuilderAdd(&flagBuilder, "w");
         break;
       case FLAG_WARNINGS_MINIMAL:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall");
+        FlagBuilderAdd(&flagBuilder, "Wall");
         break;
       case FLAG_WARNINGS:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra");
+        FlagBuilderAddMany(&flagBuilder, "Wall", "Wextra");
         break;
       case FLAG_WARNINGS_VERBOSE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra -Wpedantic");
+        FlagBuilderAddMany(&flagBuilder, "Wall", "Wextra", "Wpedantic");
         break;
       }
     }
@@ -522,23 +617,23 @@ String CreateExecutable(ExecutableOptions executableOptions) {
     if (mateState.compiler == MSVC) {
       switch (executableOptions.debug) {
       case FLAG_DEBUG_MINIMAL:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Zi");
+        FlagBuilderAdd(&flagBuilder, "Zi");
         break;
       case FLAG_DEBUG_MEDIUM:
       case FLAG_DEBUG:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/ZI");
+        FlagBuilderAdd(&flagBuilder, "ZI");
         break;
       }
     } else {
       switch (executableOptions.debug) {
       case FLAG_DEBUG_MINIMAL:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g1");
+        FlagBuilderAdd(&flagBuilder, "g1");
         break;
       case FLAG_DEBUG_MEDIUM:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g2");
+        FlagBuilderAdd(&flagBuilder, "g2");
         break;
       case FLAG_DEBUG:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g3");
+        FlagBuilderAdd(&flagBuilder, "g3");
         break;
       }
     }
@@ -548,37 +643,37 @@ String CreateExecutable(ExecutableOptions executableOptions) {
     if (mateState.compiler == MSVC) {
       switch (executableOptions.optimization) {
       case FLAG_OPTIMIZATION_NONE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Od");
+        FlagBuilderAdd(&flagBuilder, "Od");
         break;
       case FLAG_OPTIMIZATION_BASIC:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
+        FlagBuilderAdd(&flagBuilder, "O1");
         break;
       case FLAG_OPTIMIZATION:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O2");
+        FlagBuilderAdd(&flagBuilder, "O2");
         break;
       case FLAG_OPTIMIZATION_SIZE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
+        FlagBuilderAdd(&flagBuilder, "O1");
         break;
       case FLAG_OPTIMIZATION_AGGRESSIVE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Ox");
+        FlagBuilderAdd(&flagBuilder, "Ox");
         break;
       }
     } else {
       switch (executableOptions.optimization) {
       case FLAG_OPTIMIZATION_NONE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O0");
+        FlagBuilderAdd(&flagBuilder, "O0");
         break;
       case FLAG_OPTIMIZATION_BASIC:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O1");
+        FlagBuilderAdd(&flagBuilder, "O1");
         break;
       case FLAG_OPTIMIZATION:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O2");
+        FlagBuilderAdd(&flagBuilder, "O2");
         break;
       case FLAG_OPTIMIZATION_SIZE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Os");
+        FlagBuilderAdd(&flagBuilder, "Os");
         break;
       case FLAG_OPTIMIZATION_AGGRESSIVE:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O3");
+        FlagBuilderAdd(&flagBuilder, "O3");
         break;
       }
     }
@@ -589,41 +684,42 @@ String CreateExecutable(ExecutableOptions executableOptions) {
       switch (executableOptions.std) {
       case FLAG_STD_C99:
       case FLAG_STD_C11:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c11");
+        FlagBuilderAdd(&flagBuilder, "std:c11");
         break;
       case FLAG_STD_C17:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c17");
+        FlagBuilderAdd(&flagBuilder, "std:c17");
         break;
       case FLAG_STD_C23:
       case FLAG_STD_C2X:
         // NOTE: MSVC doesn't have C23 yet
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:clatest");
+        FlagBuilderAdd(&flagBuilder, "std:clatest");
         break;
       }
     } else {
       switch (executableOptions.std) {
       case FLAG_STD_C99:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c99");
+        FlagBuilderAdd(&flagBuilder, "std=c99");
         break;
       case FLAG_STD_C11:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c11");
+        FlagBuilderAdd(&flagBuilder, "std=c11");
         break;
       case FLAG_STD_C17:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c17");
+        FlagBuilderAdd(&flagBuilder, "std=c17");
         break;
       case FLAG_STD_C23:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
+        FlagBuilderAdd(&flagBuilder, "std=c2x");
         break;
       case FLAG_STD_C2X:
-        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
+        FlagBuilderAdd(&flagBuilder, "std=c2x");
         break;
       }
     }
   }
 
-  if (!StrIsNull(flagsStr)) {
-    mateState.executable.flags = flagsStr;
+  if (!StrIsNull(flagBuilder.buffer)) {
+    mateState.executable.flags = flagBuilder.buffer;
   }
+
   if (!StrIsNull(options.linkerFlags)) {
     mateState.executable.linkerFlags = options.linkerFlags;
   }
@@ -687,7 +783,7 @@ errno_t CreateCompileCommands(String ninjaBuildPath) {
   return SUCCESS;
 }
 
-static bool globMatch(String pattern, String text) {
+bool GlobMatch(String pattern, String text) {
   if (pattern.length == 1 && pattern.data[0] == '*') {
     return true;
   }
@@ -719,7 +815,7 @@ static bool globMatch(String pattern, String text) {
   return p == pattern.length;
 }
 
-static void addFile(String source) {
+void __mate_add_file(String source) {
   bool isGlob = false;
   for (size_t i = 0; i < source.length; i++) {
     if (source.data[i] == '*') {
@@ -756,14 +852,14 @@ static void addFile(String source) {
   for (size_t i = 0; i < files.length; i++) {
     String file = VecAt(files, i);
 
-    if (globMatch(pattern, file)) {
+    if (GlobMatch(pattern, file)) {
       String finalSource = F(mateState.arena, "%s/%s", directory.data, file.data);
       VecPush(mateState.sources, finalSource);
     }
   }
 }
 
-static bool removeFile(String source) {
+bool __mate_remove_file(String source) {
   Assert(mateState.sources.length > 0, "RemoveFile: Before removing a file you must first add a file, use: AddFile()");
 
   for (size_t i = 0; i < mateState.sources.length; i++) {
@@ -778,7 +874,7 @@ static bool removeFile(String source) {
 }
 
 // TODO: Create something like NormalizeOutput
-static StringVector outputTransformer(StringVector vector) {
+StringVector __mate_output_transformer(StringVector vector) {
   StringVector result = {0};
 
   if (isMSVC()) {
@@ -835,7 +931,7 @@ static StringVector outputTransformer(StringVector vector) {
   return result;
 }
 
-void ResetExecutable() {
+void __mate_reset_executable() {
   mateState.executable = (Executable){0};
   VecFree(mateState.sources);
 }
@@ -934,7 +1030,7 @@ String InstallExecutable() {
   }
 
   // Build individual source files
-  StringVector outputFiles = outputTransformer(mateState.sources);
+  StringVector outputFiles = __mate_output_transformer(mateState.sources);
   StringBuilder outputBuilder = StringBuilderCreate(mateState.arena);
   for (size_t i = 0; i < mateState.sources.length; i++) {
     String currSource = VecAt(mateState.sources, i);
@@ -981,7 +1077,7 @@ String InstallExecutable() {
   }
 
   i64 err = RunCommand(buildCommand);
-  Assert(err == SUCCESS, "InstallExecutable: Ninja file compilation failed with code: %lu", err);
+  Assert(err == SUCCESS, "InstallExecutable: Ninja file compilation failed with code: " FMT_I64, err);
 
   LogSuccess("Ninja file compilation done for %s", NormalizePathEnd(mateState.arena, ninjaBuildPath).data);
   mateState.totalTime = TimeNow() - mateState.startTime;
@@ -992,11 +1088,11 @@ String InstallExecutable() {
   String path = F(mateState.arena, "%s/%s", mateState.buildDirectory.data, mateState.executable.output.data);
 #endif
 
-  ResetExecutable();
+  __mate_reset_executable();
   return path;
 }
 
-void ResetStaticLib() {
+void __mate_reset_static_lib() {
   mateState.staticLib = (StaticLib){0};
   VecFree(mateState.sources);
 }
@@ -1068,7 +1164,7 @@ String InstallStaticLib() {
   StringBuilderAppend(mateState.arena, &builder, &S(" -c $in -o $out\n\n"));
 
   // Build individual source files
-  StringVector outputFiles = outputTransformer(mateState.sources);
+  StringVector outputFiles = __mate_output_transformer(mateState.sources);
   StringBuilder outputBuilder = StringBuilderCreate(mateState.arena);
   for (size_t i = 0; i < mateState.sources.length; i++) {
     String currSource = VecAt(mateState.sources, i);
@@ -1115,7 +1211,7 @@ String InstallStaticLib() {
   }
 
   i64 err = RunCommand(buildCommand);
-  Assert(err == SUCCESS, "InstallStaticLib: Ninja file compilation failed with code: %lu", err);
+  Assert(err == SUCCESS, "InstallStaticLib: Ninja file compilation failed with code: " FMT_I64, err);
 
   LogSuccess("Ninja file compilation done for %s", NormalizePathEnd(mateState.arena, ninjaBuildPath).data);
   mateState.totalTime = TimeNow() - mateState.startTime;
@@ -1126,7 +1222,7 @@ String InstallStaticLib() {
   String path = F(mateState.arena, "%s/%s", mateState.buildDirectory.data, mateState.staticLib.output.data);
 #endif
 
-  ResetStaticLib();
+  __mate_reset_static_lib();
   return path;
 }
 
@@ -1138,7 +1234,7 @@ errno_t RunCommand(String command) {
 #endif
 }
 
-static void addLibraryPaths(StringVector *vector) {
+void __mate_add_library_paths(StringVector *vector) {
   StringBuilder builder = StringBuilderCreate(mateState.arena);
 
   if (isMSVC() && mateState.libs.length == 0) {
@@ -1173,7 +1269,7 @@ static void addLibraryPaths(StringVector *vector) {
   mateState.libs = builder.buffer;
 }
 
-static void linkSystemLibraries(StringVector *vector) {
+void __mate_link_system_libraries(StringVector *vector) {
   StringBuilder builder = StringBuilderCreate(mateState.arena);
 
   if (isMSVC() && mateState.libs.length == 0) {
@@ -1208,7 +1304,7 @@ static void linkSystemLibraries(StringVector *vector) {
   mateState.libs = builder.buffer;
 }
 
-static void addIncludePaths(StringVector *vector) {
+void __mate_add_include_paths(StringVector *vector) {
   StringBuilder builder = StringBuilderCreate(mateState.arena);
 
   if (mateState.includes.length) {
@@ -1246,6 +1342,6 @@ static void addIncludePaths(StringVector *vector) {
 }
 
 void EndBuild() {
-  LogInfo("Build took: %ldms", mateState.totalTime);
+  LogInfo("Build took: " FMT_I64 "ms", mateState.totalTime);
   ArenaFree(mateState.arena);
 }
