@@ -2,150 +2,17 @@
 
 static MateConfig mateState = {0};
 
-bool isMSVC() {
-  return mateState.compiler == MSVC;
-}
-
-bool isGCC() {
-  return mateState.compiler == GCC;
-}
-
-bool isClang() {
-  return mateState.compiler == CLANG;
-}
-
-bool isTCC() {
-  return mateState.compiler == TCC;
-}
-
-String CompilerToStr(Compiler compiler) {
-  switch (compiler) {
-  case GCC:
-    return S("gcc");
-    break;
-  case CLANG:
-    return S("clang");
-    break;
-  case TCC:
-    return S("tcc");
-    break;
-  case MSVC:
-    return S("cl.exe");
-    break;
-  }
-}
-
-String __mate_fix_path_exe(String str) {
-  String path = NormalizeExePath(mateState.arena, str);
-#if defined(PLATFORM_WIN)
-  return F(mateState.arena, "%s\\%s", GetCwd(), path.data);
-#else
-  return F(mateState.arena, "%s/%s", GetCwd(), path.data);
-#endif
-}
-
-String __mate_fix_path(String str) {
-  String path = NormalizePath(mateState.arena, str);
-#if defined(PLATFORM_WIN)
-  return F(mateState.arena, "%s\\%s", GetCwd(), path.data);
-#else
-  return F(mateState.arena, "%s/%s", GetCwd(), path.data);
-#endif
-}
-
-FlagBuilder FlagBuilderCreate() {
-  return StringBuilderCreate(mateState.arena);
-}
-
-FlagBuilder __mate_flag_builder_reserve(size_t count) {
-  return StringBuilderReserve(mateState.arena, count);
-}
-
-void __mate_flag_builder_add(FlagBuilder *builder, String *flag) {
-  if (mateState.compiler == MSVC) {
-    Assert(flag->data[0] != '/', "FlagBuilderAdd: failed, flag should not contain /, e.g usage FlagBuilderAdd(\"W4\")");
-    if (builder->buffer.length == 0) {
-      StringBuilderAppend(mateState.arena, builder, &S("/"));
-      StringBuilderAppend(mateState.arena, builder, flag);
-      return;
-    }
-
-    StringBuilderAppend(mateState.arena, builder, &S(" /"));
-    StringBuilderAppend(mateState.arena, builder, flag);
-    return;
-  }
-
-  Assert(flag->data[0] != '-', "FlagBuilderAdd: failed, flag should not contain -, e.g usage FlagBuilderAdd(\"Wall\")");
-  if (builder->buffer.length == 0) {
-    StringBuilderAppend(mateState.arena, builder, &S("-"));
-    StringBuilderAppend(mateState.arena, builder, flag);
-    return;
-  }
-
-  StringBuilderAppend(mateState.arena, builder, &S(" -"));
-  StringBuilderAppend(mateState.arena, builder, flag);
-}
-
-void FlagBuilderAddString(FlagBuilder *builder, String *flag) {
-  StringBuilderAppend(mateState.arena, builder, flag);
-}
-
-void __mate_flag_builder_add_many(FlagBuilder *builder, StringVector flags) {
-  size_t count = 0;
-  if (mateState.compiler == MSVC) {
-    String *first = VecAtPtr(flags, 0);
-    Assert(first->data[0] != '/', "FlagBuilderAdd: failed, flag should not contain /, e.g usage FlagBuilderAdd(\"W4\")");
-
-    if (builder->buffer.length == 0) {
-      StringBuilderAppend(mateState.arena, builder, &S("/"));
-      StringBuilderAppend(mateState.arena, builder, first);
-      count = 1;
-    }
-
-    for (size_t i = count; i < flags.length; i++) {
-      StringBuilderAppend(mateState.arena, builder, &S(" /"));
-      StringBuilderAppend(mateState.arena, builder, VecAtPtr(flags, i));
-    }
-    return;
-  }
-
-  String *first = VecAtPtr(flags, 0);
-  Assert(first->data[0] != '-', "FlagBuilderAdd: failed, flag should not contain -, e.g usage FlagBuilderAdd(\"Wall\")");
-
-  if (builder->buffer.length == 0) {
-    StringBuilderAppend(mateState.arena, builder, &S("-"));
-    StringBuilderAppend(mateState.arena, builder, VecAtPtr(flags, 0));
-    count = 1;
-  }
-
-  for (size_t i = count; i < flags.length; i++) {
-    StringBuilderAppend(mateState.arena, builder, &S(" -"));
-    StringBuilderAppend(mateState.arena, builder, VecAtPtr(flags, i));
-  }
-}
-
-String ConvertNinjaPath(String str) {
-#if defined(PLATFORM_WIN)
-  String copy = StrNewSize(mateState.arena, str.data, str.length + 1);
-  memmove(&copy.data[2], &copy.data[1], str.length - 1);
-  copy.data[1] = '$';
-  copy.data[2] = ':';
-  return copy;
-#else
-  return str;
-#endif
-}
-
-void __mate_set_default_state() {
+/* --- Build Functions Implementation --- */
+static void mateSetDefaultState(void) {
   mateState.arena = ArenaCreate(20000 * sizeof(String));
   mateState.compiler = GetCompiler();
 
-  mateState.mateExe = __mate_fix_path_exe(S("./mate"));
-  mateState.mateSource = __mate_fix_path(S("./mate.c"));
-  mateState.buildDirectory = __mate_fix_path(S("./build"));
+  mateState.mateExe = mateFixPathExe(S("./mate"));
+  mateState.mateSource = mateFixPath(S("./mate.c"));
+  mateState.buildDirectory = mateFixPath(S("./build"));
 }
 
-MateConfig parseMateConfig(MateOptions options) {
+static MateConfig mateParseMateConfig(MateOptions options) {
   MateConfig result;
   result.compiler = options.compiler;
   result.mateExe = StrNew(mateState.arena, options.mateExe);
@@ -155,19 +22,19 @@ MateConfig parseMateConfig(MateOptions options) {
 }
 
 void CreateConfig(MateOptions options) {
-  __mate_set_default_state();
-  MateConfig config = parseMateConfig(options);
+  mateSetDefaultState();
+  MateConfig config = mateParseMateConfig(options);
 
   if (!StrIsNull(config.mateExe)) {
-    mateState.mateExe = __mate_fix_path_exe(config.mateExe);
+    mateState.mateExe = mateFixPathExe(config.mateExe);
   }
 
   if (!StrIsNull(config.mateSource)) {
-    mateState.mateSource = __mate_fix_path(config.mateSource);
+    mateState.mateSource = mateFixPath(config.mateSource);
   }
 
   if (!StrIsNull(config.buildDirectory)) {
-    mateState.buildDirectory = __mate_fix_path(config.buildDirectory);
+    mateState.buildDirectory = mateFixPath(config.buildDirectory);
   }
 
   if (config.compiler != 0) {
@@ -177,10 +44,10 @@ void CreateConfig(MateOptions options) {
   mateState.initConfig = true;
 }
 
-void __mate_read_cache() {
+static void mateReadCache(void) {
   String mateCachePath = F(mateState.arena, "%s/mate-cache.ini", mateState.buildDirectory.data);
   errno_t err = IniParse(mateCachePath, &mateState.cache);
-  Assert("MateReadCache: failed reading MateCache at %s, err: %d", mateCachePath.data, err);
+  Assert(err == SUCCESS, "MateReadCache: failed reading MateCache at %s, err: %d", mateCachePath.data, err);
 
   mateState.mateCache.lastBuild = IniGetLong(&mateState.cache, S("modify-time"));
   if (mateState.mateCache.lastBuild == 0) {
@@ -222,21 +89,21 @@ void __mate_read_cache() {
   Assert(err == SUCCESS, "MateReadCache: Failed writing cache, err: %d", err);
 }
 
-void StartBuild() {
+void StartBuild(void) {
   LogInit();
   if (!mateState.initConfig) {
-    __mate_set_default_state();
+    mateSetDefaultState();
   }
 
   mateState.initConfig = true;
   mateState.startTime = TimeNow();
 
   Mkdir(mateState.buildDirectory);
-  __mate_read_cache();
-  __mate_rebuild();
+  mateReadCache();
+  mateRebuild();
 }
 
-bool __mate_need_rebuild() {
+static bool mateNeedRebuild(void) {
   File stats = {0};
   errno_t err = FileStats(mateState.mateSource, &stats);
   Assert(err == SUCCESS, "Aborting rebuild: Could not read fileStats for %s, error: %d", mateState.mateSource.data, err);
@@ -255,8 +122,8 @@ bool __mate_need_rebuild() {
   return true;
 }
 
-void __mate_rebuild() {
-  if (mateState.mateCache.firstBuild || !__mate_need_rebuild()) {
+static void mateRebuild(void) {
+  if (mateState.mateCache.firstBuild || !mateNeedRebuild()) {
     return;
   }
 
@@ -286,13 +153,13 @@ void __mate_rebuild() {
   exit(err);
 }
 
-void __mate_default_staticLib() {
+static void mateDefaultStaticLib(void) {
   mateState.staticLib.output = S("");
   mateState.staticLib.flags = S("");
   mateState.staticLib.arFlags = S("rcs");
 }
 
-StaticLib __mate_parse_static_lib_options(StaticLibOptions options) {
+static StaticLib mateParseStaticLibOptions(StaticLibOptions options) {
   StaticLib result = {0};
   result.output = StrNew(mateState.arena, options.output);
   Assert(!StrIsNull(result.output),
@@ -315,8 +182,8 @@ String CreateStaticLib(StaticLibOptions staticLibOptions) {
          "}\n"
          "EndBuild()");
 
-  __mate_default_staticLib();
-  StaticLib options = __mate_parse_static_lib_options(staticLibOptions);
+  mateDefaultStaticLib();
+  StaticLib options = mateParseStaticLibOptions(staticLibOptions);
 
   String staticLibOutput = NormalizeStaticLibPath(mateState.arena, options.output);
   mateState.staticLib.output = NormalizePath(mateState.arena, staticLibOutput);
@@ -513,14 +380,14 @@ String CreateStaticLib(StaticLibOptions staticLibOptions) {
   return mateState.staticLib.ninjaBuildPath;
 }
 
-void __mate_default_executable() {
+static void mateDefaultExecutable(void) {
   String executableOutput = NormalizeExePath(mateState.arena, S("main"));
   mateState.executable.output = NormalizePath(mateState.arena, executableOutput);
   mateState.executable.linkerFlags = S("");
   mateState.executable.flags = S("");
 }
 
-Executable __mate_parse_executable_options(ExecutableOptions options) {
+static Executable mateParseExecutableOptions(ExecutableOptions options) {
   Executable result;
   result.output = StrNew(mateState.arena, options.output);
   result.flags = StrNew(mateState.arena, options.flags);
@@ -538,8 +405,8 @@ String CreateExecutable(ExecutableOptions executableOptions) {
          "}\n"
          "EndBuild()");
 
-  __mate_default_executable();
-  Executable options = __mate_parse_executable_options(executableOptions);
+  mateDefaultExecutable();
+  Executable options = mateParseExecutableOptions(executableOptions);
   if (!StrIsNull(options.output)) {
     String executableOutput = NormalizeExePath(mateState.arena, options.output);
     mateState.executable.output = NormalizePath(mateState.arena, executableOutput);
@@ -783,39 +650,7 @@ errno_t CreateCompileCommands(String ninjaBuildPath) {
   return SUCCESS;
 }
 
-bool GlobMatch(String pattern, String text) {
-  if (pattern.length == 1 && pattern.data[0] == '*') {
-    return true;
-  }
-
-  size_t p = 0;
-  size_t t = 0;
-  size_t starP = -1;
-  size_t starT = -1;
-  while (t < text.length) {
-    if (p < pattern.length && pattern.data[p] == text.data[t]) {
-      p++;
-      t++;
-    } else if (p < pattern.length && pattern.data[p] == '*') {
-      starP = p;
-      starT = t;
-      p++;
-    } else if (starP != (size_t)-1) {
-      p = starP + 1;
-      t = ++starT;
-    } else {
-      return false;
-    }
-  }
-
-  while (p < pattern.length && pattern.data[p] == '*') {
-    p++;
-  }
-
-  return p == pattern.length;
-}
-
-void __mate_add_file(String source) {
+static void mateAddFile(String source) {
   bool isGlob = false;
   for (size_t i = 0; i < source.length; i++) {
     if (source.data[i] == '*') {
@@ -852,14 +687,14 @@ void __mate_add_file(String source) {
   for (size_t i = 0; i < files.length; i++) {
     String file = VecAt(files, i);
 
-    if (GlobMatch(pattern, file)) {
+    if (mateGlobMatch(pattern, file)) {
       String finalSource = F(mateState.arena, "%s/%s", directory.data, file.data);
       VecPush(mateState.sources, finalSource);
     }
   }
 }
 
-bool __mate_remove_file(String source) {
+static bool mateRemoveFile(String source) {
   Assert(mateState.sources.length > 0, "RemoveFile: Before removing a file you must first add a file, use: AddFile()");
 
   for (size_t i = 0; i < mateState.sources.length; i++) {
@@ -873,70 +708,12 @@ bool __mate_remove_file(String source) {
   return false;
 }
 
-// TODO: Create something like NormalizeOutput
-StringVector __mate_output_transformer(StringVector vector) {
-  StringVector result = {0};
-
-  if (isMSVC()) {
-    for (size_t i = 0; i < vector.length; i++) {
-      String currentExecutable = VecAt(vector, i);
-      if (StrIsNull(currentExecutable)) {
-        VecPush(result, S(""));
-        continue;
-      }
-
-      size_t lastCharIndex = 0;
-      for (size_t j = currentExecutable.length - 1; j > 0; j--) {
-        char currentChar = currentExecutable.data[j];
-        if (currentChar == '/') {
-          lastCharIndex = j;
-          break;
-        }
-      }
-
-      Assert(lastCharIndex != 0, "MateOutputTransformer: failed to transform %s, to an object file", currentExecutable.data);
-      char *filenameStart = currentExecutable.data + lastCharIndex + 1;
-      size_t filenameLength = currentExecutable.length - (lastCharIndex + 1);
-
-      String objOutput = StrNewSize(mateState.arena, filenameStart, filenameLength + 2);
-      objOutput.data[objOutput.length - 3] = 'o';
-      objOutput.data[objOutput.length - 2] = 'b';
-      objOutput.data[objOutput.length - 1] = 'j';
-
-      VecPush(result, objOutput);
-    }
-    return result;
-  }
-
-  for (size_t i = 0; i < vector.length; i++) {
-    String currentExecutable = VecAt(vector, i);
-    if (StrIsNull(currentExecutable)) {
-      VecPush(result, S(""));
-      continue;
-    }
-
-    size_t lastCharIndex = 0;
-    for (size_t j = currentExecutable.length - 1; j > 0; j--) {
-      char currentChar = currentExecutable.data[j];
-      if (currentChar == '/') {
-        lastCharIndex = j;
-        break;
-      }
-    }
-    Assert(lastCharIndex != 0, "MateOutputTransformer: failed to transform %s, to an object file", currentExecutable.data);
-    String output = StrSlice(mateState.arena, currentExecutable, lastCharIndex + 1, currentExecutable.length);
-    output.data[output.length - 1] = 'o';
-    VecPush(result, output);
-  }
-  return result;
-}
-
-void __mate_reset_executable() {
+static void mateResetExecutable(void) {
   mateState.executable = (Executable){0};
   VecFree(mateState.sources);
 }
 
-String InstallExecutable() {
+String InstallExecutable(void) {
   Assert(mateState.sources.length != 0, "InstallExecutable: Executable has zero sources, add at least one with AddFile(\"./main.c\")");
   Assert(!StrIsNull(mateState.executable.output), "InstallExecutable: Before installing executable you must first CreateExecutable()");
 
@@ -977,13 +754,13 @@ String InstallExecutable() {
   }
 
   // Current working directory
-  String cwd_path = ConvertNinjaPath(s(GetCwd()));
+  String cwd_path = mateConvertNinjaPath(s(GetCwd()));
   StringBuilderAppend(mateState.arena, &builder, &S("cwd = "));
   StringBuilderAppend(mateState.arena, &builder, &cwd_path);
   StringBuilderAppend(mateState.arena, &builder, &S("\n"));
 
   // Build directory
-  String build_dir_path = ConvertNinjaPath(mateState.buildDirectory);
+  String build_dir_path = mateConvertNinjaPath(mateState.buildDirectory);
   StringBuilderAppend(mateState.arena, &builder, &S("builddir = "));
   StringBuilderAppend(mateState.arena, &builder, &build_dir_path);
   StringBuilderAppend(mateState.arena, &builder, &S("\n"));
@@ -1030,7 +807,7 @@ String InstallExecutable() {
   }
 
   // Build individual source files
-  StringVector outputFiles = __mate_output_transformer(mateState.sources);
+  StringVector outputFiles = mateOutputTransformer(mateState.sources);
   StringBuilder outputBuilder = StringBuilderCreate(mateState.arena);
   for (size_t i = 0; i < mateState.sources.length; i++) {
     String currSource = VecAt(mateState.sources, i);
@@ -1088,16 +865,16 @@ String InstallExecutable() {
   String path = F(mateState.arena, "%s/%s", mateState.buildDirectory.data, mateState.executable.output.data);
 #endif
 
-  __mate_reset_executable();
+  mateResetExecutable();
   return path;
 }
 
-void __mate_reset_static_lib() {
+static void mateResetStaticLib(void) {
   mateState.staticLib = (StaticLib){0};
   VecFree(mateState.sources);
 }
 
-String InstallStaticLib() {
+String InstallStaticLib(void) {
   Assert(mateState.sources.length != 0, "InstallStaticLib: Static Library has zero sources, add at least one with AddFile(\"./main.c\")");
   Assert(!StrIsNull(mateState.staticLib.output), "InstallStaticLib: Before installing static library you must first CreateStaticLib()");
 
@@ -1134,13 +911,13 @@ String InstallStaticLib() {
   }
 
   // Current working directory
-  String cwd_path = ConvertNinjaPath(s(GetCwd()));
+  String cwd_path = mateConvertNinjaPath(s(GetCwd()));
   StringBuilderAppend(mateState.arena, &builder, &S("cwd = "));
   StringBuilderAppend(mateState.arena, &builder, &cwd_path);
   StringBuilderAppend(mateState.arena, &builder, &S("\n"));
 
   // Build directory
-  String build_dir_path = ConvertNinjaPath(mateState.buildDirectory);
+  String build_dir_path = mateConvertNinjaPath(mateState.buildDirectory);
   StringBuilderAppend(mateState.arena, &builder, &S("builddir = "));
   StringBuilderAppend(mateState.arena, &builder, &build_dir_path);
   StringBuilderAppend(mateState.arena, &builder, &S("\n"));
@@ -1164,7 +941,7 @@ String InstallStaticLib() {
   StringBuilderAppend(mateState.arena, &builder, &S(" -c $in -o $out\n\n"));
 
   // Build individual source files
-  StringVector outputFiles = __mate_output_transformer(mateState.sources);
+  StringVector outputFiles = mateOutputTransformer(mateState.sources);
   StringBuilder outputBuilder = StringBuilderCreate(mateState.arena);
   for (size_t i = 0; i < mateState.sources.length; i++) {
     String currSource = VecAt(mateState.sources, i);
@@ -1222,19 +999,11 @@ String InstallStaticLib() {
   String path = F(mateState.arena, "%s/%s", mateState.buildDirectory.data, mateState.staticLib.output.data);
 #endif
 
-  __mate_reset_static_lib();
+  mateResetStaticLib();
   return path;
 }
 
-errno_t RunCommand(String command) {
-#if defined(PLATFORM_LINUX)
-  return system(command.data) >> 8;
-#else
-  return system(command.data);
-#endif
-}
-
-void __mate_add_library_paths(StringVector *vector) {
+static void mateAddLibraryPaths(StringVector *vector) {
   StringBuilder builder = StringBuilderCreate(mateState.arena);
 
   if (isMSVC() && mateState.libs.length == 0) {
@@ -1269,7 +1038,7 @@ void __mate_add_library_paths(StringVector *vector) {
   mateState.libs = builder.buffer;
 }
 
-void __mate_link_system_libraries(StringVector *vector) {
+static void mateLinkSystemLibraries(StringVector *vector) {
   StringBuilder builder = StringBuilderCreate(mateState.arena);
 
   if (isMSVC() && mateState.libs.length == 0) {
@@ -1304,7 +1073,7 @@ void __mate_link_system_libraries(StringVector *vector) {
   mateState.libs = builder.buffer;
 }
 
-void __mate_add_include_paths(StringVector *vector) {
+static void mateAddIncludePaths(StringVector *vector) {
   StringBuilder builder = StringBuilderCreate(mateState.arena);
 
   if (mateState.includes.length) {
@@ -1341,7 +1110,238 @@ void __mate_add_include_paths(StringVector *vector) {
   mateState.includes = builder.buffer;
 }
 
-void EndBuild() {
+void EndBuild(void) {
   LogInfo("Build took: " FMT_I64 "ms", mateState.totalTime);
   ArenaFree(mateState.arena);
+}
+
+/* --- Utils Implementation --- */
+errno_t RunCommand(String command) {
+#if defined(PLATFORM_LINUX)
+  return system(command.data) >> 8;
+#else
+  return system(command.data);
+#endif
+}
+
+String CompilerToStr(Compiler compiler) {
+  switch (compiler) {
+  case GCC:
+    return S("gcc");
+  case CLANG:
+    return S("clang");
+  case TCC:
+    return S("tcc");
+  case MSVC:
+    return S("cl.exe");
+  default:
+    Assert(0, "CompilerToStr: failed, should never get here, compiler given does not exist: %d", compiler);
+  }
+}
+
+FlagBuilder FlagBuilderCreate(void) {
+  return StringBuilderCreate(mateState.arena);
+}
+
+static FlagBuilder mateFlagBuilderReserve(size_t count) {
+  return StringBuilderReserve(mateState.arena, count);
+}
+
+static void mateFlagBuilderAdd(FlagBuilder *builder, String *flag) {
+  if (mateState.compiler == MSVC) {
+    Assert(flag->data[0] != '/', "FlagBuilderAdd: failed, flag should not contain /, e.g usage FlagBuilderAdd(\"W4\")");
+    if (builder->buffer.length == 0) {
+      StringBuilderAppend(mateState.arena, builder, &S("/"));
+      StringBuilderAppend(mateState.arena, builder, flag);
+      return;
+    }
+
+    StringBuilderAppend(mateState.arena, builder, &S(" /"));
+    StringBuilderAppend(mateState.arena, builder, flag);
+    return;
+  }
+
+  Assert(flag->data[0] != '-', "FlagBuilderAdd: failed, flag should not contain -, e.g usage FlagBuilderAdd(\"Wall\")");
+  if (builder->buffer.length == 0) {
+    StringBuilderAppend(mateState.arena, builder, &S("-"));
+    StringBuilderAppend(mateState.arena, builder, flag);
+    return;
+  }
+
+  StringBuilderAppend(mateState.arena, builder, &S(" -"));
+  StringBuilderAppend(mateState.arena, builder, flag);
+}
+
+void FlagBuilderAddString(FlagBuilder *builder, String *flag) {
+  StringBuilderAppend(mateState.arena, builder, flag);
+}
+
+static void mateFlagBuilderAddMany(FlagBuilder *builder, StringVector flags) {
+  size_t count = 0;
+  if (mateState.compiler == MSVC) {
+    String *first = VecAtPtr(flags, 0);
+    Assert(first->data[0] != '/', "FlagBuilderAdd: failed, flag should not contain /, e.g usage FlagBuilderAdd(\"W4\")");
+
+    if (builder->buffer.length == 0) {
+      StringBuilderAppend(mateState.arena, builder, &S("/"));
+      StringBuilderAppend(mateState.arena, builder, first);
+      count = 1;
+    }
+
+    for (size_t i = count; i < flags.length; i++) {
+      StringBuilderAppend(mateState.arena, builder, &S(" /"));
+      StringBuilderAppend(mateState.arena, builder, VecAtPtr(flags, i));
+    }
+    return;
+  }
+
+  String *first = VecAtPtr(flags, 0);
+  Assert(first->data[0] != '-', "FlagBuilderAdd: failed, flag should not contain -, e.g usage FlagBuilderAdd(\"Wall\")");
+
+  if (builder->buffer.length == 0) {
+    StringBuilderAppend(mateState.arena, builder, &S("-"));
+    StringBuilderAppend(mateState.arena, builder, VecAtPtr(flags, 0));
+    count = 1;
+  }
+
+  for (size_t i = count; i < flags.length; i++) {
+    StringBuilderAppend(mateState.arena, builder, &S(" -"));
+    StringBuilderAppend(mateState.arena, builder, VecAtPtr(flags, i));
+  }
+}
+
+static String mateFixPathExe(String str) {
+  String path = NormalizeExePath(mateState.arena, str);
+#if defined(PLATFORM_WIN)
+  return F(mateState.arena, "%s\\%s", GetCwd(), path.data);
+#else
+  return F(mateState.arena, "%s/%s", GetCwd(), path.data);
+#endif
+}
+
+static String mateFixPath(String str) {
+  String path = NormalizePath(mateState.arena, str);
+#if defined(PLATFORM_WIN)
+  return F(mateState.arena, "%s\\%s", GetCwd(), path.data);
+#else
+  return F(mateState.arena, "%s/%s", GetCwd(), path.data);
+#endif
+}
+
+static String mateConvertNinjaPath(String str) {
+#if defined(PLATFORM_WIN)
+  String copy = StrNewSize(mateState.arena, str.data, str.length + 1);
+  memmove(&copy.data[2], &copy.data[1], str.length - 1);
+  copy.data[1] = '$';
+  copy.data[2] = ':';
+  return copy;
+#else
+  return str;
+#endif
+}
+
+// TODO: Create something like NormalizeOutput
+static StringVector mateOutputTransformer(StringVector vector) {
+  StringVector result = {0};
+
+  if (isMSVC()) {
+    for (size_t i = 0; i < vector.length; i++) {
+      String currentExecutable = VecAt(vector, i);
+      if (StrIsNull(currentExecutable)) {
+        VecPush(result, S(""));
+        continue;
+      }
+
+      size_t lastCharIndex = 0;
+      for (size_t j = currentExecutable.length - 1; j > 0; j--) {
+        char currentChar = currentExecutable.data[j];
+        if (currentChar == '/') {
+          lastCharIndex = j;
+          break;
+        }
+      }
+
+      Assert(lastCharIndex != 0, "MateOutputTransformer: failed to transform %s, to an object file", currentExecutable.data);
+      char *filenameStart = currentExecutable.data + lastCharIndex + 1;
+      size_t filenameLength = currentExecutable.length - (lastCharIndex + 1);
+
+      String objOutput = StrNewSize(mateState.arena, filenameStart, filenameLength + 2);
+      objOutput.data[objOutput.length - 3] = 'o';
+      objOutput.data[objOutput.length - 2] = 'b';
+      objOutput.data[objOutput.length - 1] = 'j';
+
+      VecPush(result, objOutput);
+    }
+    return result;
+  }
+
+  for (size_t i = 0; i < vector.length; i++) {
+    String currentExecutable = VecAt(vector, i);
+    if (StrIsNull(currentExecutable)) {
+      VecPush(result, S(""));
+      continue;
+    }
+
+    size_t lastCharIndex = 0;
+    for (size_t j = currentExecutable.length - 1; j > 0; j--) {
+      char currentChar = currentExecutable.data[j];
+      if (currentChar == '/') {
+        lastCharIndex = j;
+        break;
+      }
+    }
+    Assert(lastCharIndex != 0, "MateOutputTransformer: failed to transform %s, to an object file", currentExecutable.data);
+    String output = StrSlice(mateState.arena, currentExecutable, lastCharIndex + 1, currentExecutable.length);
+    output.data[output.length - 1] = 'o';
+    VecPush(result, output);
+  }
+  return result;
+}
+
+static bool mateGlobMatch(String pattern, String text) {
+  if (pattern.length == 1 && pattern.data[0] == '*') {
+    return true;
+  }
+
+  size_t p = 0;
+  size_t t = 0;
+  size_t starP = -1;
+  size_t starT = -1;
+  while (t < text.length) {
+    if (p < pattern.length && pattern.data[p] == text.data[t]) {
+      p++;
+      t++;
+    } else if (p < pattern.length && pattern.data[p] == '*') {
+      starP = p;
+      starT = t;
+      p++;
+    } else if (starP != (size_t)-1) {
+      p = starP + 1;
+      t = ++starT;
+    } else {
+      return false;
+    }
+  }
+
+  while (p < pattern.length && pattern.data[p] == '*') {
+    p++;
+  }
+
+  return p == pattern.length;
+}
+
+bool isMSVC(void) {
+  return mateState.compiler == MSVC;
+}
+
+bool isGCC(void) {
+  return mateState.compiler == GCC;
+}
+
+bool isClang(void) {
+  return mateState.compiler == CLANG;
+}
+
+bool isTCC(void) {
+  return mateState.compiler == TCC;
 }

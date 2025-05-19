@@ -1,2 +1,16 @@
 CompileFlags:
-  Add: [-Wall, -Wextra, -DBASE_IMPLEMENTATION, -DMATE_IMPLEMENTATION]
+  Add: [
+    -std=c99, -Wpedantic, -pedantic-errors,
+    -Werror, -Wall, -Wextra, -Waggregate-return,
+    -Wbad-function-cast, -Wcast-align, -Wcast-qual,
+    -Wfloat-equal, -Wformat=2, -Wlogical-op, -Wmissing-declarations,
+    -Wmissing-include-dirs, -Wmissing-prototypes,
+    -Wnested-externs, -Wpointer-arith,
+    -Wredundant-decls, -Wsequence-point,
+    -Wshadow, -Wstrict-prototypes,
+    -Wswitch, -Wundef, -Wunreachable-code,
+    -Wunused-but-set-parameter, -Wwrite-strings,
+
+    -Wno-macro-redefined, -Wno-incompatible-pointer-types-discards-qualifiers,
+    -DBASE_IMPLEMENTATION, -DMATE_IMPLEMENTATION
+  ]

@@ -29,6 +29,7 @@
     - [x] Move to it in flag parsing for `./tests/07-raylib-source-code`
 - [x] Move private functions to `__mate_` and snake_case
 - [x] Add `FMT_I64` and `FMT_I32` to remove warnings
+- [x] Move back to camelCase but mate prefix for private `mateFunction`
 - [ ] Add `args` parser
 - [ ] Shared libs
 - [ ] raylib-source-code

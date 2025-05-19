@@ -1,7 +1,7 @@
 /* MIT License
 
   mate.h - A single-header library for compiling your C code in C
-  Version - 2025-05-19 (0.1.11):
+  Version - 2025-05-19 (0.2.0):
   https://github.com/TomasBorquez/mate.h
 
   Guide on the `README.md`
@@ -19,6 +19,8 @@
    mate.h - Mate Definitions start here
    Guide on the `README.md`
 */
+
+/* --- Type Definitions --- */
 typedef struct {
   i64 lastBuild;
   bool samuraiBuild;
@@ -133,25 +135,21 @@ typedef struct {
   ErrorFormatFlag error;
 } StaticLibOptions;
 
-void StartBuild();
-void EndBuild();
+typedef StringBuilder FlagBuilder;
+
+/* --- Build Functions --- */
+void StartBuild(void);
+void EndBuild(void);
 
 void CreateConfig(MateOptions options);
 
 String CreateExecutable(ExecutableOptions executableOptions);
-String InstallExecutable();
-void __mate_reset_executable();
+String InstallExecutable(void);
+static void mateResetExecutable(void);
 
 String CreateStaticLib(StaticLibOptions staticLibOptions);
-String InstallStaticLib();
-void __mate_reset_static_lib();
-
-bool isMSVC();
-bool isGCC();
-bool isClang();
-bool isTCC();
-
-WARN_UNUSED errno_t RunCommand(String command);
+String InstallStaticLib(void);
+static void mateResetStaticLib(void);
 
 enum CreateCompileCommandsError { COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMPILE_COMMANDS_FAILED_COMPDB };
 WARN_UNUSED errno_t CreateCompileCommands(String ninjaBuildPath);
@@ -160,55 +158,76 @@ WARN_UNUSED errno_t CreateCompileCommands(String ninjaBuildPath);
   do {                                         \
     StringVector vector = {0};                 \
     StringVectorPushMany(vector, __VA_ARGS__); \
-    __mate_add_library_paths(&vector);         \
+    mateAddLibraryPaths(&vector);              \
   } while (0)
-void __mate_add_library_paths(StringVector *vector);
+static void mateAddLibraryPaths(StringVector *vector);
 
 #define AddIncludePaths(...)                   \
   do {                                         \
     StringVector vector = {0};                 \
     StringVectorPushMany(vector, __VA_ARGS__); \
-    __mate_add_include_paths(&vector);         \
+    mateAddIncludePaths(&vector);              \
   } while (0)
-void __mate_add_include_paths(StringVector *vector);
+static void mateAddIncludePaths(StringVector *vector);
 
 #define LinkSystemLibraries(...)               \
   do {                                         \
     StringVector vector = {0};                 \
     StringVectorPushMany(vector, __VA_ARGS__); \
-    __mate_link_system_libraries(&vector);     \
+    mateLinkSystemLibraries(&vector);          \
   } while (0)
-void __mate_link_system_libraries(StringVector *vector);
+static void mateLinkSystemLibraries(StringVector *vector);
 
-#define AddFile(source) __mate_add_file(S(source));
-void __mate_add_file(String source);
+#define AddFile(source) mateAddFile(S(source));
+static void mateAddFile(String source);
 
-#define RemoveFile(source) __mate_remove_file(S(source));
-bool __mate_remove_file(String source);
+#define RemoveFile(source) mateRemoveFile(S(source));
+static bool mateRemoveFile(String source);
 
-void __mate_rebuild();
-bool __mate_need_rebuild();
-void __mate_set_default_state();
+static void mateRebuild(void);
+static bool mateNeedRebuild(void);
+static void mateSetDefaultState(void);
 
-typedef StringBuilder FlagBuilder;
+/* --- Utils --- */
+String CompilerToStr(Compiler compiler);
 
-StringBuilder FlagBuilderCreate();
+bool isMSVC(void);
+bool isGCC(void);
+bool isClang(void);
+bool isTCC(void);
 
-#define FlagBuilderReserve(count) __mate_flag_builder_reserve(count);
-FlagBuilder __mate_flag_builder_reserve(size_t count);
+WARN_UNUSED errno_t RunCommand(String command);
 
-#define FlagBuilderAdd(builder, flag) __mate_flag_builder_add(builder, &S(flag));
-void __mate_flag_builder_add(FlagBuilder *builder, String *flag);
-
+StringBuilder FlagBuilderCreate(void);
 void FlagBuilderAddString(FlagBuilder *builder, String *flag);
 
-#define FlagBuilderAddMany(builder, ...)           \
-  do {                                             \
-    StringVector _flags = {0};                     \
-    StringVectorPushMany(_flags, __VA_ARGS__);     \
-    __mate_flag_builder_add_many(builder, _flags); \
+String CompilerToStr(Compiler compiler);
+
+WARN_UNUSED errno_t RunCommand(String command);
+
+StringBuilder FlagBuilderCreate(void);
+void FlagBuilderAddString(FlagBuilder *builder, String *flag);
+
+#define FlagBuilderReserve(count) mateFlagBuilderReserve(count);
+static FlagBuilder mateFlagBuilderReserve(size_t count);
+
+#define FlagBuilderAdd(builder, flag) mateFlagBuilderAdd(builder, &S(flag));
+static void mateFlagBuilderAdd(FlagBuilder *builder, String *flag);
+
+#define FlagBuilderAddMany(builder, ...)       \
+  do {                                         \
+    StringVector _flags = {0};                 \
+    StringVectorPushMany(_flags, __VA_ARGS__); \
+    mateFlagBuilderAddMany(builder, _flags);   \
   } while (0)
-void __mate_flag_builder_add_many(FlagBuilder *builder, StringVector flags);
+static void mateFlagBuilderAddMany(FlagBuilder *builder, StringVector flags);
+
+static String mateFixPath(String str);
+static String mateFixPathExe(String str);
+static String mateConvertNinjaPath(String str);
+
+static StringVector mateOutputTransformer(StringVector vector);
+static bool mateGlobMatch(String pattern, String text);
 
 #define SAMURAI_AMALGAM "SAMURAI SOURCE"
 
