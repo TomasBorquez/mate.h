@@ -20,7 +20,6 @@ char *GetCFlags() {
     FlagBuilderAdd(&flagsBuilder, "DPLATFORM_DESKTOP_GLFW");
   }
 
-  LogInfo("Final flags: \"%s\"", flagsBuilder.buffer.data);
   return flagsBuilder.buffer.data;
 }
 

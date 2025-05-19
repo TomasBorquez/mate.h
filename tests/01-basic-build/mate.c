@@ -4,7 +4,11 @@
 i32 main() {
   StartBuild();
   {
-    CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall -g"});
+    if (isMSVC()) {
+      CreateExecutable((ExecutableOptions){.output = "main", .flags = "/W4"});
+    } else {
+      CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall"});
+    }
 
     AddFile("./src/main.c");
 

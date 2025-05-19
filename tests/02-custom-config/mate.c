@@ -6,7 +6,12 @@ i32 main() {
 
   StartBuild();
   {
-    String buildNinjaPath = CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall -g"});
+    String buildNinjaPath;
+    if (isMSVC()) {
+      buildNinjaPath = CreateExecutable((ExecutableOptions){.output = "main", .flags = "/W4"});
+    } else {
+      buildNinjaPath = CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall"});
+    }
 
     AddFile("./src/main.c");
     AddFile("./src/t_math.c");
