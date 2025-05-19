@@ -23,20 +23,12 @@
     - [x] Add comments on `api.h`
 - [x] Semi Support for `MSVC` 
 - [x] Static libs 
-- [ ] `FlagBuilder` and `AddFlag(builder, ...)`:
-    - [ ] Similar to `StringBuilder` but it uses `mateState.arena` and `AddFlag` can add many flags plus they have a `" "` by default
-    - [ ] Use when parsing flags in `CreateStaticLib` and `CreateExecutable`
-    - [ ] Move to it in flag parsing for `./tests/07-raylib-source-code`
-- [ ] Shared libs
+- [x] `FlagBuilder` and `AddFlag(builder, ...)`:
+    - [x] Similar to `StringBuilder` but it uses `mateState.arena` and `AddFlag` can add many flags plus they have a `" "` by default
+    - [x] Use when parsing flags in `CreateStaticLib` and `CreateExecutable`
+    - [x] Move to it in flag parsing for `./tests/07-raylib-source-code`
 - [ ] Add `args` parser
-- [ ] Platforms
-    - [ ] PLATFORM_DRM
-    - [ ] `GetPlatform()` should return enum of platforms
-    - [ ] `isLinux()` should be on base
-    - [ ] `isWindows()` as well
-    - [ ] add `isAndroid()`
-    - [ ] add `isMacOs()`
-    - [ ] add `isEmscripten()`
+- [ ] Shared libs
 - [ ] raylib-source-code
     - [ ] option shared (`-fPIC`, `-DBUILD_LIBTYPE_SHARED`)
     - [ ] option linux_backend (`wayland/x11`)

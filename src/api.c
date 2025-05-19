@@ -2,40 +2,37 @@
 
 static MateConfig mateState = {0};
 
-static const String MSVCStr = {.data = "cl.exe", .length = 6};
 bool isMSVC() {
-  return StrEq(mateState.compiler, MSVCStr);
+  return mateState.compiler == MSVC;
 }
 
-static const String GCCStr = {.data = "gcc", .length = 3};
 bool isGCC() {
-  return StrEq(mateState.compiler, GCCStr);
+  return mateState.compiler == GCC;
 }
 
-static const String ClangStr = {.data = "clang", .length = 5};
 bool isClang() {
-  return StrEq(mateState.compiler, ClangStr);
+  return mateState.compiler == CLANG;
 }
 
-static const String TCCStr = {.data = "tcc", .length = 3};
 bool isTCC() {
-  return StrEq(mateState.compiler, TCCStr);
+  return mateState.compiler == TCC;
 }
 
-bool isLinux() {
-#if defined(PLATFORM_LINUX)
-  return true;
-#else
-  return false;
-#endif
-}
-
-bool isWindows() {
-#if defined(PLATFORM_WIN)
-  return true;
-#else
-  return false;
-#endif
+String CompilerToStr(Compiler compiler) {
+  switch (compiler) {
+  case GCC:
+    return S("gcc");
+    break;
+  case CLANG:
+    return S("clang");
+    break;
+  case TCC:
+    return S("tcc");
+    break;
+  case MSVC:
+    return S("cl.exe");
+    break;
+  }
 }
 
 static String fixPathExe(String str) {
@@ -54,6 +51,39 @@ static String fixPath(String str) {
 #else
   return F(mateState.arena, "%s/%s", GetCwd(), path.data);
 #endif
+}
+
+FlagBuilder FlagBuilderCreate() {
+  return StringBuilderCreate(mateState.arena);
+}
+
+static FlagBuilder flagBuilderReserve(size_t count) {
+  return StringBuilderReserve(mateState.arena, count);
+}
+
+static void flagBuilderAdd(FlagBuilder *builder, String *flag) {
+  if (builder->buffer.length == 0) {
+    StringBuilderAppend(mateState.arena, builder, &S("-"));
+    StringBuilderAppend(mateState.arena, builder, flag);
+    return;
+  }
+
+  StringBuilderAppend(mateState.arena, builder, &S(" -"));
+  StringBuilderAppend(mateState.arena, builder, flag);
+}
+
+static void flagBuilderAddMany(FlagBuilder *builder, StringVector flags) {
+  size_t count = 0;
+  if (builder->buffer.length == 0) {
+    StringBuilderAppend(mateState.arena, builder, &S("-"));
+    StringBuilderAppend(mateState.arena, builder, VecAtPtr(flags, 0));
+    count = 1;
+  }
+
+  for (size_t i = count; i < flags.length; i++) {
+    StringBuilderAppend(mateState.arena, builder, &S(" -"));
+    StringBuilderAppend(mateState.arena, builder, VecAtPtr(flags, i));
+  }
 }
 
 String ConvertNinjaPath(String str) {
@@ -79,8 +109,8 @@ static void setDefaultState() {
 
 static MateConfig parseMateConfig(MateOptions options) {
   MateConfig result;
+  result.compiler = options.compiler;
   result.mateExe = StrNew(mateState.arena, options.mateExe);
-  result.compiler = StrNew(mateState.arena, options.compiler);
   result.mateSource = StrNew(mateState.arena, options.mateSource);
   result.buildDirectory = StrNew(mateState.arena, options.buildDirectory);
   return result;
@@ -102,7 +132,7 @@ void CreateConfig(MateOptions options) {
     mateState.buildDirectory = fixPath(config.buildDirectory);
   }
 
-  if (!StrIsNull(config.compiler)) {
+  if (config.compiler != 0) {
     mateState.compiler = config.compiler;
   }
 
@@ -139,7 +169,7 @@ static void readCache() {
     Assert(errFileWrite == SUCCESS, "MateReadCache: failed writing samurai source code to path %s", sourcePath.data);
 
     String outputPath = F(mateState.arena, "%s/samurai", mateState.buildDirectory.data);
-    String compileCommand = F(mateState.arena, "%s \"%s\" -o \"%s\" -lrt -std=c99", mateState.compiler.data, sourcePath.data, outputPath.data);
+    String compileCommand = F(mateState.arena, "%s \"%s\" -o \"%s\" -lrt -std=c99", CompilerToStr(mateState.compiler).data, sourcePath.data, outputPath.data);
 
     errno_t err = RunCommand(compileCommand);
     Assert(err == SUCCESS, "MateReadCache: Error meanwhile compiling samurai at %s, if you are seeing this please make an issue at github.com/TomasBorquez/mate.h", sourcePath.data);
@@ -200,7 +230,7 @@ void reBuild() {
   if (isMSVC()) {
     compileCommand = F(mateState.arena, "cl.exe \"%s\" /Fe:\"%s\"", mateState.mateSource.data, mateExeNew.data);
   } else {
-    compileCommand = F(mateState.arena, "%s \"%s\" -o \"%s\"", mateState.compiler.data, mateState.mateSource.data, mateExeNew.data);
+    compileCommand = F(mateState.arena, "%s \"%s\" -o \"%s\"", CompilerToStr(mateState.compiler).data, mateState.mateSource.data, mateExeNew.data);
   }
 
   LogWarn("%s changed rebuilding...", mateState.mateSource.data);
@@ -258,141 +288,142 @@ String CreateStaticLib(StaticLibOptions staticLibOptions) {
     flagsStr = S("");
   }
 
+  // TODO: Add better defaults for colored errors
   if (staticLibOptions.warnings != 0) {
-#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
-    switch (staticLibOptions.warnings) {
-    case FLAG_WARNINGS_NONE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-w");
-      break;
-    case FLAG_WARNINGS_MINIMAL:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall");
-      break;
-    case FLAG_WARNINGS:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra");
-      break;
-    case FLAG_WARNINGS_VERBOSE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra -Wpedantic");
-      break;
+    if (mateState.compiler == MSVC) {
+      switch (staticLibOptions.warnings) {
+      case FLAG_WARNINGS_NONE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W0");
+        break;
+      case FLAG_WARNINGS_MINIMAL:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W3");
+        break;
+      case FLAG_WARNINGS:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W4");
+        break;
+      case FLAG_WARNINGS_VERBOSE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Wall");
+        break;
+      }
+    } else {
+      switch (staticLibOptions.warnings) {
+      case FLAG_WARNINGS_NONE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-w");
+        break;
+      case FLAG_WARNINGS_MINIMAL:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall");
+        break;
+      case FLAG_WARNINGS:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra");
+        break;
+      case FLAG_WARNINGS_VERBOSE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra -Wpedantic");
+        break;
+      }
     }
-#elif defined(COMPILER_MSVC)
-    switch (staticLibOptions.warnings) {
-    case FLAG_WARNINGS_NONE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W0");
-      break;
-    case FLAG_WARNINGS_MINIMAL:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W3");
-      break;
-    case FLAG_WARNINGS:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W4");
-      break;
-    case FLAG_WARNINGS_VERBOSE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Wall");
-      break;
-    }
-#endif
   }
 
   if (staticLibOptions.debug != 0) {
-#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
-    switch (staticLibOptions.debug) {
-    case FLAG_DEBUG_MINIMAL:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g1");
-      break;
-    case FLAG_DEBUG_MEDIUM:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g2");
-      break;
-    case FLAG_DEBUG:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g3");
-      break;
+    if (mateState.compiler == MSVC) {
+      switch (staticLibOptions.debug) {
+      case FLAG_DEBUG_MINIMAL:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Zi");
+        break;
+      case FLAG_DEBUG_MEDIUM:
+      case FLAG_DEBUG:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/ZI");
+        break;
+      }
+    } else {
+      switch (staticLibOptions.debug) {
+      case FLAG_DEBUG_MINIMAL:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g1");
+        break;
+      case FLAG_DEBUG_MEDIUM:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g2");
+        break;
+      case FLAG_DEBUG:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g3");
+        break;
+      }
     }
-#elif defined(COMPILER_MSVC)
-    switch (staticLibOptions.debug) {
-    case FLAG_DEBUG_MINIMAL:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Zi");
-      break;
-    case FLAG_DEBUG_MEDIUM:
-    case FLAG_DEBUG:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/ZI");
-      break;
-    }
-#endif
   }
 
   if (staticLibOptions.optimization != 0) {
-#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
-    switch (staticLibOptions.optimization) {
-    case FLAG_OPTIMIZATION_NONE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O0");
-      break;
-    case FLAG_OPTIMIZATION_BASIC:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O1");
-      break;
-    case FLAG_OPTIMIZATION:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O2");
-      break;
-    case FLAG_OPTIMIZATION_SIZE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Os");
-      break;
-    case FLAG_OPTIMIZATION_AGGRESSIVE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O3");
-      break;
+    if (mateState.compiler == MSVC) {
+      switch (staticLibOptions.optimization) {
+      case FLAG_OPTIMIZATION_NONE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Od");
+        break;
+      case FLAG_OPTIMIZATION_BASIC:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
+        break;
+      case FLAG_OPTIMIZATION:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O2");
+        break;
+      case FLAG_OPTIMIZATION_SIZE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
+        break;
+      case FLAG_OPTIMIZATION_AGGRESSIVE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Ox");
+        break;
+      }
+    } else {
+      switch (staticLibOptions.optimization) {
+      case FLAG_OPTIMIZATION_NONE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O0");
+        break;
+      case FLAG_OPTIMIZATION_BASIC:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O1");
+        break;
+      case FLAG_OPTIMIZATION:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O2");
+        break;
+      case FLAG_OPTIMIZATION_SIZE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Os");
+        break;
+      case FLAG_OPTIMIZATION_AGGRESSIVE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O3");
+        break;
+      }
     }
-#elif defined(COMPILER_MSVC)
-    switch (staticLibOptions.optimization) {
-    case FLAG_OPTIMIZATION_NONE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Od");
-      break;
-    case FLAG_OPTIMIZATION_BASIC:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
-      break;
-    case FLAG_OPTIMIZATION:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O2");
-      break;
-    case FLAG_OPTIMIZATION_SIZE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
-      break;
-    case FLAG_OPTIMIZATION_AGGRESSIVE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Ox");
-      break;
-    }
-#endif
   }
 
   if (staticLibOptions.std != 0) {
-#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
-    switch (staticLibOptions.std) {
-    case FLAG_STD_C99:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c99");
-      break;
-    case FLAG_STD_C11:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c11");
-      break;
-    case FLAG_STD_C17:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c17");
-      break;
-    case FLAG_STD_C23:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
-      break;
-    case FLAG_STD_C2X:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
-      break;
+    if (mateState.compiler == MSVC) {
+      switch (staticLibOptions.std) {
+      case FLAG_STD_C99:
+      case FLAG_STD_C11:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c11");
+        break;
+      case FLAG_STD_C17:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c17");
+        break;
+      case FLAG_STD_C23:
+      case FLAG_STD_C2X:
+        // NOTE: MSVC doesn't have C23 yet
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:clatest");
+        break;
+      }
+    } else {
+      switch (staticLibOptions.std) {
+      case FLAG_STD_C99:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c99");
+        break;
+      case FLAG_STD_C11:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c11");
+        break;
+      case FLAG_STD_C17:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c17");
+        break;
+      case FLAG_STD_C23:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
+        break;
+      case FLAG_STD_C2X:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
+        break;
+      }
     }
-#elif defined(COMPILER_MSVC)
-    switch (staticLibOptions.std) {
-    case FLAG_STD_C99:
-    case FLAG_STD_C11:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c11");
-      break;
-    case FLAG_STD_C17:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c17");
-      break;
-    case FLAG_STD_C23:
-    case FLAG_STD_C2X:
-      // NOTE: MSVC doesn't have C23 yet
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:clatest");
-      break;
-    }
-#endif
   }
 
   if (!StrIsNull(flagsStr)) {
@@ -454,140 +485,140 @@ String CreateExecutable(ExecutableOptions executableOptions) {
   }
 
   if (executableOptions.warnings != 0) {
-#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
-    switch (executableOptions.warnings) {
-    case FLAG_WARNINGS_NONE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-w");
-      break;
-    case FLAG_WARNINGS_MINIMAL:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall");
-      break;
-    case FLAG_WARNINGS:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra");
-      break;
-    case FLAG_WARNINGS_VERBOSE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra -Wpedantic");
-      break;
+    if (mateState.compiler == MSVC) {
+      switch (executableOptions.warnings) {
+      case FLAG_WARNINGS_NONE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W0");
+        break;
+      case FLAG_WARNINGS_MINIMAL:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W3");
+        break;
+      case FLAG_WARNINGS:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W4");
+        break;
+      case FLAG_WARNINGS_VERBOSE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Wall");
+        break;
+      }
+    } else {
+      switch (executableOptions.warnings) {
+      case FLAG_WARNINGS_NONE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-w");
+        break;
+      case FLAG_WARNINGS_MINIMAL:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall");
+        break;
+      case FLAG_WARNINGS:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra");
+        break;
+      case FLAG_WARNINGS_VERBOSE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra -Wpedantic");
+        break;
+      }
     }
-#elif defined(COMPILER_MSVC)
-    switch (executableOptions.warnings) {
-    case FLAG_WARNINGS_NONE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W0");
-      break;
-    case FLAG_WARNINGS_MINIMAL:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W3");
-      break;
-    case FLAG_WARNINGS:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W4");
-      break;
-    case FLAG_WARNINGS_VERBOSE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Wall");
-      break;
-    }
-#endif
   }
 
   if (executableOptions.debug != 0) {
-#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
-    switch (executableOptions.debug) {
-    case FLAG_DEBUG_MINIMAL:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g1");
-      break;
-    case FLAG_DEBUG_MEDIUM:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g2");
-      break;
-    case FLAG_DEBUG:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g3");
-      break;
+    if (mateState.compiler == MSVC) {
+      switch (executableOptions.debug) {
+      case FLAG_DEBUG_MINIMAL:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Zi");
+        break;
+      case FLAG_DEBUG_MEDIUM:
+      case FLAG_DEBUG:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/ZI");
+        break;
+      }
+    } else {
+      switch (executableOptions.debug) {
+      case FLAG_DEBUG_MINIMAL:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g1");
+        break;
+      case FLAG_DEBUG_MEDIUM:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g2");
+        break;
+      case FLAG_DEBUG:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g3");
+        break;
+      }
     }
-#elif defined(COMPILER_MSVC)
-    switch (executableOptions.debug) {
-    case FLAG_DEBUG_MINIMAL:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Zi");
-      break;
-    case FLAG_DEBUG_MEDIUM:
-    case FLAG_DEBUG:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/ZI");
-      break;
-    }
-#endif
   }
 
   if (executableOptions.optimization != 0) {
-#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
-    switch (executableOptions.optimization) {
-    case FLAG_OPTIMIZATION_NONE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O0");
-      break;
-    case FLAG_OPTIMIZATION_BASIC:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O1");
-      break;
-    case FLAG_OPTIMIZATION:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O2");
-      break;
-    case FLAG_OPTIMIZATION_SIZE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Os");
-      break;
-    case FLAG_OPTIMIZATION_AGGRESSIVE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O3");
-      break;
+    if (mateState.compiler == MSVC) {
+      switch (executableOptions.optimization) {
+      case FLAG_OPTIMIZATION_NONE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Od");
+        break;
+      case FLAG_OPTIMIZATION_BASIC:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
+        break;
+      case FLAG_OPTIMIZATION:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O2");
+        break;
+      case FLAG_OPTIMIZATION_SIZE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
+        break;
+      case FLAG_OPTIMIZATION_AGGRESSIVE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Ox");
+        break;
+      }
+    } else {
+      switch (executableOptions.optimization) {
+      case FLAG_OPTIMIZATION_NONE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O0");
+        break;
+      case FLAG_OPTIMIZATION_BASIC:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O1");
+        break;
+      case FLAG_OPTIMIZATION:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O2");
+        break;
+      case FLAG_OPTIMIZATION_SIZE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Os");
+        break;
+      case FLAG_OPTIMIZATION_AGGRESSIVE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O3");
+        break;
+      }
     }
-#elif defined(COMPILER_MSVC)
-    switch (executableOptions.optimization) {
-    case FLAG_OPTIMIZATION_NONE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Od");
-      break;
-    case FLAG_OPTIMIZATION_BASIC:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
-      break;
-    case FLAG_OPTIMIZATION:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O2");
-      break;
-    case FLAG_OPTIMIZATION_SIZE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
-      break;
-    case FLAG_OPTIMIZATION_AGGRESSIVE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Ox");
-      break;
-    }
-#endif
   }
 
   if (executableOptions.std != 0) {
-#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
-    switch (executableOptions.std) {
-    case FLAG_STD_C99:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c99");
-      break;
-    case FLAG_STD_C11:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c11");
-      break;
-    case FLAG_STD_C17:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c17");
-      break;
-    case FLAG_STD_C23:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
-      break;
-    case FLAG_STD_C2X:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
-      break;
+    if (mateState.compiler == MSVC) {
+      switch (executableOptions.std) {
+      case FLAG_STD_C99:
+      case FLAG_STD_C11:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c11");
+        break;
+      case FLAG_STD_C17:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c17");
+        break;
+      case FLAG_STD_C23:
+      case FLAG_STD_C2X:
+        // NOTE: MSVC doesn't have C23 yet
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:clatest");
+        break;
+      }
+    } else {
+      switch (executableOptions.std) {
+      case FLAG_STD_C99:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c99");
+        break;
+      case FLAG_STD_C11:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c11");
+        break;
+      case FLAG_STD_C17:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c17");
+        break;
+      case FLAG_STD_C23:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
+        break;
+      case FLAG_STD_C2X:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
+        break;
+      }
     }
-#elif defined(COMPILER_MSVC)
-    switch (executableOptions.std) {
-    case FLAG_STD_C99:
-    case FLAG_STD_C11:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c11");
-      break;
-    case FLAG_STD_C17:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c17");
-      break;
-    case FLAG_STD_C23:
-    case FLAG_STD_C2X:
-      // NOTE: MSVC doesn't have C23 yet
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:clatest");
-      break;
-    }
-#endif
   }
 
   if (!StrIsNull(flagsStr)) {
@@ -817,7 +848,8 @@ String InstallExecutable() {
 
   // Compiler
   StringBuilderAppend(mateState.arena, &builder, &S("cc = "));
-  StringBuilderAppend(mateState.arena, &builder, &mateState.compiler);
+  String compiler = CompilerToStr(mateState.compiler);
+  StringBuilderAppend(mateState.arena, &builder, &compiler);
   StringBuilderAppend(mateState.arena, &builder, &S("\n"));
 
   // Linker flags
@@ -977,7 +1009,8 @@ String InstallStaticLib() {
 
   // Compiler
   StringBuilderAppend(mateState.arena, &builder, &S("cc = "));
-  StringBuilderAppend(mateState.arena, &builder, &mateState.compiler);
+  String compiler = CompilerToStr(mateState.compiler);
+  StringBuilderAppend(mateState.arena, &builder, &compiler);
   StringBuilderAppend(mateState.arena, &builder, &S("\n"));
 
   // Archive

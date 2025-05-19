@@ -16,7 +16,7 @@
 /* MIT License
 
   base.h - Better cross-platform STD
-  Version - 2025-05-15 (0.1.18):
+  Version - 2025-05-18 (0.1.19):
   https://github.com/TomasBorquez/base.h
 
   Usage:
@@ -68,12 +68,19 @@ extern "C" {
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
 #  define PLATFORM_WIN
-#elif defined(__linux__) || defined(__gnu_linux__)
-#  define PLATFORM_LINUX
-#elif defined(__APPLE__) || defined(__MACH__)
-#  define PLATFORM_MACOS
 #else
-#  error "The codebase only supports linux, macos and windows"
+#  define PLATFORM_UNIX
+#  if defined(__ANDROID__)
+#    define PLATFORM_ANDROID
+#  elif defined(__linux__) || defined(__gnu_linux__)
+#    define PLATFORM_LINUX
+#  elif defined(__APPLE__) || defined(__MACH__)
+#    define PLATFORM_MACOS
+#  elif defined(__EMSCRIPTEN__)
+#    define PLATFORM_EMSCRIPTEN
+#  else
+#    error "The codebase only supports linux, macos, windows, android and emscripten"
+#  endif
 #endif
 
 #if defined(COMPILER_CLANG)
@@ -280,17 +287,30 @@ void _custom_assert(const char *expr, const char *file, unsigned line, const cha
 /* --- Time and Platforms --- */
 i64 TimeNow();
 void WaitTime(i64 ms);
-String GetCompiler();
-String GetPlatform();
+
+bool isLinux();
+bool isMacOs();
+bool isWindows();
+bool isUnix();
+bool isAndroid();
+bool isEmscripten();
+bool isLinuxDRM();
+
+typedef enum { WINDOWS = 1, LINUX, MACOS } Platform;
+Platform GetPlatform();
+
+typedef enum { GCC = 1, CLANG, TCC, MSVC } Compiler;
+Compiler GetCompiler();
 
 /* --- Error --- */
 typedef i32 errno_t;
 
-enum GeneralError {
+typedef enum {
   SUCCESS = 0,
-};
+} GeneralError;
 
 String ErrToStr(errno_t err);
+
 /* --- Arena --- */
 typedef struct __ArenaChunk {
   struct __ArenaChunk *next;
@@ -398,26 +418,26 @@ void SetCwd(char *destination);
 bool Mkdir(String path); // NOTE: Mkdir if not exist
 StringVector ListDir(Arena *arena, String path);
 
-enum FileStatsError { FILE_GET_ATTRIBUTES_FAILED = 100, FILE_STATS_FILE_NOT_EXIST };
-WARN_UNUSED errno_t FileStats(String path, File *file);
+typedef enum { FILE_STATS_SUCCESS = 0, FILE_GET_ATTRIBUTES_FAILED = 100, FILE_STATS_FILE_NOT_EXIST } FileStatsError;
+WARN_UNUSED FileStatsError FileStats(String path, File *file);
 
-enum FileReadError { FILE_NOT_EXIST = 200, FILE_OPEN_FAILED, FILE_GET_SIZE_FAILED, FILE_READ_FAILED };
-WARN_UNUSED errno_t FileRead(Arena *arena, String path, String *result);
+typedef enum { FILE_READ_SUCCESS = 0, FILE_NOT_EXIST = 200, FILE_OPEN_FAILED, FILE_GET_SIZE_FAILED, FILE_READ_FAILED } FileReadError;
+WARN_UNUSED FileReadError FileRead(Arena *arena, String path, String *result);
 
-enum FileWriteError { FILE_WRITE_OPEN_FAILED = 300, FILE_WRITE_ACCESS_DENIED, FILE_WRITE_NO_MEMORY, FILE_WRITE_NOT_FOUND, FILE_WRITE_DISK_FULL, FILE_WRITE_IO_ERROR };
-WARN_UNUSED errno_t FileWrite(String path, String data);
+typedef enum { FILE_WRITE_SUCCESS = 0, FILE_WRITE_OPEN_FAILED = 300, FILE_WRITE_ACCESS_DENIED, FILE_WRITE_NO_MEMORY, FILE_WRITE_NOT_FOUND, FILE_WRITE_DISK_FULL, FILE_WRITE_IO_ERROR } FileWriteError;
+WARN_UNUSED FileWriteError FileWrite(String path, String data);
 
-// enum FileWriteError - Same error enum since it uses `FileWrite("")` under the hood
-WARN_UNUSED errno_t FileReset(String path);
+typedef enum { FILE_ADD_SUCCESS = 0, FILE_ADD_OPEN_FAILED = 400, FILE_ADD_ACCESS_DENIED, FILE_ADD_NO_MEMORY, FILE_ADD_NOT_FOUND, FILE_ADD_DISK_FULL, FILE_ADD_IO_ERROR } FileAddError;
+WARN_UNUSED FileAddError FileAdd(String path, String data); // NOTE: Adds `\n` at the end always
 
-enum FileAddError { FILE_ADD_OPEN_FAILED = 400, FILE_ADD_ACCESS_DENIED, FILE_ADD_NO_MEMORY, FILE_ADD_NOT_FOUND, FILE_ADD_DISK_FULL, FILE_ADD_IO_ERROR };
-WARN_UNUSED errno_t FileAdd(String path, String data); // NOTE: Adds `\n` at the end always
+typedef enum { FILE_DELETE_SUCCESS = 0, FILE_DELETE_ACCESS_DENIED = 500, FILE_DELETE_NOT_FOUND, FILE_DELETE_IO_ERROR } FileDeleteError;
+WARN_UNUSED FileDeleteError FileDelete(String path);
 
-enum FileDeleteError { FILE_DELETE_ACCESS_DENIED = 500, FILE_DELETE_NOT_FOUND, FILE_DELETE_IO_ERROR };
-WARN_UNUSED errno_t FileDelete(String path);
+typedef enum { FILE_RENAME_SUCCESS = 0, FILE_RENAME_ACCESS_DENIED = 600, FILE_RENAME_NOT_FOUND, FILE_RENAME_IO_ERROR } FileRenameError;
+WARN_UNUSED FileRenameError FileRename(String oldPath, String newPath);
 
-enum FileRenameError { FILE_RENAME_ACCESS_DENIED = 600, FILE_RENAME_NOT_FOUND, FILE_RENAME_IO_ERROR };
-WARN_UNUSED errno_t FileRename(String oldPath, String newPath);
+// NOTE: Same error enum since it uses `FileWrite("")` under the hood
+WARN_UNUSED FileWriteError FileReset(String path);
 
 /* --- Logger --- */
 #define _RESET "\x1b[0m"
@@ -510,7 +530,6 @@ bool IniGetBool(IniFile *ini, String key);
    base.h - Implementation of base.h
    https://github.com/TomasBorquez/base.h
 */
-
 #if defined(BASE_IMPLEMENTATION)
 // --- Vector Implementation ---
 static void vecPush(void **data, size_t *length, size_t *capacity, size_t element_size, void *value) {
@@ -649,25 +668,81 @@ WARN_UNUSED errno_t fopen_s(FILE **streamptr, const char *filename, const char *
 }
 #  endif
 
-String GetCompiler() {
-#  if defined(COMPILER_CLANG)
-  return S("clang");
-#  elif defined(COMPILER_GCC)
-  return S("gcc");
-#  elif defined(COMPILER_TCC)
-  return S("tcc");
-#  elif defined(COMPILER_MSVC)
-  return S("cl.exe");
+bool isLinux() {
+#  if defined(PLATFORM_LINUX)
+  return true;
+#  else
+  return false;
 #  endif
 }
 
-String GetPlatform() {
+bool isMacOs() {
+#  if defined(PLATFORM_MACOS)
+  return true;
+#  else
+  return false;
+#  endif
+}
+
+bool isWindows() {
 #  if defined(PLATFORM_WIN)
-  return S("windows");
+  return true;
+#  else
+  return false;
+#  endif
+}
+
+bool isUnix() {
+#  if defined(PLATFORM_UNIX)
+  return true;
+#  else
+  return false;
+#  endif
+}
+
+bool isAndroid() {
+#  if defined(PLATFORM_EMSCRIPTEN)
+  return true;
+#  else
+  return false;
+#  endif
+}
+
+bool isEmscripten() {
+#  if defined(PLATFORM_EMSCRIPTEN)
+  return true;
+#  else
+  return false;
+#  endif
+}
+
+bool isLinuxDRM() {
+#  if defined(PLATFORM_DRM)
+  return true;
+#  else
+  return false;
+#  endif
+}
+
+Compiler GetCompiler() {
+#  if defined(COMPILER_CLANG)
+  return CLANG;
+#  elif defined(COMPILER_GCC)
+  return GCC;
+#  elif defined(COMPILER_TCC)
+  return TCC;
+#  elif defined(COMPILER_MSVC)
+  return MSVC;
+#  endif
+}
+
+Platform GetPlatform() {
+#  if defined(PLATFORM_WIN)
+  return WINDOWS;
 #  elif defined(PLATFORM_LINUX)
-  return S("linux");
+  return LINUX;
 #  elif defined(PLATFORM_MACOS)
-  return S("macos");
+  return MACOS;
 #  endif
 }
 
@@ -702,7 +777,7 @@ void WaitTime(i64 ms) {
 }
 
 /* --- Error Implementation --- */
-String FileErrToStr(errno_t err) {
+String ErrToStr(errno_t err) {
   if (err < 100) {
 #  if defined(PLATFORM_WIN)
     char buffer[256];
@@ -1224,7 +1299,7 @@ String NormalizePath(Arena *arena, String path) {
 }
 
 String NormalizeExePath(Arena *arena, String path) {
-  String platform = GetPlatform();
+  Platform platform = GetPlatform();
   String result;
 
   if (path.length >= 2 && path.data[0] == '.' && (path.data[1] == '/' || path.data[1] == '\\')) {
@@ -1242,7 +1317,7 @@ String NormalizeExePath(Arena *arena, String path) {
     }
   }
 
-  if (StrEq(platform, S("windows"))) {
+  if (platform == WINDOWS) {
     if (!hasExe) {
       result = StrConcat(arena, result, exeExtension);
     }
@@ -1289,7 +1364,7 @@ String NormalizeExtension(Arena *arena, String path) {
 }
 
 String NormalizeStaticLibPath(Arena *arena, String path) {
-  String platform = GetPlatform();
+  Platform platform = GetPlatform();
   String result;
 
   if (path.length >= 2 && path.data[0] == '.' && (path.data[1] == '/' || path.data[1] == '\\')) {
@@ -1318,7 +1393,7 @@ String NormalizeStaticLibPath(Arena *arena, String path) {
     }
   }
 
-  if (StrEq(platform, S("windows"))) {
+  if (platform == WINDOWS) {
     if (hasLibExt && !StrEq(libExtension, libWinExtension)) {
       result = StrSlice(arena, result, 0, result.length - libExtension.length);
       hasLibExt = false;
@@ -1457,7 +1532,7 @@ void SetCwd(char *destination) {
   GetCwd();
 }
 
-errno_t FileStats(String path, File *result) {
+FileStatsError FileStats(String path, File *result) {
   if (GetFileAttributesA(path.data) == INVALID_FILE_ATTRIBUTES) {
     DWORD error = GetLastError();
     if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
@@ -1505,10 +1580,10 @@ errno_t FileStats(String path, File *result) {
   result->createTime = createTime.QuadPart / WINDOWS_TICK - SEC_TO_UNIX_EPOCH;
   result->modifyTime = modifyTime.QuadPart / WINDOWS_TICK - SEC_TO_UNIX_EPOCH;
 
-  return SUCCESS;
+  return FILE_STATS_SUCCESS;
 }
 
-errno_t FileRead(Arena *arena, String path, String *result) {
+FileReadError FileRead(Arena *arena, String path, String *result) {
   HANDLE hFile = INVALID_HANDLE_VALUE;
 
   hFile = CreateFileA(path.data, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -1539,10 +1614,10 @@ errno_t FileRead(Arena *arena, String path, String *result) {
   *result = (String){.length = bytesRead, .data = buffer};
 
   CloseHandle(hFile);
-  return SUCCESS;
+  return FILE_READ_SUCCESS;
 }
 
-errno_t FileWrite(String path, String data) {
+FileWriteError FileWrite(String path, String data) {
   HANDLE hFile = INVALID_HANDLE_VALUE;
 
   hFile = CreateFileA(path.data, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -1575,10 +1650,10 @@ errno_t FileWrite(String path, String data) {
 
   CloseHandle(hFile);
 
-  return SUCCESS;
+  return FILE_WRITE_SUCCESS;
 }
 
-errno_t FileAdd(String path, String data) {
+FileAddError FileAdd(String path, String data) {
   HANDLE hFile = INVALID_HANDLE_VALUE;
   hFile = CreateFileA(path.data, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
   if (hFile == INVALID_HANDLE_VALUE) {
@@ -1618,10 +1693,10 @@ errno_t FileAdd(String path, String data) {
 
   CloseHandle(hFile);
   Free(newData);
-  return SUCCESS;
+  return FILE_ADD_SUCCESS;
 }
 
-errno_t FileDelete(String path) {
+FileDeleteError FileDelete(String path) {
   if (!DeleteFileA(path.data)) {
     DWORD error = GetLastError();
     switch (error) {
@@ -1634,10 +1709,10 @@ errno_t FileDelete(String path) {
     }
   }
 
-  return SUCCESS;
+  return FILE_DELETE_SUCCESS;
 }
 
-errno_t FileRename(String oldPath, String newPath) {
+FileRenameError FileRename(String oldPath, String newPath) {
   if (!MoveFileEx(oldPath.data, newPath.data, MOVEFILE_REPLACE_EXISTING)) {
     DWORD error = GetLastError();
     switch (error) {
@@ -1650,7 +1725,7 @@ errno_t FileRename(String oldPath, String newPath) {
     }
   }
 
-  return SUCCESS;
+  return FILE_RENAME_SUCCESS;
 }
 
 bool Mkdir(String path) {
@@ -1718,7 +1793,7 @@ void SetCwd(char *destination) {
   GetCwd();
 }
 
-errno_t FileStats(String path, File *result) {
+FileStatsError FileStats(String path, File *result) {
   struct stat fileStat;
   if (stat(path.data, &fileStat) != 0) {
     if (errno == ENOENT) {
@@ -1746,10 +1821,10 @@ errno_t FileStats(String path, File *result) {
   result->createTime = fileStat.st_ctime; // Creation time (may be change time on some Unix systems)
   result->modifyTime = fileStat.st_mtime; // Modification time
 
-  return SUCCESS;
+  return FILE_STATS_SUCCESS;
 }
 
-errno_t FileRead(Arena *arena, String path, String *result) {
+FileReadError FileRead(Arena *arena, String path, String *result) {
   FILE *file = fopen(path.data, "r");
   if (!file) {
     int error = errno;
@@ -1781,10 +1856,10 @@ errno_t FileRead(Arena *arena, String path, String *result) {
 
   *result = (String){.length = bytesRead, .data = buffer};
   fclose(file);
-  return SUCCESS;
+  return FILE_READ_SUCCESS;
 }
 
-errno_t FileWrite(String path, String data) {
+FileWriteError FileWrite(String path, String data) {
   i32 fd = -1;
 
   fd = open(path.data, O_WRONLY | O_CREAT | O_TRUNC, 0644);
@@ -1816,10 +1891,10 @@ errno_t FileWrite(String path, String data) {
 
   close(fd);
 
-  return SUCCESS;
+  return FILE_WRITE_SUCCESS;
 }
 
-errno_t FileAdd(String path, String data) {
+FileAddError FileAdd(String path, String data) {
   i32 fd = -1;
 
   fd = open(path.data, O_WRONLY | O_APPEND | O_CREAT, 0644);
@@ -1857,10 +1932,10 @@ errno_t FileAdd(String path, String data) {
 
   close(fd);
   Free(newData);
-  return SUCCESS;
+  return FILE_ADD_SUCCESS;
 }
 
-errno_t FileDelete(String path) {
+FileDeleteError FileDelete(String path) {
   if (unlink(path.data) != 0) {
     int error = errno;
 
@@ -1874,10 +1949,10 @@ errno_t FileDelete(String path) {
     }
   }
 
-  return SUCCESS;
+  return FILE_DELETE_SUCCESS;
 }
 
-errno_t FileRename(String oldPath, String newPath) {
+FileRenameError FileRename(String oldPath, String newPath) {
   if (rename(oldPath.data, newPath.data) != 0) {
     errno_t error = errno;
 
@@ -1891,7 +1966,7 @@ errno_t FileRename(String oldPath, String newPath) {
     }
   }
 
-  return SUCCESS;
+  return FILE_RENAME_SUCCESS;
 }
 
 bool Mkdir(String path) {
@@ -1942,7 +2017,7 @@ StringVector ListDir(Arena *arena, String path) {
 }
 #  endif
 
-errno_t FileReset(String path) {
+FileWriteError FileReset(String path) {
   return FileWrite(path, S(""));
 }
 
@@ -1996,25 +2071,25 @@ void LogInit() {
 /* --- INI Parser Implementation --- */
 errno_t IniParse(String path, IniFile *result) {
   File stats = {0};
-  errno_t err = FileStats(path, &stats);
+  FileStatsError err = FileStats(path, &stats);
   if (err == FILE_STATS_FILE_NOT_EXIST) {
     LogWarn("IniParse: %s does not exist, creating...", path.data);
-    errno_t fileResetErr = FileReset(path);
-    Assert(fileResetErr == SUCCESS, "IniParse: Failed creating file for path %s, err: %d", path.data, fileResetErr);
+    FileWriteError err = FileReset(path);
+    Assert(err == FILE_WRITE_SUCCESS, "IniParse: Failed creating file for path %s, err: %d", path.data, err);
 
     result->arena = ArenaCreate(sizeof(String) * 10); // Initialize arena
     return SUCCESS;
   }
 
-  if (err != SUCCESS) {
+  if (err != FILE_STATS_SUCCESS) {
     return err;
   }
 
   String buffer;
   result->arena = ArenaCreate(stats.size * 4);
-  err = FileRead(result->arena, path, &buffer);
-  if (err != SUCCESS) {
-    return err;
+  FileReadError readError = FileRead(result->arena, path, &buffer);
+  if (readError != FILE_READ_SUCCESS) {
+    return readError;
   }
 
   StringVector iniSplit = StrSplitNewLine(result->arena, buffer);
@@ -2047,15 +2122,15 @@ errno_t IniParse(String path, IniFile *result) {
 }
 
 errno_t IniWrite(String path, IniFile *iniFile) {
-  errno_t err = FileReset(path);
-  if (err != SUCCESS) {
+  FileWriteError err = FileReset(path);
+  if (err != FILE_WRITE_SUCCESS) {
     return err;
   }
 
   VecForEach(iniFile->data, entry) {
     String value = F(iniFile->arena, "%s=%s", entry->key.data, entry->value.data);
-    err = FileAdd(path, value);
-    if (err != SUCCESS) {
+    FileAddError err = FileAdd(path, value);
+    if (err != FILE_ADD_SUCCESS) {
       return err;
     }
   }
@@ -2169,7 +2244,7 @@ typedef struct {
 } MateCache;
 
 typedef struct {
-  char *compiler;
+  Compiler compiler;
   char *buildDirectory;
   char *mateSource;
   char *mateExe;
@@ -2190,7 +2265,7 @@ typedef struct {
 } Executable;
 
 typedef struct {
-  String compiler;
+  Compiler compiler;
 
   // Build State
   String libs;
@@ -2282,6 +2357,11 @@ String CreateStaticLib(StaticLibOptions staticLibOptions);
 String InstallStaticLib();
 void ResetStaticLib();
 
+bool isMSVC();
+bool isGCC();
+bool isClang();
+bool isTCC();
+
 WARN_UNUSED errno_t RunCommand(String command);
 
 enum CreateCompileCommandsError { COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMPILE_COMMANDS_FAILED_COMPDB };
@@ -2321,14 +2401,23 @@ static void reBuild();
 static bool needRebuild();
 static void setDefaultState();
 
-// Utility platform/compiler functions
-bool isWindows();
-bool isLinux();
+typedef StringBuilder FlagBuilder;
 
-bool isMSVC();
-bool isGCC();
-bool isClang();
-bool isTCC();
+StringBuilder FlagBuilderCreate();
+
+#define FlagBuilderReserve(count) flagBuilderReserve(count);
+static FlagBuilder flagBuilderReserve(size_t count);
+
+#define FlagBuilderAdd(builder, flag) flagBuilderAdd(builder, &S(flag));
+static void flagBuilderAdd(FlagBuilder *builder, String *flag);
+
+#define FlagBuilderAddMany(builder, ...)       \
+  do {                                         \
+    StringVector _flags = {0};                 \
+    StringVectorPushMany(_flags, __VA_ARGS__); \
+    flagBuilderAddMany(builder, _flags);       \
+  } while (0)
+static void flagBuilderAddMany(FlagBuilder *builder, StringVector flags);
 
 // --- SAMURAI START ---
 /*
@@ -5253,40 +5342,37 @@ bool isTCC();
 #ifdef MATE_IMPLEMENTATION
 static MateConfig mateState = {0};
 
-static const String MSVCStr = {.data = "cl.exe", .length = 6};
 bool isMSVC() {
-  return StrEq(mateState.compiler, MSVCStr);
+  return mateState.compiler == MSVC;
 }
 
-static const String GCCStr = {.data = "gcc", .length = 3};
 bool isGCC() {
-  return StrEq(mateState.compiler, GCCStr);
+  return mateState.compiler == GCC;
 }
 
-static const String ClangStr = {.data = "clang", .length = 5};
 bool isClang() {
-  return StrEq(mateState.compiler, ClangStr);
+  return mateState.compiler == CLANG;
 }
 
-static const String TCCStr = {.data = "tcc", .length = 3};
 bool isTCC() {
-  return StrEq(mateState.compiler, TCCStr);
+  return mateState.compiler == TCC;
 }
 
-bool isLinux() {
-#if defined(PLATFORM_LINUX)
-  return true;
-#else
-  return false;
-#endif
-}
-
-bool isWindows() {
-#if defined(PLATFORM_WIN)
-  return true;
-#else
-  return false;
-#endif
+String CompilerToStr(Compiler compiler) {
+  switch (compiler) {
+  case GCC:
+    return S("gcc");
+    break;
+  case CLANG:
+    return S("clang");
+    break;
+  case TCC:
+    return S("tcc");
+    break;
+  case MSVC:
+    return S("cl.exe");
+    break;
+  }
 }
 
 static String fixPathExe(String str) {
@@ -5305,6 +5391,39 @@ static String fixPath(String str) {
 #else
   return F(mateState.arena, "%s/%s", GetCwd(), path.data);
 #endif
+}
+
+FlagBuilder FlagBuilderCreate() {
+  return StringBuilderCreate(mateState.arena);
+}
+
+static FlagBuilder flagBuilderReserve(size_t count) {
+  return StringBuilderReserve(mateState.arena, count);
+}
+
+static void flagBuilderAdd(FlagBuilder *builder, String *flag) {
+  if (builder->buffer.length == 0) {
+    StringBuilderAppend(mateState.arena, builder, &S("-"));
+    StringBuilderAppend(mateState.arena, builder, flag);
+    return;
+  }
+
+  StringBuilderAppend(mateState.arena, builder, &S(" -"));
+  StringBuilderAppend(mateState.arena, builder, flag);
+}
+
+static void flagBuilderAddMany(FlagBuilder *builder, StringVector flags) {
+  size_t count = 0;
+  if (builder->buffer.length == 0) {
+    StringBuilderAppend(mateState.arena, builder, &S("-"));
+    StringBuilderAppend(mateState.arena, builder, VecAtPtr(flags, 0));
+    count = 1;
+  }
+
+  for (size_t i = count; i < flags.length; i++) {
+    StringBuilderAppend(mateState.arena, builder, &S(" -"));
+    StringBuilderAppend(mateState.arena, builder, VecAtPtr(flags, i));
+  }
 }
 
 String ConvertNinjaPath(String str) {
@@ -5330,8 +5449,8 @@ static void setDefaultState() {
 
 static MateConfig parseMateConfig(MateOptions options) {
   MateConfig result;
+  result.compiler = options.compiler;
   result.mateExe = StrNew(mateState.arena, options.mateExe);
-  result.compiler = StrNew(mateState.arena, options.compiler);
   result.mateSource = StrNew(mateState.arena, options.mateSource);
   result.buildDirectory = StrNew(mateState.arena, options.buildDirectory);
   return result;
@@ -5353,7 +5472,7 @@ void CreateConfig(MateOptions options) {
     mateState.buildDirectory = fixPath(config.buildDirectory);
   }
 
-  if (!StrIsNull(config.compiler)) {
+  if (config.compiler != 0) {
     mateState.compiler = config.compiler;
   }
 
@@ -5390,7 +5509,7 @@ static void readCache() {
     Assert(errFileWrite == SUCCESS, "MateReadCache: failed writing samurai source code to path %s", sourcePath.data);
 
     String outputPath = F(mateState.arena, "%s/samurai", mateState.buildDirectory.data);
-    String compileCommand = F(mateState.arena, "%s \"%s\" -o \"%s\" -lrt -std=c99", mateState.compiler.data, sourcePath.data, outputPath.data);
+    String compileCommand = F(mateState.arena, "%s \"%s\" -o \"%s\" -lrt -std=c99", CompilerToStr(mateState.compiler).data, sourcePath.data, outputPath.data);
 
     errno_t err = RunCommand(compileCommand);
     Assert(err == SUCCESS, "MateReadCache: Error meanwhile compiling samurai at %s, if you are seeing this please make an issue at github.com/TomasBorquez/mate.h", sourcePath.data);
@@ -5451,7 +5570,7 @@ void reBuild() {
   if (isMSVC()) {
     compileCommand = F(mateState.arena, "cl.exe \"%s\" /Fe:\"%s\"", mateState.mateSource.data, mateExeNew.data);
   } else {
-    compileCommand = F(mateState.arena, "%s \"%s\" -o \"%s\"", mateState.compiler.data, mateState.mateSource.data, mateExeNew.data);
+    compileCommand = F(mateState.arena, "%s \"%s\" -o \"%s\"", CompilerToStr(mateState.compiler).data, mateState.mateSource.data, mateExeNew.data);
   }
 
   LogWarn("%s changed rebuilding...", mateState.mateSource.data);
@@ -5509,141 +5628,142 @@ String CreateStaticLib(StaticLibOptions staticLibOptions) {
     flagsStr = S("");
   }
 
+  // TODO: Add better defaults for colored errors
   if (staticLibOptions.warnings != 0) {
-#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
-    switch (staticLibOptions.warnings) {
-    case FLAG_WARNINGS_NONE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-w");
-      break;
-    case FLAG_WARNINGS_MINIMAL:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall");
-      break;
-    case FLAG_WARNINGS:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra");
-      break;
-    case FLAG_WARNINGS_VERBOSE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra -Wpedantic");
-      break;
+    if (mateState.compiler == MSVC) {
+      switch (staticLibOptions.warnings) {
+      case FLAG_WARNINGS_NONE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W0");
+        break;
+      case FLAG_WARNINGS_MINIMAL:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W3");
+        break;
+      case FLAG_WARNINGS:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W4");
+        break;
+      case FLAG_WARNINGS_VERBOSE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Wall");
+        break;
+      }
+    } else {
+      switch (staticLibOptions.warnings) {
+      case FLAG_WARNINGS_NONE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-w");
+        break;
+      case FLAG_WARNINGS_MINIMAL:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall");
+        break;
+      case FLAG_WARNINGS:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra");
+        break;
+      case FLAG_WARNINGS_VERBOSE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra -Wpedantic");
+        break;
+      }
     }
-#elif defined(COMPILER_MSVC)
-    switch (staticLibOptions.warnings) {
-    case FLAG_WARNINGS_NONE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W0");
-      break;
-    case FLAG_WARNINGS_MINIMAL:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W3");
-      break;
-    case FLAG_WARNINGS:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W4");
-      break;
-    case FLAG_WARNINGS_VERBOSE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Wall");
-      break;
-    }
-#endif
   }
 
   if (staticLibOptions.debug != 0) {
-#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
-    switch (staticLibOptions.debug) {
-    case FLAG_DEBUG_MINIMAL:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g1");
-      break;
-    case FLAG_DEBUG_MEDIUM:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g2");
-      break;
-    case FLAG_DEBUG:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g3");
-      break;
+    if (mateState.compiler == MSVC) {
+      switch (staticLibOptions.debug) {
+      case FLAG_DEBUG_MINIMAL:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Zi");
+        break;
+      case FLAG_DEBUG_MEDIUM:
+      case FLAG_DEBUG:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/ZI");
+        break;
+      }
+    } else {
+      switch (staticLibOptions.debug) {
+      case FLAG_DEBUG_MINIMAL:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g1");
+        break;
+      case FLAG_DEBUG_MEDIUM:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g2");
+        break;
+      case FLAG_DEBUG:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g3");
+        break;
+      }
     }
-#elif defined(COMPILER_MSVC)
-    switch (staticLibOptions.debug) {
-    case FLAG_DEBUG_MINIMAL:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Zi");
-      break;
-    case FLAG_DEBUG_MEDIUM:
-    case FLAG_DEBUG:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/ZI");
-      break;
-    }
-#endif
   }
 
   if (staticLibOptions.optimization != 0) {
-#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
-    switch (staticLibOptions.optimization) {
-    case FLAG_OPTIMIZATION_NONE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O0");
-      break;
-    case FLAG_OPTIMIZATION_BASIC:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O1");
-      break;
-    case FLAG_OPTIMIZATION:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O2");
-      break;
-    case FLAG_OPTIMIZATION_SIZE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Os");
-      break;
-    case FLAG_OPTIMIZATION_AGGRESSIVE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O3");
-      break;
+    if (mateState.compiler == MSVC) {
+      switch (staticLibOptions.optimization) {
+      case FLAG_OPTIMIZATION_NONE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Od");
+        break;
+      case FLAG_OPTIMIZATION_BASIC:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
+        break;
+      case FLAG_OPTIMIZATION:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O2");
+        break;
+      case FLAG_OPTIMIZATION_SIZE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
+        break;
+      case FLAG_OPTIMIZATION_AGGRESSIVE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Ox");
+        break;
+      }
+    } else {
+      switch (staticLibOptions.optimization) {
+      case FLAG_OPTIMIZATION_NONE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O0");
+        break;
+      case FLAG_OPTIMIZATION_BASIC:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O1");
+        break;
+      case FLAG_OPTIMIZATION:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O2");
+        break;
+      case FLAG_OPTIMIZATION_SIZE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Os");
+        break;
+      case FLAG_OPTIMIZATION_AGGRESSIVE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O3");
+        break;
+      }
     }
-#elif defined(COMPILER_MSVC)
-    switch (staticLibOptions.optimization) {
-    case FLAG_OPTIMIZATION_NONE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Od");
-      break;
-    case FLAG_OPTIMIZATION_BASIC:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
-      break;
-    case FLAG_OPTIMIZATION:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O2");
-      break;
-    case FLAG_OPTIMIZATION_SIZE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
-      break;
-    case FLAG_OPTIMIZATION_AGGRESSIVE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Ox");
-      break;
-    }
-#endif
   }
 
   if (staticLibOptions.std != 0) {
-#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
-    switch (staticLibOptions.std) {
-    case FLAG_STD_C99:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c99");
-      break;
-    case FLAG_STD_C11:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c11");
-      break;
-    case FLAG_STD_C17:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c17");
-      break;
-    case FLAG_STD_C23:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
-      break;
-    case FLAG_STD_C2X:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
-      break;
+    if (mateState.compiler == MSVC) {
+      switch (staticLibOptions.std) {
+      case FLAG_STD_C99:
+      case FLAG_STD_C11:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c11");
+        break;
+      case FLAG_STD_C17:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c17");
+        break;
+      case FLAG_STD_C23:
+      case FLAG_STD_C2X:
+        // NOTE: MSVC doesn't have C23 yet
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:clatest");
+        break;
+      }
+    } else {
+      switch (staticLibOptions.std) {
+      case FLAG_STD_C99:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c99");
+        break;
+      case FLAG_STD_C11:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c11");
+        break;
+      case FLAG_STD_C17:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c17");
+        break;
+      case FLAG_STD_C23:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
+        break;
+      case FLAG_STD_C2X:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
+        break;
+      }
     }
-#elif defined(COMPILER_MSVC)
-    switch (staticLibOptions.std) {
-    case FLAG_STD_C99:
-    case FLAG_STD_C11:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c11");
-      break;
-    case FLAG_STD_C17:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c17");
-      break;
-    case FLAG_STD_C23:
-    case FLAG_STD_C2X:
-      // NOTE: MSVC doesn't have C23 yet
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:clatest");
-      break;
-    }
-#endif
   }
 
   if (!StrIsNull(flagsStr)) {
@@ -5705,140 +5825,140 @@ String CreateExecutable(ExecutableOptions executableOptions) {
   }
 
   if (executableOptions.warnings != 0) {
-#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
-    switch (executableOptions.warnings) {
-    case FLAG_WARNINGS_NONE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-w");
-      break;
-    case FLAG_WARNINGS_MINIMAL:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall");
-      break;
-    case FLAG_WARNINGS:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra");
-      break;
-    case FLAG_WARNINGS_VERBOSE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra -Wpedantic");
-      break;
+    if (mateState.compiler == MSVC) {
+      switch (executableOptions.warnings) {
+      case FLAG_WARNINGS_NONE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W0");
+        break;
+      case FLAG_WARNINGS_MINIMAL:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W3");
+        break;
+      case FLAG_WARNINGS:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W4");
+        break;
+      case FLAG_WARNINGS_VERBOSE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Wall");
+        break;
+      }
+    } else {
+      switch (executableOptions.warnings) {
+      case FLAG_WARNINGS_NONE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-w");
+        break;
+      case FLAG_WARNINGS_MINIMAL:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall");
+        break;
+      case FLAG_WARNINGS:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra");
+        break;
+      case FLAG_WARNINGS_VERBOSE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Wall -Wextra -Wpedantic");
+        break;
+      }
     }
-#elif defined(COMPILER_MSVC)
-    switch (executableOptions.warnings) {
-    case FLAG_WARNINGS_NONE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W0");
-      break;
-    case FLAG_WARNINGS_MINIMAL:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W3");
-      break;
-    case FLAG_WARNINGS:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/W4");
-      break;
-    case FLAG_WARNINGS_VERBOSE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Wall");
-      break;
-    }
-#endif
   }
 
   if (executableOptions.debug != 0) {
-#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
-    switch (executableOptions.debug) {
-    case FLAG_DEBUG_MINIMAL:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g1");
-      break;
-    case FLAG_DEBUG_MEDIUM:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g2");
-      break;
-    case FLAG_DEBUG:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g3");
-      break;
+    if (mateState.compiler == MSVC) {
+      switch (executableOptions.debug) {
+      case FLAG_DEBUG_MINIMAL:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Zi");
+        break;
+      case FLAG_DEBUG_MEDIUM:
+      case FLAG_DEBUG:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/ZI");
+        break;
+      }
+    } else {
+      switch (executableOptions.debug) {
+      case FLAG_DEBUG_MINIMAL:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g1");
+        break;
+      case FLAG_DEBUG_MEDIUM:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g2");
+        break;
+      case FLAG_DEBUG:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-g3");
+        break;
+      }
     }
-#elif defined(COMPILER_MSVC)
-    switch (executableOptions.debug) {
-    case FLAG_DEBUG_MINIMAL:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Zi");
-      break;
-    case FLAG_DEBUG_MEDIUM:
-    case FLAG_DEBUG:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/ZI");
-      break;
-    }
-#endif
   }
 
   if (executableOptions.optimization != 0) {
-#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
-    switch (executableOptions.optimization) {
-    case FLAG_OPTIMIZATION_NONE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O0");
-      break;
-    case FLAG_OPTIMIZATION_BASIC:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O1");
-      break;
-    case FLAG_OPTIMIZATION:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O2");
-      break;
-    case FLAG_OPTIMIZATION_SIZE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Os");
-      break;
-    case FLAG_OPTIMIZATION_AGGRESSIVE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O3");
-      break;
+    if (mateState.compiler == MSVC) {
+      switch (executableOptions.optimization) {
+      case FLAG_OPTIMIZATION_NONE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Od");
+        break;
+      case FLAG_OPTIMIZATION_BASIC:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
+        break;
+      case FLAG_OPTIMIZATION:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O2");
+        break;
+      case FLAG_OPTIMIZATION_SIZE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
+        break;
+      case FLAG_OPTIMIZATION_AGGRESSIVE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Ox");
+        break;
+      }
+    } else {
+      switch (executableOptions.optimization) {
+      case FLAG_OPTIMIZATION_NONE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O0");
+        break;
+      case FLAG_OPTIMIZATION_BASIC:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O1");
+        break;
+      case FLAG_OPTIMIZATION:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O2");
+        break;
+      case FLAG_OPTIMIZATION_SIZE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-Os");
+        break;
+      case FLAG_OPTIMIZATION_AGGRESSIVE:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-O3");
+        break;
+      }
     }
-#elif defined(COMPILER_MSVC)
-    switch (executableOptions.optimization) {
-    case FLAG_OPTIMIZATION_NONE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Od");
-      break;
-    case FLAG_OPTIMIZATION_BASIC:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
-      break;
-    case FLAG_OPTIMIZATION:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O2");
-      break;
-    case FLAG_OPTIMIZATION_SIZE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/O1");
-      break;
-    case FLAG_OPTIMIZATION_AGGRESSIVE:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/Ox");
-      break;
-    }
-#endif
   }
 
   if (executableOptions.std != 0) {
-#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
-    switch (executableOptions.std) {
-    case FLAG_STD_C99:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c99");
-      break;
-    case FLAG_STD_C11:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c11");
-      break;
-    case FLAG_STD_C17:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c17");
-      break;
-    case FLAG_STD_C23:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
-      break;
-    case FLAG_STD_C2X:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
-      break;
+    if (mateState.compiler == MSVC) {
+      switch (executableOptions.std) {
+      case FLAG_STD_C99:
+      case FLAG_STD_C11:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c11");
+        break;
+      case FLAG_STD_C17:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c17");
+        break;
+      case FLAG_STD_C23:
+      case FLAG_STD_C2X:
+        // NOTE: MSVC doesn't have C23 yet
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:clatest");
+        break;
+      }
+    } else {
+      switch (executableOptions.std) {
+      case FLAG_STD_C99:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c99");
+        break;
+      case FLAG_STD_C11:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c11");
+        break;
+      case FLAG_STD_C17:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c17");
+        break;
+      case FLAG_STD_C23:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
+        break;
+      case FLAG_STD_C2X:
+        flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "-std=c2x");
+        break;
+      }
     }
-#elif defined(COMPILER_MSVC)
-    switch (executableOptions.std) {
-    case FLAG_STD_C99:
-    case FLAG_STD_C11:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c11");
-      break;
-    case FLAG_STD_C17:
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:c17");
-      break;
-    case FLAG_STD_C23:
-    case FLAG_STD_C2X:
-      // NOTE: MSVC doesn't have C23 yet
-      flagsStr = F(mateState.arena, "%s %s", flagsStr.data, "/std:clatest");
-      break;
-    }
-#endif
   }
 
   if (!StrIsNull(flagsStr)) {
@@ -6068,7 +6188,8 @@ String InstallExecutable() {
 
   // Compiler
   StringBuilderAppend(mateState.arena, &builder, &S("cc = "));
-  StringBuilderAppend(mateState.arena, &builder, &mateState.compiler);
+  String compiler = CompilerToStr(mateState.compiler);
+  StringBuilderAppend(mateState.arena, &builder, &compiler);
   StringBuilderAppend(mateState.arena, &builder, &S("\n"));
 
   // Linker flags
@@ -6228,7 +6349,8 @@ String InstallStaticLib() {
 
   // Compiler
   StringBuilderAppend(mateState.arena, &builder, &S("cc = "));
-  StringBuilderAppend(mateState.arena, &builder, &mateState.compiler);
+  String compiler = CompilerToStr(mateState.compiler);
+  StringBuilderAppend(mateState.arena, &builder, &compiler);
   StringBuilderAppend(mateState.arena, &builder, &S("\n"));
 
   // Archive

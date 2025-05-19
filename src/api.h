@@ -26,7 +26,7 @@ typedef struct {
 } MateCache;
 
 typedef struct {
-  char *compiler;
+  Compiler compiler;
   char *buildDirectory;
   char *mateSource;
   char *mateExe;
@@ -47,7 +47,7 @@ typedef struct {
 } Executable;
 
 typedef struct {
-  String compiler;
+  Compiler compiler;
 
   // Build State
   String libs;
@@ -139,6 +139,11 @@ String CreateStaticLib(StaticLibOptions staticLibOptions);
 String InstallStaticLib();
 void ResetStaticLib();
 
+bool isMSVC();
+bool isGCC();
+bool isClang();
+bool isTCC();
+
 WARN_UNUSED errno_t RunCommand(String command);
 
 enum CreateCompileCommandsError { COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMPILE_COMMANDS_FAILED_COMPDB };
@@ -178,14 +183,23 @@ static void reBuild();
 static bool needRebuild();
 static void setDefaultState();
 
-// Utility platform/compiler functions
-bool isWindows();
-bool isLinux();
+typedef StringBuilder FlagBuilder;
 
-bool isMSVC();
-bool isGCC();
-bool isClang();
-bool isTCC();
+StringBuilder FlagBuilderCreate();
+
+#define FlagBuilderReserve(count) flagBuilderReserve(count);
+static FlagBuilder flagBuilderReserve(size_t count);
+
+#define FlagBuilderAdd(builder, flag) flagBuilderAdd(builder, &S(flag));
+static void flagBuilderAdd(FlagBuilder *builder, String *flag);
+
+#define FlagBuilderAddMany(builder, ...)       \
+  do {                                         \
+    StringVector _flags = {0};                 \
+    StringVectorPushMany(_flags, __VA_ARGS__); \
+    flagBuilderAddMany(builder, _flags);       \
+  } while (0)
+static void flagBuilderAddMany(FlagBuilder *builder, StringVector flags);
 
 #define SAMURAI_AMALGAM "SAMURAI SOURCE"
 

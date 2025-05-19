@@ -1,24 +1,26 @@
 #define MATE_IMPLEMENTATION
 #include "../../mate.h"
 
-char *GetCFlags(Arena *arena) {
-  String defaultFlags = S("-std=gnu99 "
-                          "-D_GNU_SOURCE "
-                          "-DGL_SILENCE_DEPRECATION=199309L "
-                          "-fno-sanitize=undefined " // https://github.com/raysan5/raylib/issues/3674
+char *GetCFlags() {
+  FlagBuilder flagsBuilder = FlagBuilderCreate();
+
+  // NOTE: Default Raylib Flags
+  FlagBuilderAddMany(&flagsBuilder,
+                     "std=c99",
+                     "D_GNU_SOURCE",
+                     "DGL_SILENCE_DEPRECATION=199309L",
+                     "fno-sanitize=undefined" // https://github.com/raysan5/raylib/issues/3674
   );
 
-  StringBuilder flagsBuilder = StringBuilderCreate(arena);
-  StringBuilderAppend(arena, &flagsBuilder, &defaultFlags);
-
   if (isLinux()) {
-    StringBuilderAppend(arena, &flagsBuilder, &S("-DPLATFORM_DESKTOP_GLFW -D_GLFW_X11 "));
+    FlagBuilderAddMany(&flagsBuilder, "DPLATFORM_DESKTOP_GLFW", "D_GLFW_X11");
   }
 
   if (isWindows()) {
-    StringBuilderAppend(arena, &flagsBuilder, &S("-DPLATFORM_DESKTOP_GLFW "));
+    FlagBuilderAdd(&flagsBuilder, "DPLATFORM_DESKTOP_GLFW");
   }
 
+  LogInfo("Final flags: \"%s\"", flagsBuilder.buffer.data);
   return flagsBuilder.buffer.data;
 }
 
@@ -26,8 +28,7 @@ i32 main() {
   StartBuild();
   {
     { // Compile static lib
-      Arena *arena = ArenaCreate(1024);
-      CreateStaticLib((StaticLibOptions){.output = "libraylib", .flags = GetCFlags(arena)});
+      CreateStaticLib((StaticLibOptions){.output = "libraylib", .flags = GetCFlags()});
 
       AddFile("./src/rcore.c");
       AddFile("./src/utils.c");
