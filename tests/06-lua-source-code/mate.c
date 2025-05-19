@@ -4,7 +4,7 @@
 i32 main() {
   StartBuild();
   {
-    char *cflags = "-DLUA_USE_LINUX -fno-stack-protector -fno-common -march=native";
+    char *cflags = "-DLUA_USE_LINUX -fno-stack-protector -fno-common -march=native -Wno-tautological-compare";
     CreateStaticLib((StaticLibOptions){.output = "liblua", .std = FLAG_STD_C99, .warnings = FLAG_WARNINGS_NONE, .flags = cflags});
 
     AddFile("./src/*.c");

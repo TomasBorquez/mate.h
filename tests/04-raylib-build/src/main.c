@@ -5,6 +5,8 @@
 #define SCREEN_HEIGHT 450
 
 int main(void) {
+  exit(0);
+
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Example window");
   SetTargetFPS(144);
 

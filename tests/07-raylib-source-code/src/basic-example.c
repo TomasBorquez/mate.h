@@ -1,10 +1,13 @@
 #include "raylib.h"
+#include <stdlib.h>
+
+#define SCREEN_WIDTH 800
+#define SCREEN_HEIGHT 450
 
 int main(void) {
-  const int screenWidth = 800;
-  const int screenHeight = 450;
+  exit(0);
 
-  InitWindow(screenWidth, screenHeight, "raylib [core] example - basic window");
+  InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "raylib [core] example - basic window");
 
   SetTargetFPS(60);
   while (!WindowShouldClose()) {
@@ -17,5 +20,4 @@ int main(void) {
   }
 
   CloseWindow();
-  return 0;
 }
