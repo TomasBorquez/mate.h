@@ -16,7 +16,8 @@ i32 main(void) {
     InstallExecutable(executable);
 
     // Runs `./build/main`
-    RunCommand(executable.outputPath);
+    errno_t err = RunCommand(executable.outputPath);
+    Assert(err == SUCCESS, "RunCommand: failed, return from exe should always be SUCCESS"); // Assert that we return SUCCESS == 0
   }
   EndBuild();
 }

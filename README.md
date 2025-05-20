@@ -23,19 +23,19 @@ teach you everything you need to know to use it, here is a simple example of a `
 i32 main() {
   StartBuild();
   {
-    CreateExecutable((ExecutableOptions){
+    Executable executable = CreateExecutable((ExecutableOptions){
         .output = "main",   // output name, in windows this becomes `main.exe` automatically
         .flags = "-Wall -g" // adds warnings and debug symbols
     });
 
     // Files to compile
-    AddFile("./src/main.c");
+    AddFile(executable, "./src/main.c");
 
     // Compiles all files parallely with samurai
-    String exePath = InstallExecutable();
+    InstallExecutable(executable);
 
     // Runs `./build/main` or `./build/main.exe` depending on the platform
-    RunCommand(exePath);
+    RunCommand(executable.outputPath);
   }
   EndBuild();
 }
