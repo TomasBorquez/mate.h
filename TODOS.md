@@ -1,4 +1,25 @@
 # [TODOS](https://github.com/TomasBorquez/mate.h/issues/9)
+
+### v0.2
+- [ ] Add `args` parser
+- [ ] Shared libs
+- [ ] raylib-source-code
+    - [ ] option shared (`-fPIC`, `-DBUILD_LIBTYPE_SHARED`)
+    - [ ] option linux_backend (`wayland/x11`)
+    - [ ] option optional modules such as `rshapes`, `rtextures`, etc
+    - [ ] option platform such as `glfw`, `SDL`, etc
+    - [ ] option opengl version
+    - [ ] default config from `src/config.h` else `-DEXTERNAL_CONFIG_FLAGS`
+- [ ] `InstallHeader()` and other various library builder functions
+- [ ] `LinkStaticLib()` for linking another `StaticLib`
+- [ ] Full `MSVC` support on static/shared libs
+- [ ] Header tests like on `CMAKE`
+- [ ] Add `MacOS` support (find someone who is willing to help)
+- [ ] Make `samurai` windows compatible
+- [ ] Properly clean the state of arenas and vectors
+- [ ] `clang-formatter` as a github action (when many contributions)
+
+### v0.1
 - [x] Create `amalgam-script.c` as well as `pre-commit hook`
 - [x] Examples folder that serves as tests
 - [x] Full Linux support
@@ -30,22 +51,3 @@
 - [x] Move private functions to `__mate_` and snake_case
 - [x] Add `FMT_I64` and `FMT_I32` to remove warnings
 - [x] Move back to camelCase but mate prefix for private `mateFunction`
-
-### Last stage
-- [ ] Add `args` parser
-- [ ] Shared libs
-- [ ] raylib-source-code
-    - [ ] option shared (`-fPIC`, `-DBUILD_LIBTYPE_SHARED`)
-    - [ ] option linux_backend (`wayland/x11`)
-    - [ ] option optional modules such as `rshapes`, `rtextures`, etc
-    - [ ] option platform such as `glfw`, `SDL`, etc
-    - [ ] option opengl version
-    - [ ] default config from `src/config.h` else `-DEXTERNAL_CONFIG_FLAGS`
-- [ ] `InstallHeader()` and other various library builder functions
-- [ ] `LinkStaticLib()` for linking another `StaticLib`
-- [ ] Full `MSVC` support on static/shared libs
-- [ ] Header tests like on `CMAKE`
-- [ ] Add `MacOS` support (find someone who is willing to help)
-- [ ] Make `samurai` windows compatible
-- [ ] Properly clean the state of arenas and vectors
-- [ ] `clang-formatter` as a github action (when many contributions)
