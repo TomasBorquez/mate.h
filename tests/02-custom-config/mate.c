@@ -1,29 +1,29 @@
 #define MATE_IMPLEMENTATION
 #include "../../mate.h"
 
-i32 main() {
+i32 main(void) {
   CreateConfig((MateOptions){.compiler = CLANG, .buildDirectory = "./custom-dir"});
 
   StartBuild();
   {
-    String buildNinjaPath;
+    Executable executable;
     if (isMSVC()) {
-      buildNinjaPath = CreateExecutable((ExecutableOptions){.output = "main", .flags = "/W4"});
+      executable = CreateExecutable((ExecutableOptions){.output = "main", .flags = "/W4"});
     } else {
-      buildNinjaPath = CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall"});
+      executable = CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall"});
     }
 
-    AddFile("./src/main.c");
-    AddFile("./src/t_math.c");
+    AddFile(executable, "./src/main.c");
+    AddFile(executable, "./src/t_math.c");
 
     if (isLinux()) {
-      LinkSystemLibraries("m");
+      LinkSystemLibraries(executable, "m");
     }
 
-    String exePath = InstallExecutable();
-    errno_t errExe = RunCommand(exePath);
+    InstallExecutable(executable);
 
-    errno_t errCompileCmd = CreateCompileCommands(buildNinjaPath);
+    errno_t errExe = RunCommand(executable.outputPath);
+    errno_t errCompileCmd = CreateCompileCommands(executable);
     Assert(errExe == SUCCESS && errCompileCmd == SUCCESS, "Failed, RunCommand and errCompileCmd should be SUCCESS");
   }
   EndBuild();

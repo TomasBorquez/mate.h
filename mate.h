@@ -2272,27 +2272,28 @@ typedef struct {
 
 typedef struct {
   String output;
+  String outputPath;
   String flags;
   String arFlags;
+  String libs;
+  String includes;
+  StringVector sources;
   String ninjaBuildPath;
 } StaticLib;
 
 typedef struct {
   String output;
+  String outputPath;
   String flags;
   String linkerFlags;
+  String libs;
+  String includes;
+  StringVector sources;
   String ninjaBuildPath;
 } Executable;
 
 typedef struct {
   Compiler compiler;
-
-  // Build State
-  String libs;
-  String includes;
-  StringVector sources;
-  Executable executable;
-  StaticLib staticLib;
 
   // Paths
   String buildDirectory;
@@ -2351,11 +2352,13 @@ typedef struct {
   char *linkerFlags;
   char *includes;
   char *libs;
-  WarningsFlag warnings;
-  DebugFlag debug;
-  OptimizationFlag optimization;
+
+  // NOTE: Flag options
   STDFlag std;
+  DebugFlag debug;
+  WarningsFlag warnings;
   ErrorFormatFlag error;
+  OptimizationFlag optimization;
 } ExecutableOptions;
 
 typedef struct {
@@ -2364,61 +2367,67 @@ typedef struct {
   char *arFlags;
   char *includes;
   char *libs;
-  WarningsFlag warnings;
-  DebugFlag debug;
-  OptimizationFlag optimization;
+
+  // NOTE: Flag options
   STDFlag std;
+  DebugFlag debug;
+  WarningsFlag warnings;
   ErrorFormatFlag error;
+  OptimizationFlag optimization;
 } StaticLibOptions;
 
 typedef StringBuilder FlagBuilder;
 
-/* --- Build Functions --- */
+/* --- Build System --- */
 void StartBuild(void);
 void EndBuild(void);
 
 void CreateConfig(MateOptions options);
 
-String CreateExecutable(ExecutableOptions executableOptions);
-String InstallExecutable(void);
-static void mateResetExecutable(void);
+Executable CreateExecutable(ExecutableOptions executableOptions);
+#define InstallExecutable(target) mateInstallExecutable(&target)
+static void mateInstallExecutable(Executable *executable);
+static void mateResetExecutable(Executable *executable);
 
-String CreateStaticLib(StaticLibOptions staticLibOptions);
-String InstallStaticLib(void);
-static void mateResetStaticLib(void);
+StaticLib CreateStaticLib(StaticLibOptions staticLibOptions);
+#define InstallStaticLib(target) mateInstallStaticLib(&target)
+static void mateInstallStaticLib(StaticLib *staticLib);
+static void mateResetStaticLib(StaticLib *staticLib);
 
-enum CreateCompileCommandsError { COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMPILE_COMMANDS_FAILED_COMPDB };
-WARN_UNUSED errno_t CreateCompileCommands(String ninjaBuildPath);
+typedef enum { COMPILE_COMMANDS_SUCCESS = 0, COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMPILE_COMMANDS_FAILED_COMPDB } CreateCompileCommandsError;
 
-#define AddLibraryPaths(...)                   \
+#define CreateCompileCommands(target) mateCreateCompileCommands(&target.ninjaBuildPath);
+static WARN_UNUSED CreateCompileCommandsError mateCreateCompileCommands(String *ninjaBuildPath);
+
+#define AddLibraryPaths(target, ...)           \
   do {                                         \
-    StringVector vector = {0};                 \
-    StringVectorPushMany(vector, __VA_ARGS__); \
-    mateAddLibraryPaths(&vector);              \
+    StringVector _libs = {0};                  \
+    StringVectorPushMany(_libs, __VA_ARGS__);  \
+    mateAddLibraryPaths(&target.libs, &_libs); \
   } while (0)
-static void mateAddLibraryPaths(StringVector *vector);
+static void mateAddLibraryPaths(String *targetLibs, StringVector *libs);
 
-#define AddIncludePaths(...)                   \
-  do {                                         \
-    StringVector vector = {0};                 \
-    StringVectorPushMany(vector, __VA_ARGS__); \
-    mateAddIncludePaths(&vector);              \
+#define LinkSystemLibraries(target, ...)           \
+  do {                                             \
+    StringVector _libs = {0};                      \
+    StringVectorPushMany(_libs, __VA_ARGS__);      \
+    mateLinkSystemLibraries(&target.libs, &_libs); \
   } while (0)
-static void mateAddIncludePaths(StringVector *vector);
+static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs);
 
-#define LinkSystemLibraries(...)               \
-  do {                                         \
-    StringVector vector = {0};                 \
-    StringVectorPushMany(vector, __VA_ARGS__); \
-    mateLinkSystemLibraries(&vector);          \
+#define AddIncludePaths(target, ...)                   \
+  do {                                                 \
+    StringVector _includes = {0};                      \
+    StringVectorPushMany(_includes, __VA_ARGS__);      \
+    mateAddIncludePaths(&target.includes, &_includes); \
   } while (0)
-static void mateLinkSystemLibraries(StringVector *vector);
+static void mateAddIncludePaths(String *targetIncludes, StringVector *vector);
 
-#define AddFile(source) mateAddFile(S(source));
-static void mateAddFile(String source);
+#define AddFile(target, source) mateAddFile(&target.sources, S(source));
+static void mateAddFile(StringVector *sources, String source);
 
-#define RemoveFile(source) mateRemoveFile(S(source));
-static bool mateRemoveFile(String source);
+#define RemoveFile(target, source) mateRemoveFile(&target.sources, S(source));
+static bool mateRemoveFile(StringVector *sources, String source);
 
 static void mateRebuild(void);
 static bool mateNeedRebuild(void);
@@ -5388,7 +5397,7 @@ static bool mateGlobMatch(String pattern, String text);
 #ifdef MATE_IMPLEMENTATION
 static MateConfig mateState = {0};
 
-/* --- Build Functions Implementation --- */
+/* --- Build System Implementation --- */
 static void mateSetDefaultState(void) {
   mateState.arena = ArenaCreate(20000 * sizeof(String));
   mateState.compiler = GetCompiler();
@@ -5399,7 +5408,7 @@ static void mateSetDefaultState(void) {
 }
 
 static MateConfig mateParseMateConfig(MateOptions options) {
-  MateConfig result;
+  MateConfig result = {0};
   result.compiler = options.compiler;
   result.mateExe = StrNew(mateState.arena, options.mateExe);
   result.mateSource = StrNew(mateState.arena, options.mateSource);
@@ -5539,25 +5548,27 @@ static void mateRebuild(void) {
   exit(err);
 }
 
-static void mateDefaultStaticLib(void) {
-  mateState.staticLib.output = S("");
-  mateState.staticLib.flags = S("");
-  mateState.staticLib.arFlags = S("rcs");
+static StaticLib mateDefaultStaticLib(void) {
+  StaticLib result = {0};
+  result.output = S("");
+  result.flags = S("");
+  result.arFlags = S("rcs");
+  return result;
 }
 
-static StaticLib mateParseStaticLibOptions(StaticLibOptions options) {
+static StaticLib mateParseStaticLibOptions(StaticLibOptions *options) {
   StaticLib result = {0};
-  result.output = StrNew(mateState.arena, options.output);
+  result.output = StrNew(mateState.arena, options->output);
   Assert(!StrIsNull(result.output),
          "MateParseStaticLibOptions: failed, StaticLibOptions.output should never be null, please define the output name like this: \n"
          "\n"
          "CreateStaticLib((StaticLibOptions) { .output = \"libexample\"});");
-  result.flags = StrNew(mateState.arena, options.flags);
-  result.arFlags = StrNew(mateState.arena, options.arFlags);
+  result.flags = StrNew(mateState.arena, options->flags);
+  result.arFlags = StrNew(mateState.arena, options->arFlags);
   return result;
 }
 
-String CreateStaticLib(StaticLibOptions staticLibOptions) {
+StaticLib CreateStaticLib(StaticLibOptions staticLibOptions) {
   Assert(!isMSVC(), "CreateStaticLib: MSVC compiler not yet implemented for static libraries");
   Assert(mateState.initConfig,
          "CreateStaticLib: before creating a static library you must use StartBuild(), like this: \n"
@@ -5568,11 +5579,11 @@ String CreateStaticLib(StaticLibOptions staticLibOptions) {
          "}\n"
          "EndBuild()");
 
-  mateDefaultStaticLib();
-  StaticLib options = mateParseStaticLibOptions(staticLibOptions);
+  StaticLib result = mateDefaultStaticLib();
+  StaticLib options = mateParseStaticLibOptions(&staticLibOptions);
 
   String staticLibOutput = NormalizeStaticLibPath(mateState.arena, options.output);
-  mateState.staticLib.output = NormalizePath(mateState.arena, staticLibOutput);
+  result.output = NormalizePath(mateState.arena, staticLibOutput);
 
   FlagBuilder flagBuilder = FlagBuilderCreate();
   if (!StrIsNull(options.flags)) {
@@ -5745,43 +5756,45 @@ String CreateStaticLib(StaticLibOptions staticLibOptions) {
   }
 
   if (!StrIsNull(flagBuilder.buffer)) {
-    mateState.staticLib.flags = flagBuilder.buffer;
+    result.flags = flagBuilder.buffer;
   }
 
   if (!StrIsNull(options.arFlags)) {
-    mateState.staticLib.arFlags = options.arFlags;
+    result.arFlags = options.arFlags;
   }
 
   String optionIncludes = s(staticLibOptions.includes);
   if (!StrIsNull(optionIncludes)) {
-    mateState.includes = optionIncludes;
+    result.includes = optionIncludes;
   }
 
   String optionLibs = s(staticLibOptions.libs);
   if (!StrIsNull(optionLibs)) {
-    mateState.includes = optionLibs;
+    result.includes = optionLibs;
   }
 
-  mateState.staticLib.ninjaBuildPath = F(mateState.arena, "%s/static-%s.ninja", mateState.buildDirectory.data, NormalizeExtension(mateState.arena, mateState.staticLib.output).data);
-  return mateState.staticLib.ninjaBuildPath;
-}
-
-static void mateDefaultExecutable(void) {
-  String executableOutput = NormalizeExePath(mateState.arena, S("main"));
-  mateState.executable.output = NormalizePath(mateState.arena, executableOutput);
-  mateState.executable.linkerFlags = S("");
-  mateState.executable.flags = S("");
-}
-
-static Executable mateParseExecutableOptions(ExecutableOptions options) {
-  Executable result;
-  result.output = StrNew(mateState.arena, options.output);
-  result.flags = StrNew(mateState.arena, options.flags);
-  result.linkerFlags = StrNew(mateState.arena, options.linkerFlags);
+  result.ninjaBuildPath = F(mateState.arena, "%s/static-%s.ninja", mateState.buildDirectory.data, NormalizeExtension(mateState.arena, result.output).data);
   return result;
 }
 
-String CreateExecutable(ExecutableOptions executableOptions) {
+static Executable mateDefaultExecutable(void) {
+  Executable result = {0};
+  String executableOutput = NormalizeExePath(mateState.arena, S("main"));
+  result.output = NormalizePath(mateState.arena, executableOutput);
+  result.linkerFlags = S("");
+  result.flags = S("");
+  return result;
+}
+
+static Executable mateParseExecutableOptions(ExecutableOptions *options) {
+  Executable result = {0};
+  result.output = StrNew(mateState.arena, options->output);
+  result.flags = StrNew(mateState.arena, options->flags);
+  result.linkerFlags = StrNew(mateState.arena, options->linkerFlags);
+  return result;
+}
+
+Executable CreateExecutable(ExecutableOptions executableOptions) {
   Assert(mateState.initConfig,
          "CreateExecutable: before creating an executable you must use StartBuild(), like this: \n"
          "\n"
@@ -5791,11 +5804,11 @@ String CreateExecutable(ExecutableOptions executableOptions) {
          "}\n"
          "EndBuild()");
 
-  mateDefaultExecutable();
-  Executable options = mateParseExecutableOptions(executableOptions);
+  Executable result = mateDefaultExecutable();
+  Executable options = mateParseExecutableOptions(&executableOptions);
   if (!StrIsNull(options.output)) {
     String executableOutput = NormalizeExePath(mateState.arena, options.output);
-    mateState.executable.output = NormalizePath(mateState.arena, executableOutput);
+    result.output = NormalizePath(mateState.arena, executableOutput);
   }
 
   FlagBuilder flagBuilder = FlagBuilderCreate();
@@ -5970,28 +5983,28 @@ String CreateExecutable(ExecutableOptions executableOptions) {
   }
 
   if (!StrIsNull(flagBuilder.buffer)) {
-    mateState.executable.flags = flagBuilder.buffer;
+    result.flags = flagBuilder.buffer;
   }
 
   if (!StrIsNull(options.linkerFlags)) {
-    mateState.executable.linkerFlags = options.linkerFlags;
+    result.linkerFlags = options.linkerFlags;
   }
 
   String optionIncludes = s(executableOptions.includes);
   if (!StrIsNull(optionIncludes)) {
-    mateState.includes = optionIncludes;
+    result.includes = optionIncludes;
   }
 
   String optionLibs = s(executableOptions.libs);
   if (!StrIsNull(optionLibs)) {
-    mateState.includes = optionLibs;
+    result.includes = optionLibs;
   }
 
-  mateState.executable.ninjaBuildPath = F(mateState.arena, "%s/exe-%s.ninja", mateState.buildDirectory.data, NormalizeExtension(mateState.arena, mateState.executable.output).data);
-  return mateState.executable.ninjaBuildPath;
+  result.ninjaBuildPath = F(mateState.arena, "%s/exe-%s.ninja", mateState.buildDirectory.data, NormalizeExtension(mateState.arena, result.output).data);
+  return result;
 }
 
-errno_t CreateCompileCommands(String ninjaBuildPath) {
+static CreateCompileCommandsError mateCreateCompileCommands(String *ninjaBuildPath) {
   FILE *ninjaPipe;
   FILE *outputFile;
   char buffer[4096];
@@ -6007,11 +6020,11 @@ errno_t CreateCompileCommands(String ninjaBuildPath) {
   String compdbCommand;
   if (mateState.mateCache.samuraiBuild == true) {
     String samuraiOutputPath = F(mateState.arena, "%s/samurai", mateState.buildDirectory.data);
-    compdbCommand = NormalizePath(mateState.arena, F(mateState.arena, "%s -f %s -t compdb", samuraiOutputPath.data, ninjaBuildPath.data));
+    compdbCommand = NormalizePath(mateState.arena, F(mateState.arena, "%s -f %s -t compdb", samuraiOutputPath.data, ninjaBuildPath->data));
   }
 
   if (mateState.mateCache.samuraiBuild == false) {
-    compdbCommand = NormalizePath(mateState.arena, F(mateState.arena, "ninja -f %s -t compdb", ninjaBuildPath.data));
+    compdbCommand = NormalizePath(mateState.arena, F(mateState.arena, "ninja -f %s -t compdb", ninjaBuildPath->data));
   }
 
   ninjaPipe = popen(compdbCommand.data, "r");
@@ -6033,10 +6046,10 @@ errno_t CreateCompileCommands(String ninjaBuildPath) {
   }
 
   LogSuccess("Successfully created %s", NormalizePathEnd(mateState.arena, compileCommandsPath).data);
-  return SUCCESS;
+  return COMPILE_COMMANDS_SUCCESS;
 }
 
-static void mateAddFile(String source) {
+static void mateAddFile(StringVector *sources, String source) {
   bool isGlob = false;
   for (size_t i = 0; i < source.length; i++) {
     if (source.data[i] == '*') {
@@ -6054,7 +6067,7 @@ static void mateAddFile(String source) {
          "For example, valid: AddFile(\"./main.c\"), invalid: AddFile(\"./main.c/\")");
 
   if (!isGlob) {
-    VecPush(mateState.sources, source);
+    VecPush((*sources), source);
     return;
   }
 
@@ -6075,16 +6088,16 @@ static void mateAddFile(String source) {
 
     if (mateGlobMatch(pattern, file)) {
       String finalSource = F(mateState.arena, "%s/%s", directory.data, file.data);
-      VecPush(mateState.sources, finalSource);
+      VecPush((*sources), finalSource);
     }
   }
 }
 
-static bool mateRemoveFile(String source) {
-  Assert(mateState.sources.length > 0, "RemoveFile: Before removing a file you must first add a file, use: AddFile()");
+static bool mateRemoveFile(StringVector *sources, String source) {
+  Assert(sources->length > 0, "RemoveFile: Before removing a file you must first add a file, use: AddFile()");
 
-  for (size_t i = 0; i < mateState.sources.length; i++) {
-    String *currValue = VecAtPtr(mateState.sources, i);
+  for (size_t i = 0; i < sources->length; i++) {
+    String *currValue = VecAtPtr((*sources), i);
     if (StrEq(source, *currValue)) {
       currValue->data = NULL;
       currValue->length = 0;
@@ -6094,14 +6107,9 @@ static bool mateRemoveFile(String source) {
   return false;
 }
 
-static void mateResetExecutable(void) {
-  mateState.executable = (Executable){0};
-  VecFree(mateState.sources);
-}
-
-String InstallExecutable(void) {
-  Assert(mateState.sources.length != 0, "InstallExecutable: Executable has zero sources, add at least one with AddFile(\"./main.c\")");
-  Assert(!StrIsNull(mateState.executable.output), "InstallExecutable: Before installing executable you must first CreateExecutable()");
+static void mateInstallExecutable(Executable *executable) {
+  Assert(executable->sources.length != 0, "InstallExecutable: Executable has zero sources, add at least one with AddFile(\"./main.c\")");
+  Assert(!StrIsNull(executable->output), "InstallExecutable: Before installing executable you must first CreateExecutable()");
 
   StringBuilder builder = StringBuilderReserve(mateState.arena, 1024);
 
@@ -6112,30 +6120,30 @@ String InstallExecutable(void) {
   StringBuilderAppend(mateState.arena, &builder, &S("\n"));
 
   // Linker flags
-  if (mateState.executable.linkerFlags.length > 0) {
+  if (executable->linkerFlags.length > 0) {
     StringBuilderAppend(mateState.arena, &builder, &S("linker_flags = "));
-    StringBuilderAppend(mateState.arena, &builder, &mateState.executable.linkerFlags);
+    StringBuilderAppend(mateState.arena, &builder, &executable->linkerFlags);
     StringBuilderAppend(mateState.arena, &builder, &S("\n"));
   }
 
   // Compiler flags
-  if (mateState.executable.flags.length > 0) {
+  if (executable->flags.length > 0) {
     StringBuilderAppend(mateState.arena, &builder, &S("flags = "));
-    StringBuilderAppend(mateState.arena, &builder, &mateState.executable.flags);
+    StringBuilderAppend(mateState.arena, &builder, &executable->flags);
     StringBuilderAppend(mateState.arena, &builder, &S("\n"));
   }
 
   // Include paths
-  if (mateState.includes.length > 0) {
+  if (executable->includes.length > 0) {
     StringBuilderAppend(mateState.arena, &builder, &S("includes = "));
-    StringBuilderAppend(mateState.arena, &builder, &mateState.includes);
+    StringBuilderAppend(mateState.arena, &builder, &executable->includes);
     StringBuilderAppend(mateState.arena, &builder, &S("\n"));
   }
 
   // Libraries
-  if (mateState.libs.length > 0) {
+  if (executable->libs.length > 0) {
     StringBuilderAppend(mateState.arena, &builder, &S("libs = "));
-    StringBuilderAppend(mateState.arena, &builder, &mateState.libs);
+    StringBuilderAppend(mateState.arena, &builder, &executable->libs);
     StringBuilderAppend(mateState.arena, &builder, &S("\n"));
   }
 
@@ -6153,16 +6161,16 @@ String InstallExecutable(void) {
 
   // Target
   StringBuilderAppend(mateState.arena, &builder, &S("target = $builddir/"));
-  StringBuilderAppend(mateState.arena, &builder, &mateState.executable.output);
+  StringBuilderAppend(mateState.arena, &builder, &executable->output);
   StringBuilderAppend(mateState.arena, &builder, &S("\n\n"));
 
   // Link command
   StringBuilderAppend(mateState.arena, &builder, &S("rule link\n  command = $cc"));
-  if (mateState.executable.flags.length > 0) {
+  if (executable->flags.length > 0) {
     StringBuilderAppend(mateState.arena, &builder, &S(" $flags"));
   }
 
-  if (mateState.executable.linkerFlags.length > 0) {
+  if (executable->linkerFlags.length > 0) {
     StringBuilderAppend(mateState.arena, &builder, &S(" $linker_flags"));
   }
 
@@ -6172,17 +6180,17 @@ String InstallExecutable(void) {
     StringBuilderAppend(mateState.arena, &builder, &S(" -o $out $in"));
   }
 
-  if (mateState.libs.length > 0) {
+  if (executable->libs.length > 0) {
     StringBuilderAppend(mateState.arena, &builder, &S(" $libs"));
   }
   StringBuilderAppend(mateState.arena, &builder, &S("\n\n"));
 
   // Compile command
   StringBuilderAppend(mateState.arena, &builder, &S("rule compile\n  command = $cc"));
-  if (mateState.executable.flags.length > 0) {
+  if (executable->flags.length > 0) {
     StringBuilderAppend(mateState.arena, &builder, &S(" $flags"));
   }
-  if (mateState.includes.length > 0) {
+  if (executable->includes.length > 0) {
     StringBuilderAppend(mateState.arena, &builder, &S(" $includes"));
   }
 
@@ -6193,10 +6201,10 @@ String InstallExecutable(void) {
   }
 
   // Build individual source files
-  StringVector outputFiles = mateOutputTransformer(mateState.sources);
+  StringVector outputFiles = mateOutputTransformer(executable->sources);
   StringBuilder outputBuilder = StringBuilderCreate(mateState.arena);
-  for (size_t i = 0; i < mateState.sources.length; i++) {
-    String currSource = VecAt(mateState.sources, i);
+  for (size_t i = 0; i < executable->sources.length; i++) {
+    String currSource = VecAt(executable->sources, i);
     if (StrIsNull(currSource)) continue;
 
     String outputFile = VecAt(outputFiles, i);
@@ -6227,7 +6235,7 @@ String InstallExecutable(void) {
   // Default target
   StringBuilderAppend(mateState.arena, &builder, &S("default $target\n"));
 
-  String ninjaBuildPath = mateState.executable.ninjaBuildPath;
+  String ninjaBuildPath = executable->ninjaBuildPath;
   errno_t errWrite = FileWrite(ninjaBuildPath, builder.buffer);
   Assert(errWrite == SUCCESS, "InstallExecutable: failed to write build.ninja for %s, err: %d", ninjaBuildPath.data, errWrite);
 
@@ -6246,23 +6254,15 @@ String InstallExecutable(void) {
   mateState.totalTime = TimeNow() - mateState.startTime;
 
 #if defined(PLATFORM_WIN)
-  String path = F(mateState.arena, "%s\\%s", mateState.buildDirectory.data, mateState.executable.output.data);
+  executable->outputPath = F(mateState.arena, "%s\\%s", mateState.buildDirectory.data, executable->output.data);
 #else
-  String path = F(mateState.arena, "%s/%s", mateState.buildDirectory.data, mateState.executable.output.data);
+  executable->outputPath = F(mateState.arena, "%s/%s", mateState.buildDirectory.data, executable->output.data);
 #endif
-
-  mateResetExecutable();
-  return path;
 }
 
-static void mateResetStaticLib(void) {
-  mateState.staticLib = (StaticLib){0};
-  VecFree(mateState.sources);
-}
-
-String InstallStaticLib(void) {
-  Assert(mateState.sources.length != 0, "InstallStaticLib: Static Library has zero sources, add at least one with AddFile(\"./main.c\")");
-  Assert(!StrIsNull(mateState.staticLib.output), "InstallStaticLib: Before installing static library you must first CreateStaticLib()");
+static void mateInstallStaticLib(StaticLib *staticLib) {
+  Assert(staticLib->sources.length != 0, "InstallStaticLib: Static Library has zero sources, add at least one with AddFile(\"./main.c\")");
+  Assert(!StrIsNull(staticLib->output), "InstallStaticLib: Before installing static library you must first CreateStaticLib()");
 
   StringBuilder builder = StringBuilderReserve(mateState.arena, 1024);
 
@@ -6276,23 +6276,23 @@ String InstallStaticLib(void) {
   StringBuilderAppend(mateState.arena, &builder, &S("ar = ar\n")); // TODO: Add different ar for MSVC
 
   // Compiler flags
-  if (mateState.staticLib.flags.length > 0) {
+  if (staticLib->flags.length > 0) {
     StringBuilderAppend(mateState.arena, &builder, &S("flags = "));
-    StringBuilderAppend(mateState.arena, &builder, &mateState.staticLib.flags);
+    StringBuilderAppend(mateState.arena, &builder, &staticLib->flags);
     StringBuilderAppend(mateState.arena, &builder, &S("\n"));
   }
 
   // Archive flags
-  if (mateState.staticLib.arFlags.length > 0) {
+  if (staticLib->arFlags.length > 0) {
     StringBuilderAppend(mateState.arena, &builder, &S("ar_flags = "));
-    StringBuilderAppend(mateState.arena, &builder, &mateState.staticLib.arFlags);
+    StringBuilderAppend(mateState.arena, &builder, &staticLib->arFlags);
     StringBuilderAppend(mateState.arena, &builder, &S("\n"));
   }
 
   // Include paths
-  if (mateState.includes.length > 0) {
+  if (staticLib->includes.length > 0) {
     StringBuilderAppend(mateState.arena, &builder, &S("includes = "));
-    StringBuilderAppend(mateState.arena, &builder, &mateState.includes);
+    StringBuilderAppend(mateState.arena, &builder, &staticLib->includes);
     StringBuilderAppend(mateState.arena, &builder, &S("\n"));
   }
 
@@ -6310,7 +6310,7 @@ String InstallStaticLib(void) {
 
   // Target
   StringBuilderAppend(mateState.arena, &builder, &S("target = $builddir/"));
-  StringBuilderAppend(mateState.arena, &builder, &mateState.staticLib.output);
+  StringBuilderAppend(mateState.arena, &builder, &staticLib->output);
   StringBuilderAppend(mateState.arena, &builder, &S("\n\n"));
 
   // Archive command
@@ -6318,19 +6318,19 @@ String InstallStaticLib(void) {
 
   // Compile command
   StringBuilderAppend(mateState.arena, &builder, &S("rule compile\n  command = $cc"));
-  if (mateState.staticLib.flags.length > 0) {
+  if (staticLib->flags.length > 0) {
     StringBuilderAppend(mateState.arena, &builder, &S(" $flags"));
   }
-  if (mateState.includes.length > 0) {
+  if (staticLib->includes.length > 0) {
     StringBuilderAppend(mateState.arena, &builder, &S(" $includes"));
   }
   StringBuilderAppend(mateState.arena, &builder, &S(" -c $in -o $out\n\n"));
 
   // Build individual source files
-  StringVector outputFiles = mateOutputTransformer(mateState.sources);
+  StringVector outputFiles = mateOutputTransformer(staticLib->sources);
   StringBuilder outputBuilder = StringBuilderCreate(mateState.arena);
-  for (size_t i = 0; i < mateState.sources.length; i++) {
-    String currSource = VecAt(mateState.sources, i);
+  for (size_t i = 0; i < staticLib->sources.length; i++) {
+    String currSource = VecAt(staticLib->sources, i);
     if (StrIsNull(currSource)) continue;
 
     String outputFile = VecAt(outputFiles, i);
@@ -6361,7 +6361,7 @@ String InstallStaticLib(void) {
   // Default target
   StringBuilderAppend(mateState.arena, &builder, &S("default $target\n"));
 
-  String ninjaBuildPath = mateState.staticLib.ninjaBuildPath;
+  String ninjaBuildPath = staticLib->ninjaBuildPath;
   errno_t errWrite = FileWrite(ninjaBuildPath, builder.buffer);
   Assert(errWrite == SUCCESS, "InstallStaticLib: failed to write build-static-library.ninja for %s, err: %d", ninjaBuildPath.data, errWrite);
 
@@ -6380,37 +6380,34 @@ String InstallStaticLib(void) {
   mateState.totalTime = TimeNow() - mateState.startTime;
 
 #if defined(PLATFORM_WIN)
-  String path = F(mateState.arena, "%s\\%s", mateState.buildDirectory.data, mateState.staticLib.output.data);
+  staticLib->outputPath = F(mateState.arena, "%s\\%s", mateState.buildDirectory.data, staticLib->output.data);
 #else
-  String path = F(mateState.arena, "%s/%s", mateState.buildDirectory.data, mateState.staticLib.output.data);
+  staticLib->outputPath = F(mateState.arena, "%s/%s", mateState.buildDirectory.data, staticLib->output.data);
 #endif
-
-  mateResetStaticLib();
-  return path;
 }
 
-static void mateAddLibraryPaths(StringVector *vector) {
+static void mateAddLibraryPaths(String *targetLibs, StringVector *libs) {
   StringBuilder builder = StringBuilderCreate(mateState.arena);
 
-  if (isMSVC() && mateState.libs.length == 0) {
+  if (isMSVC() && targetLibs->length == 0) {
     StringBuilderAppend(mateState.arena, &builder, &S("/link"));
   }
 
-  if (mateState.libs.length) {
-    StringBuilderAppend(mateState.arena, &builder, &mateState.libs);
+  if (targetLibs->length) {
+    StringBuilderAppend(mateState.arena, &builder, targetLibs);
   }
 
   if (isMSVC()) {
     // MSVC format: /LIBPATH:"path"
-    for (size_t i = 0; i < vector->length; i++) {
-      String currLib = VecAt((*vector), i);
+    for (size_t i = 0; i < libs->length; i++) {
+      String currLib = VecAt((*libs), i);
       String buffer = F(mateState.arena, " /LIBPATH:\"%s\"", currLib.data);
       StringBuilderAppend(mateState.arena, &builder, &buffer);
     }
   } else {
     // GCC/Clang format: -L"path"
-    for (size_t i = 0; i < vector->length; i++) {
-      String currLib = VecAt((*vector), i);
+    for (size_t i = 0; i < libs->length; i++) {
+      String currLib = VecAt((*libs), i);
       if (i == 0 && builder.buffer.length == 0) {
         String buffer = F(mateState.arena, "-L\"%s\"", currLib.data);
         StringBuilderAppend(mateState.arena, &builder, &buffer);
@@ -6421,31 +6418,31 @@ static void mateAddLibraryPaths(StringVector *vector) {
     }
   }
 
-  mateState.libs = builder.buffer;
+  *targetLibs = builder.buffer;
 }
 
-static void mateLinkSystemLibraries(StringVector *vector) {
+static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs) {
   StringBuilder builder = StringBuilderCreate(mateState.arena);
 
-  if (isMSVC() && mateState.libs.length == 0) {
+  if (isMSVC() && targetLibs->length == 0) {
     StringBuilderAppend(mateState.arena, &builder, &S("/link"));
   }
 
-  if (mateState.libs.length) {
-    StringBuilderAppend(mateState.arena, &builder, &mateState.libs);
+  if (targetLibs->length) {
+    StringBuilderAppend(mateState.arena, &builder, targetLibs);
   }
 
   if (isMSVC()) {
     // MSVC format: library.lib
-    for (size_t i = 0; i < vector->length; i++) {
-      String currLib = VecAt((*vector), i);
+    for (size_t i = 0; i < libs->length; i++) {
+      String currLib = VecAt((*libs), i);
       String buffer = F(mateState.arena, " %s.lib", currLib.data);
       StringBuilderAppend(mateState.arena, &builder, &buffer);
     }
   } else {
     // GCC/Clang format: -llib
-    for (size_t i = 0; i < vector->length; i++) {
-      String currLib = VecAt((*vector), i);
+    for (size_t i = 0; i < libs->length; i++) {
+      String currLib = VecAt((*libs), i);
       if (i == 0 && builder.buffer.length == 0) {
         String buffer = F(mateState.arena, "-l%s", currLib.data);
         StringBuilderAppend(mateState.arena, &builder, &buffer);
@@ -6456,21 +6453,21 @@ static void mateLinkSystemLibraries(StringVector *vector) {
     }
   }
 
-  mateState.libs = builder.buffer;
+  *targetLibs = builder.buffer;
 }
 
-static void mateAddIncludePaths(StringVector *vector) {
+static void mateAddIncludePaths(String *targetIncludes, StringVector *includes) {
   StringBuilder builder = StringBuilderCreate(mateState.arena);
 
-  if (mateState.includes.length) {
-    StringBuilderAppend(mateState.arena, &builder, &mateState.includes);
+  if (targetIncludes->length) {
+    StringBuilderAppend(mateState.arena, &builder, targetIncludes);
     StringBuilderAppend(mateState.arena, &builder, &S(" "));
   }
 
   if (isMSVC()) {
     // MSVC format: /I"path"
-    for (size_t i = 0; i < vector->length; i++) {
-      String currInclude = VecAt((*vector), i);
+    for (size_t i = 0; i < includes->length; i++) {
+      String currInclude = VecAt((*includes), i);
       if (i == 0 && builder.buffer.length == 0) {
         String buffer = F(mateState.arena, "/I\"%s\"", currInclude.data);
         StringBuilderAppend(mateState.arena, &builder, &buffer);
@@ -6481,8 +6478,8 @@ static void mateAddIncludePaths(StringVector *vector) {
     }
   } else {
     // GCC/Clang format: -I"path"
-    for (size_t i = 0; i < vector->length; i++) {
-      String currInclude = VecAt((*vector), i);
+    for (size_t i = 0; i < includes->length; i++) {
+      String currInclude = VecAt((*includes), i);
       if (i == 0 && builder.buffer.length == 0) {
         String buffer = F(mateState.arena, "-I\"%s\"", currInclude.data);
         StringBuilderAppend(mateState.arena, &builder, &buffer);
@@ -6493,7 +6490,7 @@ static void mateAddIncludePaths(StringVector *vector) {
     }
   }
 
-  mateState.includes = builder.buffer;
+  *targetIncludes = builder.buffer;
 }
 
 void EndBuild(void) {

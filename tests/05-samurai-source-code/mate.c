@@ -3,25 +3,26 @@
 
 #define SAMU_VERSION_OUTPUT 2
 
-i32 main() {
+i32 main(void) {
   StartBuild();
   {
-    CreateExecutable((ExecutableOptions){
+    Executable executable = CreateExecutable((ExecutableOptions){
         .output = "samu",
         .optimization = FLAG_OPTIMIZATION,
         .std = FLAG_STD_C99,
         .warnings = FLAG_WARNINGS_NONE,
     });
 
-    AddFile("./src/*.c");
-    RemoveFile("./src/exclude-me.c");
-    RemoveFile("./src/random.c");
+    AddFile(executable, "./src/*.c");
+    RemoveFile(executable, "./src/exclude-me.c");
+    RemoveFile(executable, "./src/random.c");
 
-    LinkSystemLibraries("rt");
+    LinkSystemLibraries(executable, "rt");
 
-    String exePath = InstallExecutable();
-    errno_t err = RunCommand(F(mateState.arena, "%s -version", exePath.data));
-    Assert(err == SAMU_VERSION_OUTPUT, "Failed, output did not equal SAMU_VERSION_OUTPUT");
+    InstallExecutable(executable);
+
+    errno_t err = RunCommand(F(mateState.arena, "%s -version", executable.outputPath.data));
+    Assert(err == SAMU_VERSION_OUTPUT, "RunCommand: failed output did not equal SAMU_VERSION_OUTPUT");
   }
   EndBuild();
 }

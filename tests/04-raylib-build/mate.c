@@ -1,40 +1,40 @@
 #define MATE_IMPLEMENTATION
 #include "../../mate.h"
 
-i32 main() {
+i32 main(void) {
   StartBuild();
   {
     // NOTE: Add .exe to make sure it removes on linux builds
-    String buildNinjaPath;
+    Executable executable;
     if (isMSVC()) {
-      buildNinjaPath = CreateExecutable((ExecutableOptions){.output = "main.exe", .warnings = FLAG_WARNINGS_NONE, .flags = "/MD"});
+      executable = CreateExecutable((ExecutableOptions){.output = "main.exe", .warnings = FLAG_WARNINGS_NONE, .flags = "/MD"});
     } else {
-      buildNinjaPath = CreateExecutable((ExecutableOptions){.output = "main.exe", .warnings = FLAG_WARNINGS_NONE, .flags = "-Wall -g"});
+      executable = CreateExecutable((ExecutableOptions){.output = "main.exe", .warnings = FLAG_WARNINGS_NONE, .flags = "-Wall -g"});
     }
 
-    AddFile("./src/main.c");
+    AddFile(executable, "./src/main.c");
 
     if (isLinux()) {
-      AddIncludePaths("./vendor/raylib/include");
-      AddLibraryPaths("./vendor/raylib/lib/linux_amd64");
-      LinkSystemLibraries("raylib", "m");
+      AddIncludePaths(executable, "./vendor/raylib/include");
+      AddLibraryPaths(executable, "./vendor/raylib/lib/linux_amd64");
+      LinkSystemLibraries(executable, "raylib", "m");
     }
 
     if (isWindows()) {
-      AddIncludePaths("./vendor/raylib/include");
+      AddIncludePaths(executable, "./vendor/raylib/include");
 
       if (isMSVC()) {
-        AddLibraryPaths("./vendor/raylib/lib/win64_msvc");
-        LinkSystemLibraries("raylib", "opengl32", "kernel32", "user32", "shell32", "gdi32", "winmm", "msvcrt");
+        AddLibraryPaths(executable, "./vendor/raylib/lib/win64_msvc");
+        LinkSystemLibraries(executable, "raylib", "opengl32", "kernel32", "user32", "shell32", "gdi32", "winmm", "msvcrt");
       } else {
-        AddLibraryPaths("./vendor/raylib/lib/win64_mingw");
-        LinkSystemLibraries("raylib", "gdi32", "winmm");
+        AddLibraryPaths(executable, "./vendor/raylib/lib/win64_mingw");
+        LinkSystemLibraries(executable, "raylib", "gdi32", "winmm");
       }
     }
 
-    String exePath = InstallExecutable();
-    RunCommand(exePath);
-    CreateCompileCommands(buildNinjaPath);
+    InstallExecutable(executable);
+    RunCommand(executable.outputPath);
+    CreateCompileCommands(executable);
   }
   EndBuild();
 }

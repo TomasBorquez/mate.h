@@ -1,20 +1,21 @@
 #define MATE_IMPLEMENTATION
 #include "../../mate.h"
 
-i32 main() {
+i32 main(void) {
   StartBuild();
   {
+    Executable executable;
     if (isMSVC()) {
-      CreateExecutable((ExecutableOptions){.output = "main", .flags = "/W4"});
+      executable = CreateExecutable((ExecutableOptions){.output = "main", .flags = "/W4"});
     } else {
-      CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall"});
+      executable = CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall"});
     }
 
-    AddFile("./src/main.c");
+    AddFile(executable, "./src/main.c");
 
-    String exePath = InstallExecutable();
+    InstallExecutable(executable);
 
-    errno_t result = RunCommand(exePath);
+    errno_t result = RunCommand(executable.outputPath);
     Assert(result == SUCCESS, "Failed, RunCommand should be SUCCESS");
   }
   EndBuild();

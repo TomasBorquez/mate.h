@@ -1,10 +1,10 @@
 #define MATE_IMPLEMENTATION
 #include "../../mate.h"
 
-i32 main() {
+i32 main(void) {
   StartBuild();
   {
-    CreateExecutable((ExecutableOptions){
+    Executable executable = CreateExecutable((ExecutableOptions){
         .output = "main",
         .warnings = FLAG_WARNINGS,         // -Wall -Wextra
         .debug = FLAG_DEBUG,               // -g3
@@ -12,15 +12,16 @@ i32 main() {
         .std = FLAG_STD_C23,               // -std=c2x
     });
 
-    AddFile("./src/main.c");
+    AddFile(executable, "./src/main.c");
 
     if (isLinux()) {
-      LinkSystemLibraries("m");
+      LinkSystemLibraries(executable, "m");
     }
 
-    String exePath = InstallExecutable();
-    errno_t result = RunCommand(exePath);
-    Assert(result == SUCCESS, "Failed, RunCommand should be SUCCESS");
+    InstallExecutable(executable);
+
+    errno_t result = RunCommand(executable.outputPath);
+    Assert(result == SUCCESS, "RunCommand: failed should be SUCCESS");
   }
   EndBuild();
 }

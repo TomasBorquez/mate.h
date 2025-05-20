@@ -1,7 +1,7 @@
 #define MATE_IMPLEMENTATION
 #include "../../mate.h"
 
-char *GetCFlags() {
+static char *GetCFlags(void) {
   FlagBuilder flagsBuilder = FlagBuilderCreate();
 
   // NOTE: Default Raylib Flags
@@ -23,56 +23,56 @@ char *GetCFlags() {
   return flagsBuilder.buffer.data;
 }
 
-i32 main() {
+i32 main(void) {
   StartBuild();
   {
     { // Compile static lib
-      CreateStaticLib((StaticLibOptions){.output = "libraylib", .flags = GetCFlags()});
+      StaticLib staticLib = CreateStaticLib((StaticLibOptions){.output = "libraylib", .flags = GetCFlags()});
 
-      AddFile("./src/rcore.c");
-      AddFile("./src/utils.c");
-      AddFile("./src/rglfw.c");
+      AddFile(staticLib, "./src/rcore.c");
+      AddFile(staticLib, "./src/utils.c");
+      AddFile(staticLib, "./src/rglfw.c");
 
-      AddFile("./src/rshapes.c");
-      AddFile("./src/rtextures.c");
-      AddFile("./src/rtext.c");
-      AddFile("./src/rmodels.c");
-      AddFile("./src/raudio.c");
+      AddFile(staticLib, "./src/rshapes.c");
+      AddFile(staticLib, "./src/rtextures.c");
+      AddFile(staticLib, "./src/rtext.c");
+      AddFile(staticLib, "./src/rmodels.c");
+      AddFile(staticLib, "./src/raudio.c");
 
-      AddIncludePaths("./src/platforms");
-      AddIncludePaths("./src/external/glfw/include");
+      AddIncludePaths(staticLib, "./src/platforms");
+      AddIncludePaths(staticLib, "./src/external/glfw/include");
 
       if (isLinux()) {
-        LinkSystemLibraries("GL", "rt", "dl", "m", "X11", "Xcursor", "Xext", "Xfixes", "Xi", "Xinerama", "Xrandr", "Xrender");
+        LinkSystemLibraries(staticLib, "GL", "rt", "dl", "m", "X11", "Xcursor", "Xext", "Xfixes", "Xi", "Xinerama", "Xrandr", "Xrender");
       }
       if (isWindows()) {
-        LinkSystemLibraries("winmm", "gdi32", "opengl32");
+        LinkSystemLibraries(staticLib, "winmm", "gdi32", "opengl32");
       }
 
-      InstallStaticLib();
+      InstallStaticLib(staticLib);
     }
 
     { // Run simple example
-      CreateExecutable((ExecutableOptions){
+      Executable executable = CreateExecutable((ExecutableOptions){
           .output = "basic-example",
           .std = FLAG_STD_C99,
           .warnings = FLAG_WARNINGS_NONE,
       });
 
-      AddFile("./src/basic-example.c");
+      AddFile(executable, "./src/basic-example.c");
 
-      AddIncludePaths("./src");
-      AddLibraryPaths("./build");
+      AddIncludePaths(executable, "./src");
+      AddLibraryPaths(executable, "./build"); // TODO: LinkStaticLib()
 
       if (isLinux()) {
-        LinkSystemLibraries("raylib", "GL", "rt", "dl", "m", "X11");
+        LinkSystemLibraries(executable, "raylib", "GL", "rt", "dl", "m", "X11");
       }
       if (isWindows()) {
-        LinkSystemLibraries("raylib", "winmm", "gdi32", "opengl32");
+        LinkSystemLibraries(executable, "raylib", "winmm", "gdi32", "opengl32");
       }
 
-      String exePath = InstallExecutable();
-      RunCommand(exePath);
+      InstallExecutable(executable);
+      RunCommand(executable.outputPath);
     }
   }
   EndBuild();

@@ -1,10 +1,10 @@
 #define MATE_IMPLEMENTATION
 #include "../../mate.h"
 
-i32 main() {
+i32 main(void) {
   StartBuild();
   {
-    CreateExecutable((ExecutableOptions){
+    Executable executable = CreateExecutable((ExecutableOptions){
         .output = "samu",
         .optimization = FLAG_OPTIMIZATION,
         .std = FLAG_STD_C99,
@@ -27,14 +27,14 @@ i32 main() {
     */
 
     // Or this
-    AddFile("./src/*.c");
+    AddFile(executable, "./src/*.c");
 
     if (isLinux()) {
-      LinkSystemLibraries("rt");
+      LinkSystemLibraries(executable, "rt");
     }
 
-    String exePath = InstallExecutable();
-    RunCommand(exePath);
+    InstallExecutable(executable);
+    RunCommand(executable.outputPath);
   }
   EndBuild();
 }

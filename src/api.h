@@ -36,27 +36,28 @@ typedef struct {
 
 typedef struct {
   String output;
+  String outputPath;
   String flags;
   String arFlags;
+  String libs;
+  String includes;
+  StringVector sources;
   String ninjaBuildPath;
 } StaticLib;
 
 typedef struct {
   String output;
+  String outputPath;
   String flags;
   String linkerFlags;
+  String libs;
+  String includes;
+  StringVector sources;
   String ninjaBuildPath;
 } Executable;
 
 typedef struct {
   Compiler compiler;
-
-  // Build State
-  String libs;
-  String includes;
-  StringVector sources;
-  Executable executable;
-  StaticLib staticLib;
 
   // Paths
   String buildDirectory;
@@ -115,11 +116,13 @@ typedef struct {
   char *linkerFlags;
   char *includes;
   char *libs;
-  WarningsFlag warnings;
-  DebugFlag debug;
-  OptimizationFlag optimization;
+
+  // NOTE: Flag options
   STDFlag std;
+  DebugFlag debug;
+  WarningsFlag warnings;
   ErrorFormatFlag error;
+  OptimizationFlag optimization;
 } ExecutableOptions;
 
 typedef struct {
@@ -128,61 +131,67 @@ typedef struct {
   char *arFlags;
   char *includes;
   char *libs;
-  WarningsFlag warnings;
-  DebugFlag debug;
-  OptimizationFlag optimization;
+
+  // NOTE: Flag options
   STDFlag std;
+  DebugFlag debug;
+  WarningsFlag warnings;
   ErrorFormatFlag error;
+  OptimizationFlag optimization;
 } StaticLibOptions;
 
 typedef StringBuilder FlagBuilder;
 
-/* --- Build Functions --- */
+/* --- Build System --- */
 void StartBuild(void);
 void EndBuild(void);
 
 void CreateConfig(MateOptions options);
 
-String CreateExecutable(ExecutableOptions executableOptions);
-String InstallExecutable(void);
-static void mateResetExecutable(void);
+Executable CreateExecutable(ExecutableOptions executableOptions);
+#define InstallExecutable(target) mateInstallExecutable(&target)
+static void mateInstallExecutable(Executable *executable);
+static void mateResetExecutable(Executable *executable);
 
-String CreateStaticLib(StaticLibOptions staticLibOptions);
-String InstallStaticLib(void);
-static void mateResetStaticLib(void);
+StaticLib CreateStaticLib(StaticLibOptions staticLibOptions);
+#define InstallStaticLib(target) mateInstallStaticLib(&target)
+static void mateInstallStaticLib(StaticLib *staticLib);
+static void mateResetStaticLib(StaticLib *staticLib);
 
-enum CreateCompileCommandsError { COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMPILE_COMMANDS_FAILED_COMPDB };
-WARN_UNUSED errno_t CreateCompileCommands(String ninjaBuildPath);
+typedef enum { COMPILE_COMMANDS_SUCCESS = 0, COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMPILE_COMMANDS_FAILED_COMPDB } CreateCompileCommandsError;
 
-#define AddLibraryPaths(...)                   \
+#define CreateCompileCommands(target) mateCreateCompileCommands(&target.ninjaBuildPath);
+static WARN_UNUSED CreateCompileCommandsError mateCreateCompileCommands(String *ninjaBuildPath);
+
+#define AddLibraryPaths(target, ...)           \
   do {                                         \
-    StringVector vector = {0};                 \
-    StringVectorPushMany(vector, __VA_ARGS__); \
-    mateAddLibraryPaths(&vector);              \
+    StringVector _libs = {0};                  \
+    StringVectorPushMany(_libs, __VA_ARGS__);  \
+    mateAddLibraryPaths(&target.libs, &_libs); \
   } while (0)
-static void mateAddLibraryPaths(StringVector *vector);
+static void mateAddLibraryPaths(String *targetLibs, StringVector *libs);
 
-#define AddIncludePaths(...)                   \
-  do {                                         \
-    StringVector vector = {0};                 \
-    StringVectorPushMany(vector, __VA_ARGS__); \
-    mateAddIncludePaths(&vector);              \
+#define LinkSystemLibraries(target, ...)           \
+  do {                                             \
+    StringVector _libs = {0};                      \
+    StringVectorPushMany(_libs, __VA_ARGS__);      \
+    mateLinkSystemLibraries(&target.libs, &_libs); \
   } while (0)
-static void mateAddIncludePaths(StringVector *vector);
+static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs);
 
-#define LinkSystemLibraries(...)               \
-  do {                                         \
-    StringVector vector = {0};                 \
-    StringVectorPushMany(vector, __VA_ARGS__); \
-    mateLinkSystemLibraries(&vector);          \
+#define AddIncludePaths(target, ...)                   \
+  do {                                                 \
+    StringVector _includes = {0};                      \
+    StringVectorPushMany(_includes, __VA_ARGS__);      \
+    mateAddIncludePaths(&target.includes, &_includes); \
   } while (0)
-static void mateLinkSystemLibraries(StringVector *vector);
+static void mateAddIncludePaths(String *targetIncludes, StringVector *vector);
 
-#define AddFile(source) mateAddFile(S(source));
-static void mateAddFile(String source);
+#define AddFile(target, source) mateAddFile(&target.sources, S(source));
+static void mateAddFile(StringVector *sources, String source);
 
-#define RemoveFile(source) mateRemoveFile(S(source));
-static bool mateRemoveFile(String source);
+#define RemoveFile(target, source) mateRemoveFile(&target.sources, S(source));
+static bool mateRemoveFile(StringVector *sources, String source);
 
 static void mateRebuild(void);
 static bool mateNeedRebuild(void);
