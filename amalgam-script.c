@@ -11,7 +11,7 @@ typedef struct {
 
 String resultPath = S("./mate.h");
 
-FileResult readSource(String path) {
+static FileResult readSource(String path) {
   FileResult result = {0};
   errno_t err = FileStats(path, &result.stats);
   if (err != SUCCESS) {
@@ -30,7 +30,7 @@ FileResult readSource(String path) {
 }
 
 // NOTE: Set file empty before writing
-void resetAmalgamFile() {
+static void resetAmalgamFile(void) {
   errno_t err = FileWrite(resultPath, S(""));
   if (err != SUCCESS) {
     LogError("Error on FileWrite: %d", err);
@@ -81,7 +81,7 @@ static String escapeString(Arena *arena, String *str) {
   return result;
 }
 
-i32 main() {
+i32 main(void) {
   resetAmalgamFile();
 
   // NOTE: Sources
@@ -138,11 +138,10 @@ i32 main() {
 
     if (StrEq(*currLine, samuraiMacro)) {
       FileAdd(resultPath, S("// --- SAMURAI START ---"));
-      FileAdd(resultPath, S("/*"));
-      FileAdd(resultPath, S("* This code comes from Samurai (https://github.com/michaelforney/samurai)"));
-      FileAdd(resultPath, S("* Copyright © 2017-2021 Michael Forney"));
-      FileAdd(resultPath, S("* Licensed under ISC license, with portions under Apache License 2.0 and MIT licenses."));
-      FileAdd(resultPath, S("* See LICENSE-SAMURAI.txt for the full license text."));
+      FileAdd(resultPath, S("/* This code comes from Samurai (https://github.com/michaelforney/samurai)"));
+      FileAdd(resultPath, S("*  Copyright © 2017-2021 Michael Forney"));
+      FileAdd(resultPath, S("*  Licensed under ISC license, with portions under Apache License 2.0 and MIT licenses."));
+      FileAdd(resultPath, S("*  See LICENSE-SAMURAI.txt for the full license text."));
       FileAdd(resultPath, S("*/"));
       for (size_t j = 0; j < samuraiSourceSplit.length; j++) {
         String currLine = VecAt(samuraiSourceSplit, j);
@@ -176,6 +175,5 @@ i32 main() {
     FileAdd(resultPath, *currLine);
   }
 
-  // TODO: Free resources (not really necessary but..)
   LogSuccess("Successfully created amalgam %s", resultPath.data);
 }

@@ -30,6 +30,8 @@
 - [x] Move private functions to `__mate_` and snake_case
 - [x] Add `FMT_I64` and `FMT_I32` to remove warnings
 - [x] Move back to camelCase but mate prefix for private `mateFunction`
+
+### Last stage
 - [ ] Add `args` parser
 - [ ] Shared libs
 - [ ] raylib-source-code
@@ -40,11 +42,10 @@
     - [ ] option opengl version
     - [ ] default config from `src/config.h` else `-DEXTERNAL_CONFIG_FLAGS`
 - [ ] `InstallHeader()` and other various library builder functions
-
-### Last stage
-- [ ] `clang-formatter` as a github action (when many contributions)
+- [ ] `LinkStaticLib()` for linking another `StaticLib`
 - [ ] Full `MSVC` support on static/shared libs
 - [ ] Header tests like on `CMAKE`
 - [ ] Add `MacOS` support (find someone who is willing to help)
 - [ ] Make `samurai` windows compatible
 - [ ] Properly clean the state of arenas and vectors
+- [ ] `clang-formatter` as a github action (when many contributions)

@@ -2475,11 +2475,10 @@ static StringVector mateOutputTransformer(StringVector vector);
 static bool mateGlobMatch(String pattern, String text);
 
 // --- SAMURAI START ---
-/*
-* This code comes from Samurai (https://github.com/michaelforney/samurai)
-* Copyright © 2017-2021 Michael Forney
-* Licensed under ISC license, with portions under Apache License 2.0 and MIT licenses.
-* See LICENSE-SAMURAI.txt for the full license text.
+/* This code comes from Samurai (https://github.com/michaelforney/samurai)
+*  Copyright © 2017-2021 Michael Forney
+*  Licensed under ISC license, with portions under Apache License 2.0 and MIT licenses.
+*  See LICENSE-SAMURAI.txt for the full license text.
 */
 #define SAMURAI_AMALGAM "#define _POSIX_C_SOURCE 200809L\n"  \
             "#include <errno.h>\n"\
