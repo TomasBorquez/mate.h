@@ -201,7 +201,7 @@ StaticLib CreateStaticLib(StaticLibOptions staticLibOptions) {
       FlagBuilderAdd(&flagBuilder, "fdiagnostics-color=always");
       break;
     case FLAG_ERROR_MAX:
-      FlagBuilderAddMany(&flagBuilder, "fdiagnostics-color=always", "fdiagnostics-show-caret", "fdiagnostics-show-option", "fdiagnostics-generate-patch");
+      FlagBuilderAdd(&flagBuilder, "fdiagnostics-color=always", "fdiagnostics-show-caret", "fdiagnostics-show-option", "fdiagnostics-generate-patch");
       break;
     }
   } else if (mateState.compiler == CLANG) {
@@ -210,7 +210,7 @@ StaticLib CreateStaticLib(StaticLibOptions staticLibOptions) {
       FlagBuilderAdd(&flagBuilder, "fcolor-diagnostics");
       break;
     case FLAG_ERROR_MAX:
-      FlagBuilderAddMany(&flagBuilder, "fcolor-diagnostics", "fcaret-diagnostics", "fdiagnostics-fixit-info", "fdiagnostics-show-option");
+      FlagBuilderAdd(&flagBuilder, "fcolor-diagnostics", "fcaret-diagnostics", "fdiagnostics-fixit-info", "fdiagnostics-show-option");
       break;
     }
   } else if (mateState.compiler == MSVC) {
@@ -219,7 +219,7 @@ StaticLib CreateStaticLib(StaticLibOptions staticLibOptions) {
       FlagBuilderAdd(&flagBuilder, "nologo");
       break;
     case FLAG_ERROR_MAX:
-      FlagBuilderAddMany(&flagBuilder, "nologo", "diagnostics:caret");
+      FlagBuilderAdd(&flagBuilder, "nologo", "diagnostics:caret");
       break;
     }
   }
@@ -249,10 +249,10 @@ StaticLib CreateStaticLib(StaticLibOptions staticLibOptions) {
         FlagBuilderAdd(&flagBuilder, "Wall");
         break;
       case FLAG_WARNINGS:
-        FlagBuilderAddMany(&flagBuilder, "Wall", "Wextra");
+        FlagBuilderAdd(&flagBuilder, "Wall", "Wextra");
         break;
       case FLAG_WARNINGS_VERBOSE:
-        FlagBuilderAddMany(&flagBuilder, "Wall", "Wextra", "Wpedantic");
+        FlagBuilderAdd(&flagBuilder, "Wall", "Wextra", "Wpedantic");
         break;
       }
     }
@@ -427,7 +427,7 @@ Executable CreateExecutable(ExecutableOptions executableOptions) {
       FlagBuilderAdd(&flagBuilder, "fdiagnostics-color=always");
       break;
     case FLAG_ERROR_MAX:
-      FlagBuilderAddMany(&flagBuilder, "fdiagnostics-color=always", "fdiagnostics-show-caret", "fdiagnostics-show-option", "fdiagnostics-generate-patch");
+      FlagBuilderAdd(&flagBuilder, "fdiagnostics-color=always", "fdiagnostics-show-caret", "fdiagnostics-show-option", "fdiagnostics-generate-patch");
       break;
     }
   } else if (mateState.compiler == CLANG) {
@@ -436,7 +436,7 @@ Executable CreateExecutable(ExecutableOptions executableOptions) {
       FlagBuilderAdd(&flagBuilder, "fcolor-diagnostics");
       break;
     case FLAG_ERROR_MAX:
-      FlagBuilderAddMany(&flagBuilder, "fcolor-diagnostics", "fcaret-diagnostics", "fdiagnostics-fixit-info", "fdiagnostics-show-option");
+      FlagBuilderAdd(&flagBuilder, "fcolor-diagnostics", "fcaret-diagnostics", "fdiagnostics-fixit-info", "fdiagnostics-show-option");
       break;
     }
   } else if (mateState.compiler == MSVC) {
@@ -445,7 +445,7 @@ Executable CreateExecutable(ExecutableOptions executableOptions) {
       FlagBuilderAdd(&flagBuilder, "nologo");
       break;
     case FLAG_ERROR_MAX:
-      FlagBuilderAddMany(&flagBuilder, "nologo", "diagnostics:caret");
+      FlagBuilderAdd(&flagBuilder, "nologo", "diagnostics:caret");
       break;
     }
   }
@@ -475,10 +475,10 @@ Executable CreateExecutable(ExecutableOptions executableOptions) {
         FlagBuilderAdd(&flagBuilder, "Wall");
         break;
       case FLAG_WARNINGS:
-        FlagBuilderAddMany(&flagBuilder, "Wall", "Wextra");
+        FlagBuilderAdd(&flagBuilder, "Wall", "Wextra");
         break;
       case FLAG_WARNINGS_VERBOSE:
-        FlagBuilderAddMany(&flagBuilder, "Wall", "Wextra", "Wpedantic");
+        FlagBuilderAdd(&flagBuilder, "Wall", "Wextra", "Wpedantic");
         break;
       }
     }
@@ -1135,36 +1135,11 @@ static FlagBuilder mateFlagBuilderReserve(size_t count) {
   return StringBuilderReserve(mateState.arena, count);
 }
 
-static void mateFlagBuilderAdd(FlagBuilder *builder, String *flag) {
-  if (mateState.compiler == MSVC) {
-    Assert(flag->data[0] != '/', "FlagBuilderAdd: failed, flag should not contain /, e.g usage FlagBuilderAdd(\"W4\")");
-    if (builder->buffer.length == 0) {
-      StringBuilderAppend(mateState.arena, builder, &S("/"));
-      StringBuilderAppend(mateState.arena, builder, flag);
-      return;
-    }
-
-    StringBuilderAppend(mateState.arena, builder, &S(" /"));
-    StringBuilderAppend(mateState.arena, builder, flag);
-    return;
-  }
-
-  Assert(flag->data[0] != '-', "FlagBuilderAdd: failed, flag should not contain -, e.g usage FlagBuilderAdd(\"Wall\")");
-  if (builder->buffer.length == 0) {
-    StringBuilderAppend(mateState.arena, builder, &S("-"));
-    StringBuilderAppend(mateState.arena, builder, flag);
-    return;
-  }
-
-  StringBuilderAppend(mateState.arena, builder, &S(" -"));
-  StringBuilderAppend(mateState.arena, builder, flag);
-}
-
 void FlagBuilderAddString(FlagBuilder *builder, String *flag) {
   StringBuilderAppend(mateState.arena, builder, flag);
 }
 
-static void mateFlagBuilderAddMany(FlagBuilder *builder, StringVector flags) {
+static void mateFlagBuilderAdd(FlagBuilder *builder, StringVector flags) {
   size_t count = 0;
   if (mateState.compiler == MSVC) {
     String *first = VecAtPtr(flags, 0);

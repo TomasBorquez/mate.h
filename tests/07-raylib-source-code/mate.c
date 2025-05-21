@@ -5,15 +5,15 @@ static char *GetCFlags(void) {
   FlagBuilder flagsBuilder = FlagBuilderCreate();
 
   // NOTE: Default Raylib Flags
-  FlagBuilderAddMany(&flagsBuilder,
-                     "std=c99",
-                     "D_GNU_SOURCE",
-                     "DGL_SILENCE_DEPRECATION=199309L",
-                     "fno-sanitize=undefined" // https://github.com/raysan5/raylib/issues/3674
+  FlagBuilderAdd(&flagsBuilder,
+                 "std=c99",
+                 "D_GNU_SOURCE",
+                 "DGL_SILENCE_DEPRECATION=199309L",
+                 "fno-sanitize=undefined" // https://github.com/raysan5/raylib/issues/3674
   );
 
   if (isLinux()) {
-    FlagBuilderAddMany(&flagsBuilder, "DPLATFORM_DESKTOP_GLFW", "D_GLFW_X11");
+    FlagBuilderAdd(&flagsBuilder, "DPLATFORM_DESKTOP_GLFW", "D_GLFW_X11");
   }
 
   if (isWindows()) {

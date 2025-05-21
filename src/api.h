@@ -168,6 +168,9 @@ static WARN_UNUSED CreateCompileCommandsError mateCreateCompileCommands(String *
     StringVector _libs = {0};                  \
     StringVectorPushMany(_libs, __VA_ARGS__);  \
     mateAddLibraryPaths(&target.libs, &_libs); \
+                                               \
+    /* Cleanup */                              \
+    VecFree(_libs);                            \
   } while (0)
 static void mateAddLibraryPaths(String *targetLibs, StringVector *libs);
 
@@ -176,6 +179,9 @@ static void mateAddLibraryPaths(String *targetLibs, StringVector *libs);
     StringVector _libs = {0};                      \
     StringVectorPushMany(_libs, __VA_ARGS__);      \
     mateLinkSystemLibraries(&target.libs, &_libs); \
+                                                   \
+    /* Cleanup */                                  \
+    VecFree(_libs);                                \
   } while (0)
 static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs);
 
@@ -184,6 +190,9 @@ static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs);
     StringVector _includes = {0};                      \
     StringVectorPushMany(_includes, __VA_ARGS__);      \
     mateAddIncludePaths(&target.includes, &_includes); \
+                                                       \
+    /* Cleanup */                                      \
+    VecFree(_includes);                                \
   } while (0)
 static void mateAddIncludePaths(String *targetIncludes, StringVector *vector);
 
@@ -220,16 +229,16 @@ void FlagBuilderAddString(FlagBuilder *builder, String *flag);
 #define FlagBuilderReserve(count) mateFlagBuilderReserve(count);
 static FlagBuilder mateFlagBuilderReserve(size_t count);
 
-#define FlagBuilderAdd(builder, flag) mateFlagBuilderAdd(builder, &S(flag));
-static void mateFlagBuilderAdd(FlagBuilder *builder, String *flag);
-
-#define FlagBuilderAddMany(builder, ...)       \
+#define FlagBuilderAdd(builder, ...)           \
   do {                                         \
     StringVector _flags = {0};                 \
     StringVectorPushMany(_flags, __VA_ARGS__); \
-    mateFlagBuilderAddMany(builder, _flags);   \
+    mateFlagBuilderAdd(builder, _flags);       \
+                                               \
+    /* Cleanup */                              \
+    VecFree(_flags);                           \
   } while (0)
-static void mateFlagBuilderAddMany(FlagBuilder *builder, StringVector flags);
+static void mateFlagBuilderAdd(FlagBuilder *builder, StringVector flags);
 
 static String mateFixPath(String str);
 static String mateFixPathExe(String str);
