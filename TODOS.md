@@ -17,6 +17,7 @@
 - [ ] Add `MacOS` support (find someone who is willing to help)
 - [ ] Make `samurai` windows compatible
 - [ ] Properly clean the state of arenas and vectors
+- [ ] Parallel Dependency check
 - [ ] `clang-formatter` as a github action (when many contributions)
 
 ### v0.1
