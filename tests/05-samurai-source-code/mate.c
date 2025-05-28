@@ -17,7 +17,9 @@ i32 main(void) {
     RemoveFile(executable, "./src/exclude-me.c");
     RemoveFile(executable, "./src/random.c");
 
-    LinkSystemLibraries(executable, "rt");
+    if (!isMacOs()) {
+      LinkSystemLibraries(executable, "rt");
+    }
 
     InstallExecutable(executable);
 
