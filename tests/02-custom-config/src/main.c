@@ -12,8 +12,6 @@ int main() {
   float z[1760]; // Depth buffer
   char b[1760];  // Character buffer
 
-  //printf("\x1b[2J"); // Clear screen
-
   while (1) {
     // Clear buffers
     memset(b, 32, 1760); // Fill with spaces
@@ -52,9 +50,6 @@ int main() {
         }
       }
     }
-
-    // Move cursor to home position
-    // printf("\x1b[H");
 
     // Display the frame and update rotation angles
     for (k = 0; k < 1761; k++) {
