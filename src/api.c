@@ -1105,7 +1105,7 @@ void EndBuild(void) {
 
 /* --- Utils Implementation --- */
 errno_t RunCommand(String command) {
-#if defined(PLATFORM_LINUX)
+#if defined(PLATFORM_LINUX) | defined(PLATFORM_MACOS)
   return system(command.data) >> 8;
 #else
   return system(command.data);
