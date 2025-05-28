@@ -32,6 +32,12 @@ i32 main(void) {
       }
     }
 
+    if (isMacOs()) {
+      AddIncludePaths(executable, "./vendor/raylib/include");
+      AddLibraryPaths(executable, "./vendor/raylib/lib/macos");
+      LinkSystemLibraries(executable, "raylib");
+    }
+
     InstallExecutable(executable);
     RunCommand(executable.outputPath);
     CreateCompileCommands(executable);
