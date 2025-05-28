@@ -1,11 +1,25 @@
 #define MATE_IMPLEMENTATION
 #include "../../mate.h"
 
+static char *GetCFlags(void) {
+  FlagBuilder flagsBuilder = FlagBuilderCreate();
+  FlagBuilderAdd(&flagsBuilder, "fno-stack-protector", "fno-common", "march=native", "Wno-tautological-compare");
+
+  if (isWindows()) {
+    FlagBuilderAdd(&flagsBuilder, "DLUA_USE_WINDOWS");
+  } else if (isMacOs()) {
+    FlagBuilderAdd(&flagsBuilder, "DLUA_USE_MACOSX");
+  } else if (isLinux()) {
+    FlagBuilderAdd(&flagsBuilder, "DLUA_USE_LINUX");
+  }
+
+  return flagsBuilder.buffer.data;
+}
+
 i32 main(void) {
   StartBuild();
   {
-    char *cflags = "-DLUA_USE_LINUX -fno-stack-protector -fno-common -march=native -Wno-tautological-compare";
-    StaticLib staticLib = CreateStaticLib((StaticLibOptions){.output = "liblua", .std = FLAG_STD_C99, .warnings = FLAG_WARNINGS_NONE, .flags = cflags});
+    StaticLib staticLib = CreateStaticLib((StaticLibOptions){.output = "liblua", .std = FLAG_STD_C99, .warnings = FLAG_WARNINGS_NONE, .flags = GetCFlags()});
 
     AddFile(staticLib, "./src/*.c");
     RemoveFile(staticLib, "./src/lua.c");
@@ -13,7 +27,7 @@ i32 main(void) {
 
     mateInstallStaticLib(&staticLib);
 
-    Executable executable = CreateExecutable((ExecutableOptions){.output = "lua", .std = FLAG_STD_C99, .warnings = FLAG_WARNINGS_NONE, .flags = cflags});
+    Executable executable = CreateExecutable((ExecutableOptions){.output = "lua", .std = FLAG_STD_C99, .warnings = FLAG_WARNINGS_NONE, .flags = GetCFlags()});
     AddFile(executable, "./src/lua.c");
     AddLibraryPaths(executable, "./build/"); // TODO: LinkStaticLib()
     LinkSystemLibraries(executable, "lua", "m", "dl");
