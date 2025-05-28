@@ -1,0 +1,50 @@
+name: Run Tests MacOS
+on:
+  push:
+    paths:
+      - '**/*.c'
+      - '**/*.h'
+      - '.github/workflows/*.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  test-examples:
+    runs-on: macos-15
+    
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+    
+    steps:
+    - name: Checkout code with submodules
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+        fetch-depth: 0  
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Run tests
+      run: |
+        tests=(
+          "01-basic-build"
+          "02-custom-config"
+          "03-generic-flags"
+          "04-raylib-build"
+          "05-samurai-source-code"
+          "06-lua-source-code"
+        )
+        
+        for test in "${tests[@]}"; do
+          echo "Running test $test with ${{ matrix.compiler }}..."
+          cd ./tests/$test
+          
+          ${{ matrix.compiler }} mate.c -o mate
+          ./mate
+          
+          if [ $? -ne 0 ]; then
+            echo "Test $test failed with ${{ matrix.compiler }}"
+            exit 1
+          fi
+          cd - > /dev/null
+        done
