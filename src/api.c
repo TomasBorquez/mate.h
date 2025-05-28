@@ -74,7 +74,7 @@ static void mateReadCache(void) {
     Assert(errFileWrite == SUCCESS, "MateReadCache: failed writing samurai source code to path %s", sourcePath.data);
 
     String outputPath = F(mateState.arena, "%s/samurai", mateState.buildDirectory.data);
-    String compileCommand = F(mateState.arena, "%s \"%s\" -o \"%s\" -lrt -std=c99", CompilerToStr(mateState.compiler).data, sourcePath.data, outputPath.data);
+    String compileCommand = F(mateState.arena, "%s \"%s\" -o \"%s\" -std=c99", CompilerToStr(mateState.compiler).data, sourcePath.data, outputPath.data);
 
     errno_t err = RunCommand(compileCommand);
     Assert(err == SUCCESS, "MateReadCache: Error meanwhile compiling samurai at %s, if you are seeing this please make an issue at github.com/TomasBorquez/mate.h", sourcePath.data);

@@ -1,6 +1,7 @@
 # [TODOS](https://github.com/TomasBorquez/mate.h/issues/9)
 
 ### v0.2
+- [ ] When parsing `ExecutableOptions.output`, make sure it is not a path, just a name with/without .exe
 - [ ] Add `args` parser
 - [ ] Shared libs
 - [ ] `InstallHeader()` and other various library builder functions

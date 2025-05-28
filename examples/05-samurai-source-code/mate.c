@@ -11,19 +11,19 @@ i32 main(void) {
     });
 
     /* You can do this
-      AddFile("./src/build.c");
-      AddFile("./src/deps.c");
-      AddFile("./src/env.c");
-      AddFile("./src/graph.c");
-      AddFile("./src/htab.c");
-      AddFile("./src/log.c");
-      AddFile("./src/parse.c");
-      AddFile("./src/samu.c");
-      AddFile("./src/scan.c");
-      AddFile("./src/tool.c");
-      AddFile("./src/tree.c");
-      AddFile("./src/util.c");
-      AddFile("./src/os-posix.c");
+      AddFile(executable, "./src/build.c");
+      AddFile(executable, "./src/deps.c");
+      AddFile(executable, "./src/env.c");
+      AddFile(executable, "./src/graph.c");
+      AddFile(executable, "./src/htab.c");
+      AddFile(executable, "./src/log.c");
+      AddFile(executable, "./src/parse.c");
+      AddFile(executable, "./src/samu.c");
+      AddFile(executable, "./src/scan.c");
+      AddFile(executable, "./src/tool.c");
+      AddFile(executable, "./src/tree.c");
+      AddFile(executable, "./src/util.c");
+      AddFile(executable, "./src/os-posix.c");
     */
 
     // Or this
