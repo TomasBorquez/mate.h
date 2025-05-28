@@ -45,10 +45,6 @@ if [ ! -z "$SPECIFIC_TEST" ]; then
 fi
 
 for test in "${tests[@]}"; do
-  # if [ "$COMPILER" == "tcc" ] && [ "$test" == "07-raylib-source-code" ]; then
-  #   echo "Skipping $test for TCC compiler"
-  #   continue
-  # fi
   
   echo "Running test $test with $COMPILER..."
   
