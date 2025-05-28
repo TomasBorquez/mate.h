@@ -1,6 +1,11 @@
 # [TODOS](https://github.com/TomasBorquez/mate.h/issues/9)
 
-### v0.2
+## v0.2
+
+#### Bugs
+- [ ] Samurai does not generate `compile_commands.json`?
+
+#### Features
 - [ ] When parsing `ExecutableOptions.output`, make sure it is not a path, just a name with/without .exe
 - [ ] Add `args` parser
 - [ ] Shared libs
@@ -13,23 +18,23 @@
 - [ ] Properly clean the state of arenas and vectors
 - [ ] Parallel Dependency check
 - [ ] `clang-formatter` as a github action (when many contributions)
-- [ ] Tests
-    - [ ] test static/private functions and that the output is correct 
-    - [ ] test that checks rebuild works correctly
-    - [ ] test that checks illegal stuff doesn't pass without an assertion
-        - [ ] like `InstallExecutable` without `CreateExecutable`
-        - [ ] like `CreateExecutable` without `StartBuild`
-        - [ ] etc
-    - [ ] raylib-source-code
-        - [ ] option shared (`-fPIC`, `-DBUILD_LIBTYPE_SHARED`)
-        - [ ] option linux_backend (`wayland/x11`)
-        - [ ] option optional modules such as `rshapes`, `rtextures`, etc
-        - [ ] option platform such as `glfw`, `SDL`, etc
-        - [ ] option opengl version
-        - [ ] default config from `src/config.h` else `-DEXTERNAL_CONFIG_FLAGS`
-        - [ ] ^ for all use as inspiration `build.zig` from raylib
 
-### v0.1
+#### Tests
+- [ ] test static/private functions and that the output is correct 
+- [ ] test that checks rebuild works correctly
+- [ ] test that checks illegal stuff doesn't pass without an assertion
+    - [ ] like `InstallExecutable` without `CreateExecutable`
+    - [ ] like `CreateExecutable` without `StartBuild`
+- [ ] raylib-source-code
+    - [ ] option shared (`-fPIC`, `-DBUILD_LIBTYPE_SHARED`)
+    - [ ] option linux_backend (`wayland/x11`)
+    - [ ] option optional modules such as `rshapes`, `rtextures`, etc
+    - [ ] option platform such as `glfw`, `SDL`, etc
+    - [ ] option opengl version
+    - [ ] default config from `src/config.h` else `-DEXTERNAL_CONFIG_FLAGS`
+    - [ ] ^ for all use as inspiration `build.zig` from raylib
+
+## v0.1
 - [x] Create `amalgam-script.c` as well as `pre-commit hook`
 - [x] Examples folder that serves as tests
 - [x] Full Linux support
