@@ -137,6 +137,7 @@ i32 main(void) {
     }
 
     if (StrEq(*currLine, samuraiMacro)) {
+      FileAdd(resultPath, S("// clang-format off"));
       FileAdd(resultPath, S("// --- SAMURAI START ---"));
       FileAdd(resultPath, S("/* This code comes from Samurai (https://github.com/michaelforney/samurai)"));
       FileAdd(resultPath, S("*  Copyright © 2017-2021 Michael Forney"));
@@ -169,6 +170,7 @@ i32 main(void) {
       }
 
       FileAdd(resultPath, S("// --- SAMURAI END ---"));
+      FileAdd(resultPath, S("// clang-format on"));
       continue;
     }
 
