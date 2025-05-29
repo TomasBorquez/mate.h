@@ -661,11 +661,11 @@ static CreateCompileCommandsError mateCreateCompileCommands(String *ninjaBuildPa
   String compdbCommand;
   if (mateState.mateCache.samuraiBuild == true) {
     String samuraiOutputPath = F(mateState.arena, "%s/samurai", mateState.buildDirectory.data);
-    compdbCommand = NormalizePath(mateState.arena, F(mateState.arena, "%s -f %s -t compdb", samuraiOutputPath.data, ninjaBuildPath->data));
+    compdbCommand = NormalizePath(mateState.arena, F(mateState.arena, "%s -f %s -t compdb compile", samuraiOutputPath.data, ninjaBuildPath->data));
   }
 
   if (mateState.mateCache.samuraiBuild == false) {
-    compdbCommand = NormalizePath(mateState.arena, F(mateState.arena, "ninja -f %s -t compdb", ninjaBuildPath->data));
+    compdbCommand = NormalizePath(mateState.arena, F(mateState.arena, "ninja -f %s -t compdb compile", ninjaBuildPath->data));
   }
 
   ninjaPipe = popen(compdbCommand.data, "r");

@@ -3,7 +3,7 @@
 ## v0.2
 
 #### Bugs
-- [ ] Samurai does not generate `compile_commands.json`?
+- [x] Samurai does not generate `compile_commands.json`?
 
 #### Features
 - [x] When parsing `ExecutableOptions.output`, make sure it is not a path, just a name with/without .exe
@@ -25,6 +25,7 @@
 - [ ] test that checks illegal stuff doesn't pass without an assertion
     - [ ] like `InstallExecutable` without `CreateExecutable`
     - [ ] like `CreateExecutable` without `StartBuild`
+- [ ] test that checks `CreateCompileCommands` works correctly
 - [ ] raylib-source-code
     - [ ] option shared (`-fPIC`, `-DBUILD_LIBTYPE_SHARED`)
     - [ ] option linux_backend (`wayland/x11`)
