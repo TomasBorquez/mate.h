@@ -1,18 +1,23 @@
+---
 BasedOnStyle: None
-ColumnLimit: 0
-PointerAlignment: Right
+ColumnLimit: 240
 IndentWidth: 2
 TabWidth: 2
+SpacesBeforeTrailingComments: 1
 UseTab: Never
+PointerAlignment: Right
 SortIncludes: false
 AccessModifierOffset: 0
-AllowShortIfStatementsOnASingleLine: true
-AllowShortEnumsOnASingleLine: true
+AllowAllArgumentsOnNextLine: false
+AllowShortBlocksOnASingleLine: Always
 AllowShortBlocksOnASingleLine: Always
 AllowShortCaseLabelsOnASingleLine: true
-AllowShortBlocksOnASingleLine: Always
+AllowShortEnumsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
 IndentAccessModifiers: true
-SpacesBeforeTrailingComments: 1
+IndentPPDirectives: AfterHash
+BinPackArguments: false
 BreakBeforeBraces: Custom
 BraceWrapping:
   AfterFunction: false
