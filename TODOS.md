@@ -17,10 +17,10 @@
 - [ ] Make `samurai` windows compatible
 - [ ] Properly clean the state of arenas and vectors
 - [ ] Parallel Dependency check
-- [ ] `clang-formatter` as a github action (when many contributions)
+- [x] `clang-formatter` as a github action (when many contributions)
 
 #### Tests
-- [ ] test static/private functions and that the output is correct 
+- [ ] test static/private functions and that the output is correct
 - [ ] test that checks rebuild works correctly
 - [ ] test that checks illegal stuff doesn't pass without an assertion
     - [ ] like `InstallExecutable` without `CreateExecutable`
@@ -57,8 +57,8 @@
     - [x] Use String builder function
     - [x] Remove unnecessary code
     - [x] Add comments on `api.h`
-- [x] Semi Support for `MSVC` 
-- [x] Static libs 
+- [x] Semi Support for `MSVC`
+- [x] Static libs
 - [x] `FlagBuilder` and `AddFlag(builder, ...)`:
     - [x] Similar to `StringBuilder` but it uses `mateState.arena` and `AddFlag` can add many flags plus they have a `" "` by default
     - [x] Use when parsing flags in `CreateStaticLib` and `CreateExecutable`
