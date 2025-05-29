@@ -2,6 +2,8 @@ name: Clang Format
 
 on:
   push:
+    branches:
+      - main
     paths:
       - '**/*.c'
       - '**/*.h'
@@ -16,15 +18,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code with submodules
+    - name: Checkout code
       uses: actions/checkout@v3
       with:
-        submodules: recursive
         fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Install clang-format
-      run: sudo apt-get update && sudo apt-get install -y clang-format
+      run: sudo apt-get update && sudo apt-get install -y clang-format-14
 
     - name: Format files
       run: clang-format -i -style=file $(find src/ -name "*.c" -o -name "*.h") mate.h amalgam-script.c
