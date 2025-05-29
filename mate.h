@@ -16,7 +16,7 @@
 /* MIT License
 
   base.h - Better cross-platform STD
-  Version - 2025-05-19 (0.2.0):
+  Version - 2025-05-29 (0.2.1):
   https://github.com/TomasBorquez/base.h
 
   Usage:
@@ -94,6 +94,7 @@
 #  include <dirent.h>
 #  include <errno.h>
 #  include <fcntl.h>
+#  include <limits.h>
 #  include <sys/stat.h>
 #  include <sys/types.h>
 #  include <unistd.h>
