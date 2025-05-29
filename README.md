@@ -54,7 +54,7 @@ builds, you can use [TCC](https://bellard.org/tcc/) which is a tinier and faster
 |---|---|---|
 | **Linux** | ✅ Supported | Uses [Samurai](https://github.com/michaelforney/samurai) under the hood |
 | **Windows** | ✅ Supported | Requires Ninja build system (Samurai [in progress](https://github.com/TomasBorquez/mate.h/issues/2)) |
-| **macOS** | ⚠️ Supported | Limited testing done |
+| **[MacOS](https://github.com/TomasBorquez/mate.h/issues/17)** | ⚠️ Supported | Limited testing done |
 
 ## Compilers
 | Compiler | Status | Notes |
