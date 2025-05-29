@@ -1,0 +1,24 @@
+BasedOnStyle: None
+ColumnLimit: 0
+PointerAlignment: Right
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+SortIncludes: false
+AccessModifierOffset: 0
+AllowShortIfStatementsOnASingleLine: true
+AllowShortEnumsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Always
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Always
+IndentAccessModifiers: true
+SpacesBeforeTrailingComments: 1
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: false
+  AfterClass: false
+  AfterControlStatement: false
+  AfterEnum: false
+  BeforeCatch: false
+  BeforeElse: false
+  IndentBraces: false
