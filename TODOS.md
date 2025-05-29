@@ -6,7 +6,7 @@
 - [ ] Samurai does not generate `compile_commands.json`?
 
 #### Features
-- [ ] When parsing `ExecutableOptions.output`, make sure it is not a path, just a name with/without .exe
+- [x] When parsing `ExecutableOptions.output`, make sure it is not a path, just a name with/without .exe
 - [ ] Add `args` parser
 - [ ] Shared libs
 - [ ] `InstallHeader()` and other various library builder functions

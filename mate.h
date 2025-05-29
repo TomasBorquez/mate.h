@@ -1,7 +1,7 @@
 /* MIT License
 
   mate.h - A single-header library for compiling your C code in C
-  Version - 2025-05-19 (0.2.0):
+  Version - 2025-05-29 (0.2.1):
   https://github.com/TomasBorquez/mate.h
 
   Guide on the `README.md`
@@ -5556,6 +5556,20 @@ static void mateRebuild(void) {
   exit(err);
 }
 
+static bool mateIsValidExecutable(String *exePath) {
+  if (exePath->data[0] == '.') {
+    return false;
+  }
+
+  for (size_t i = 0; i < exePath->length; i++) {
+    char currChar = exePath->data[i];
+    if (currChar == '/' || currChar == '\\') {
+      return false;
+    }
+  }
+  return true;
+}
+
 static StaticLib mateDefaultStaticLib(void) {
   StaticLib result = {0};
   result.output = S("");
@@ -5571,6 +5585,18 @@ static StaticLib mateParseStaticLibOptions(StaticLibOptions *options) {
          "MateParseStaticLibOptions: failed, StaticLibOptions.output should never be null, please define the output name like this: \n"
          "\n"
          "CreateStaticLib((StaticLibOptions) { .output = \"libexample\"});");
+
+  // NOTE: For custom build folder look into `CreateConfig`, e.g:
+  // CreateConfig((MateOptions){ .buildDirectory = "./custom-dir" });
+  Assert(mateIsValidExecutable(&result.output),
+         "MateParseStaticLibOptions: failed, StaticLibOptions.output shouldn't be a path, e.g: \n"
+         "\n"
+         "Correct:\n"
+         "CreateStaticLib((StaticLibOptions) { .output = \"libexample\"});\n"
+         "\n"
+         "Incorrect:\n"
+         "CreateStaticLib((StaticLibOptions) { .output = \"./output/libexample.a\"});");
+
   result.flags = StrNew(mateState.arena, options->flags);
   result.arFlags = StrNew(mateState.arena, options->arFlags);
   return result;
@@ -5816,6 +5842,16 @@ Executable CreateExecutable(ExecutableOptions executableOptions) {
   Executable options = mateParseExecutableOptions(&executableOptions);
   if (!StrIsNull(options.output)) {
     String executableOutput = NormalizeExePath(mateState.arena, options.output);
+    // NOTE: For custom build folder look into `CreateConfig`, e.g:
+    // CreateConfig((MateOptions){ .buildDirectory = "./custom-dir" });
+    Assert(mateIsValidExecutable(&executableOutput),
+           "MateParseExecutable: failed, ExecutableOptions.output shouldn't be a path, e.g: \n"
+           "\n"
+           "Correct:\n"
+           "CreateExecutable((ExecutableOptions) { .output = \"main\"});\n"
+           "\n"
+           "Incorrect:\n"
+           "CreateExecutable((ExecutableOptions) { .output = \"./output/main\"});");
     result.output = NormalizePath(mateState.arena, executableOutput);
   }
 
