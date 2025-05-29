@@ -2483,6 +2483,7 @@ static String mateConvertNinjaPath(String str);
 static StringVector mateOutputTransformer(StringVector vector);
 static bool mateGlobMatch(String pattern, String text);
 
+// clang-format off
 // --- SAMURAI START ---
 /* This code comes from Samurai (https://github.com/michaelforney/samurai)
 *  Copyright © 2017-2021 Michael Forney
@@ -5397,6 +5398,7 @@ static bool mateGlobMatch(String pattern, String text);
             "}\n"\
             ""
 // --- SAMURAI END ---
+// clang-format on
 
 /* MIT License
    mate.h - Mate Implementations start here
