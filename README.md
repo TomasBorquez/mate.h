@@ -68,4 +68,4 @@ builds, you can use [TCC](https://bellard.org/tcc/) which is a tinier and faster
 This project incorporates code from [Samurai](https://github.com/michaelforney/samurai), which is primarily licensed under ISC license by Michael Forney, 
 with portions under Apache License 2.0 and MIT licenses. The full license text is available in the [LICENSE-SAMURAI.txt](./LICENSE-SAMURAI.txt) file.
 
-Inspired from `build.zig`, `nob.h`, `CMake` and `Mason` build systems, aswell as other unrelated C libraries like `raylib` and `clay.h` in terms of interfaces and implementations.
+Inspired from `build.zig`, `nob.h`, `CMake` and `Meson` build systems, aswell as other unrelated C libraries like `raylib` and `clay.h` in terms of interfaces and implementations.
