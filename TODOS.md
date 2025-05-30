@@ -9,7 +9,9 @@
 
 #### Features
 - [x] When parsing `ExecutableOptions.output`, make sure it is not a path, just a name with/without .exe
-- [ ] Make all macros `()`
+- [x] `clang-formatter` as a github action (when many contributions)
+- [x] `AddFiles` for array, and remove macros
+- [x] Make all macros `()`
 - [ ] Add `args` parser
 - [ ] Shared libs
 - [ ] `InstallHeader()` and other various library builder functions
@@ -20,15 +22,15 @@
 - [ ] Make `samurai` windows compatible
 - [ ] Properly clean the state of arenas and vectors
 - [ ] Parallel Dependency check
-- [x] `clang-formatter` as a github action (when many contributions)
 
 #### Tests
-- [ ] test static/private functions and that the output is correct
+- [ ] test mate functions and that the output is correct
+    - [ ] `AddFiles` and `AddFile`
+    - [ ] check `CreateCompileCommands` works correctly
 - [ ] test that checks rebuild works correctly
 - [ ] test that checks illegal stuff doesn't pass without an assertion
     - [ ] like `InstallExecutable` without `CreateExecutable`
     - [ ] like `CreateExecutable` without `StartBuild`
-- [ ] test that checks `CreateCompileCommands` works correctly
 - [ ] raylib-source-code
     - [ ] option shared (`-fPIC`, `-DBUILD_LIBTYPE_SHARED`)
     - [ ] option linux_backend (`wayland/x11`)

@@ -54,9 +54,9 @@ i32 main(void) {
 
     { // Run simple example
       Executable executable = CreateExecutable((ExecutableOptions){
-          .output = "basic-example",
-          .std = FLAG_STD_C99,
-          .warnings = FLAG_WARNINGS_NONE,
+        .output = "basic-example",
+        .std = FLAG_STD_C99,
+        .warnings = FLAG_WARNINGS_NONE,
       });
 
       AddFile(executable, "./src/basic-example.c");

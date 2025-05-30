@@ -2386,57 +2386,64 @@ void EndBuild(void);
 void CreateConfig(MateOptions options);
 
 Executable CreateExecutable(ExecutableOptions executableOptions);
-#define InstallExecutable(target) mateInstallExecutable(&target)
+#define InstallExecutable(target) mateInstallExecutable(&(target))
 static void mateInstallExecutable(Executable *executable);
 static void mateResetExecutable(Executable *executable);
 
 StaticLib CreateStaticLib(StaticLibOptions staticLibOptions);
-#define InstallStaticLib(target) mateInstallStaticLib(&target)
+#define InstallStaticLib(target) mateInstallStaticLib(&(target))
 static void mateInstallStaticLib(StaticLib *staticLib);
 static void mateResetStaticLib(StaticLib *staticLib);
 
 typedef enum { COMPILE_COMMANDS_SUCCESS = 0, COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMPILE_COMMANDS_FAILED_COMPDB } CreateCompileCommandsError;
 
-#define CreateCompileCommands(target) mateCreateCompileCommands(&target.ninjaBuildPath);
+#define CreateCompileCommands(target) mateCreateCompileCommands(&(target).ninjaBuildPath);
 static WARN_UNUSED CreateCompileCommandsError mateCreateCompileCommands(String *ninjaBuildPath);
 
-#define AddLibraryPaths(target, ...)           \
-  do {                                         \
-    StringVector _libs = {0};                  \
-    StringVectorPushMany(_libs, __VA_ARGS__);  \
-    mateAddLibraryPaths(&target.libs, &_libs); \
-                                               \
-    /* Cleanup */                              \
-    VecFree(_libs);                            \
+#define AddLibraryPaths(target, ...)             \
+  do {                                           \
+    StringVector _libs = {0};                    \
+    StringVectorPushMany(_libs, __VA_ARGS__);    \
+    mateAddLibraryPaths(&(target).libs, &_libs); \
+                                                 \
+    /* Cleanup */                                \
+    VecFree(_libs);                              \
   } while (0)
 static void mateAddLibraryPaths(String *targetLibs, StringVector *libs);
 
-#define LinkSystemLibraries(target, ...)           \
-  do {                                             \
-    StringVector _libs = {0};                      \
-    StringVectorPushMany(_libs, __VA_ARGS__);      \
-    mateLinkSystemLibraries(&target.libs, &_libs); \
-                                                   \
-    /* Cleanup */                                  \
-    VecFree(_libs);                                \
+#define LinkSystemLibraries(target, ...)             \
+  do {                                               \
+    StringVector _libs = {0};                        \
+    StringVectorPushMany(_libs, __VA_ARGS__);        \
+    mateLinkSystemLibraries(&(target).libs, &_libs); \
+                                                     \
+    /* Cleanup */                                    \
+    VecFree(_libs);                                  \
   } while (0)
 static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs);
 
-#define AddIncludePaths(target, ...)                   \
-  do {                                                 \
-    StringVector _includes = {0};                      \
-    StringVectorPushMany(_includes, __VA_ARGS__);      \
-    mateAddIncludePaths(&target.includes, &_includes); \
-                                                       \
-    /* Cleanup */                                      \
-    VecFree(_includes);                                \
+#define AddIncludePaths(target, ...)                     \
+  do {                                                   \
+    StringVector _includes = {0};                        \
+    StringVectorPushMany(_includes, __VA_ARGS__);        \
+    mateAddIncludePaths(&(target).includes, &_includes); \
+                                                         \
+    /* Cleanup */                                        \
+    VecFree(_includes);                                  \
   } while (0)
 static void mateAddIncludePaths(String *targetIncludes, StringVector *vector);
 
-#define AddFile(target, source) mateAddFile(&target.sources, s(source));
+#define AddFile(target, source) mateAddFile(&(target).sources, s(source));
 static void mateAddFile(StringVector *sources, String source);
 
-#define RemoveFile(target, source) mateRemoveFile(&target.sources, s(source));
+#define AddFiles(target, files)                                                                           \
+  do {                                                                                                    \
+    Assert(sizeof(files) != sizeof(*(files)), "AddFiles: failed, files must be an array, not a pointer"); \
+    mateAddFiles(&(target).sources, files, sizeof(files) / sizeof(*(files)));                             \
+  } while (0);
+static void mateAddFiles(StringVector *sources, char **source, size_t size);
+
+#define RemoveFile(target, source) mateRemoveFile(&(target).sources, s(source));
 static bool mateRemoveFile(StringVector *sources, String source);
 
 static void mateRebuild(void);
@@ -6094,6 +6101,13 @@ static CreateCompileCommandsError mateCreateCompileCommands(String *ninjaBuildPa
 
   LogSuccess("Successfully created %s", NormalizePathEnd(mateState.arena, compileCommandsPath).data);
   return COMPILE_COMMANDS_SUCCESS;
+}
+
+static void mateAddFiles(StringVector *sources, char **files, size_t size) {
+  for (size_t i = 0; i < size; i++) {
+    String currFile = s(files[i]);
+    mateAddFile(sources, currFile);
+  }
 }
 
 static void mateAddFile(StringVector *sources, String source) {

@@ -690,6 +690,13 @@ static CreateCompileCommandsError mateCreateCompileCommands(String *ninjaBuildPa
   return COMPILE_COMMANDS_SUCCESS;
 }
 
+static void mateAddFiles(StringVector *sources, char **files, size_t size) {
+  for (size_t i = 0; i < size; i++) {
+    String currFile = s(files[i]);
+    mateAddFile(sources, currFile);
+  }
+}
+
 static void mateAddFile(StringVector *sources, String source) {
   bool isGlob = false;
   for (size_t i = 0; i < source.length; i++) {
