@@ -1,9 +1,8 @@
 name: Clang Format
-
 on:
-  push:
+  pull_request:
     branches:
-      - main
+      - master
     paths:
       - '**/*.c'
       - '**/*.h'
@@ -14,7 +13,7 @@ permissions:
   actions: read
 
 jobs:
-  build-and-run:
+  format:
     runs-on: ubuntu-latest
 
     steps:
