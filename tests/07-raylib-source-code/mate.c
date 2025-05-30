@@ -15,7 +15,11 @@ static char *GetCFlags(void) {
   if (isLinux()) {
     FlagBuilderAdd(&flagsBuilder, "DPLATFORM_DESKTOP_GLFW", "D_GLFW_X11");
   }
-
+  if (isMacOs()) {
+    FlagBuilderAdd(&flagsBuilder, "DPLATFORM_DESKTOP_GLFW", "D_GL_SILENCE_DEPRECATION=1");
+    // Required due to raylib's use of Objective-C types on macOS.
+    FlagBuilderAdd(&flagsBuilder, "x objective-c");
+  }
   if (isWindows()) {
     FlagBuilderAdd(&flagsBuilder, "DPLATFORM_DESKTOP_GLFW");
   }
@@ -27,7 +31,12 @@ i32 main(void) {
   StartBuild();
   {
     { // Compile static lib
-      StaticLib staticLib = CreateStaticLib((StaticLibOptions){.output = "libraylib", .flags = GetCFlags()});
+      StaticLib staticLib = CreateStaticLib((StaticLibOptions){
+          .output = "libraylib",
+          .flags = GetCFlags(),
+          // Handle linking macOS frameworks manually.
+          .libs = (!isMacOs()) ? "" : "-lm -framework Foundation -framework AppKit -framework IOKit -framework OpenGL -framework CoreVideo",
+      });
 
       AddFile(staticLib, "./src/rcore.c");
       AddFile(staticLib, "./src/utils.c");
@@ -45,6 +54,7 @@ i32 main(void) {
       if (isLinux()) {
         LinkSystemLibraries(staticLib, "GL", "rt", "dl", "m", "X11", "Xcursor", "Xext", "Xfixes", "Xi", "Xinerama", "Xrandr", "Xrender");
       }
+      
       if (isWindows()) {
         LinkSystemLibraries(staticLib, "winmm", "gdi32", "opengl32");
       }
@@ -66,6 +76,16 @@ i32 main(void) {
 
       if (isLinux()) {
         LinkSystemLibraries(executable, "raylib", "GL", "rt", "dl", "m", "X11");
+      }
+      if (isMacOs()) {
+        // Link regular system libraries.
+        LinkSystemLibraries(executable, "raylib", "m");
+        // Link macOS system frameworks.
+        FlagBuilder frameworkFlagsBuilder = FlagBuilderCreate();
+        FlagBuilderAddString(&frameworkFlagsBuilder, &executable.libs);
+        FlagBuilderAdd(&frameworkFlagsBuilder, "framework CoreVideo", "framework IOKit", "framework Cocoa", "framework GLUT", "framework OpenGL");
+        String libsAndFrameworks = frameworkFlagsBuilder.buffer;
+        executable.libs = libsAndFrameworks;
       }
       if (isWindows()) {
         LinkSystemLibraries(executable, "raylib", "winmm", "gdi32", "opengl32");
