@@ -23,6 +23,11 @@
 - [ ] Properly clean the state of arenas and vectors
 - [ ] Parallel Dependency check
 
+#### Examples
+- [ ] Show how to use FS functions `FileWrite`, `FileDelete`, etc.
+- [ ] Show how to use String functions `F()`, `StrConcat`, etc.
+- [ ] Show how to use `FlagBuilder`, `AddFiles`, `CreateStaticLib`.
+
 #### Tests
 - [ ] test mate functions and that the output is correct
     - [ ] `AddFiles` and `AddFile`
