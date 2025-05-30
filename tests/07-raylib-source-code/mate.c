@@ -79,7 +79,7 @@ i32 main(void) {
       }
       if (isMacOs()) {
         // Link regular system libraries.
-        LinkSystemLibraries(executable, "m");
+        LinkSystemLibraries(executable, "raylib", "m");
         // Link macOS system frameworks.
         FlagBuilder frameworkFlagsBuilder = FlagBuilderCreate();
         FlagBuilderAddString(&frameworkFlagsBuilder, &executable.libs);
