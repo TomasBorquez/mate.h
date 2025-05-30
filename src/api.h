@@ -196,10 +196,10 @@ static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs);
   } while (0)
 static void mateAddIncludePaths(String *targetIncludes, StringVector *vector);
 
-#define AddFile(target, source) mateAddFile(&target.sources, S(source));
+#define AddFile(target, source) mateAddFile(&target.sources, s(source));
 static void mateAddFile(StringVector *sources, String source);
 
-#define RemoveFile(target, source) mateRemoveFile(&target.sources, S(source));
+#define RemoveFile(target, source) mateRemoveFile(&target.sources, s(source));
 static bool mateRemoveFile(StringVector *sources, String source);
 
 static void mateRebuild(void);

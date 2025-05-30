@@ -4,9 +4,12 @@
 
 #### Bugs
 - [x] Samurai does not generate `compile_commands.json`?
+- [x] Move `AddFile/RemoveFile` to use `s()` for the file names
+- [x] `CreateStaticLib/CreateExecutable` were using includes instead of libs
 
 #### Features
 - [x] When parsing `ExecutableOptions.output`, make sure it is not a path, just a name with/without .exe
+- [ ] Make all macros `()`
 - [ ] Add `args` parser
 - [ ] Shared libs
 - [ ] `InstallHeader()` and other various library builder functions

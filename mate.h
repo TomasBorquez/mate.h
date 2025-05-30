@@ -2433,10 +2433,10 @@ static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs);
   } while (0)
 static void mateAddIncludePaths(String *targetIncludes, StringVector *vector);
 
-#define AddFile(target, source) mateAddFile(&target.sources, S(source));
+#define AddFile(target, source) mateAddFile(&target.sources, s(source));
 static void mateAddFile(StringVector *sources, String source);
 
-#define RemoveFile(target, source) mateRemoveFile(&target.sources, S(source));
+#define RemoveFile(target, source) mateRemoveFile(&target.sources, s(source));
 static bool mateRemoveFile(StringVector *sources, String source);
 
 static void mateRebuild(void);
@@ -5805,7 +5805,7 @@ StaticLib CreateStaticLib(StaticLibOptions staticLibOptions) {
 
   String optionLibs = s(staticLibOptions.libs);
   if (!StrIsNull(optionLibs)) {
-    result.includes = optionLibs;
+    result.libs = optionLibs;
   }
 
   result.ninjaBuildPath = F(mateState.arena, "%s/static-%s.ninja", mateState.buildDirectory.data, NormalizeExtension(mateState.arena, result.output).data);
@@ -6042,7 +6042,7 @@ Executable CreateExecutable(ExecutableOptions executableOptions) {
 
   String optionLibs = s(executableOptions.libs);
   if (!StrIsNull(optionLibs)) {
-    result.includes = optionLibs;
+    result.libs = optionLibs;
   }
 
   result.ninjaBuildPath = F(mateState.arena, "%s/exe-%s.ninja", mateState.buildDirectory.data, NormalizeExtension(mateState.arena, result.output).data);

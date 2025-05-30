@@ -401,7 +401,7 @@ StaticLib CreateStaticLib(StaticLibOptions staticLibOptions) {
 
   String optionLibs = s(staticLibOptions.libs);
   if (!StrIsNull(optionLibs)) {
-    result.includes = optionLibs;
+    result.libs = optionLibs;
   }
 
   result.ninjaBuildPath = F(mateState.arena, "%s/static-%s.ninja", mateState.buildDirectory.data, NormalizeExtension(mateState.arena, result.output).data);
@@ -638,7 +638,7 @@ Executable CreateExecutable(ExecutableOptions executableOptions) {
 
   String optionLibs = s(executableOptions.libs);
   if (!StrIsNull(optionLibs)) {
-    result.includes = optionLibs;
+    result.libs = optionLibs;
   }
 
   result.ninjaBuildPath = F(mateState.arena, "%s/exe-%s.ninja", mateState.buildDirectory.data, NormalizeExtension(mateState.arena, result.output).data);
