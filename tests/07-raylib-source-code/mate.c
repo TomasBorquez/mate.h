@@ -31,7 +31,12 @@ i32 main(void) {
   StartBuild();
   {
     { // Compile static lib
-      StaticLib staticLib = CreateStaticLib((StaticLibOptions){.output = "libraylib", .flags = GetCFlags()});
+      StaticLib staticLib = CreateStaticLib((StaticLibOptions){
+          .output = "libraylib",
+          .flags = GetCFlags(),
+          // Handle linking macOS frameworks manually.
+          .libs = (!isMacOs()) ? "" : "-lm -framework Foundation -framework AppKit -framework IOKit -framework OpenGL -framework CoreVideo",
+      });
 
       AddFile(staticLib, "./src/rcore.c");
       AddFile(staticLib, "./src/utils.c");
@@ -49,16 +54,7 @@ i32 main(void) {
       if (isLinux()) {
         LinkSystemLibraries(staticLib, "GL", "rt", "dl", "m", "X11", "Xcursor", "Xext", "Xfixes", "Xi", "Xinerama", "Xrandr", "Xrender");
       }
-      if (isMacOs()) {
-        // Link regular system libraries.
-        LinkSystemLibraries(staticLib, "m");
-        // Link macOS system frameworks.
-        FlagBuilder frameworkFlagsBuilder = FlagBuilderCreate();
-        FlagBuilderAddString(&frameworkFlagsBuilder, &staticLib.libs);
-        FlagBuilderAdd(&frameworkFlagsBuilder, "framework Foundation", "framework AppKit", "framework IOKit", "framework OpenGL", "framework CoreVideo");
-        String libsAndFrameworks = frameworkFlagsBuilder.buffer;
-        staticLib.libs = libsAndFrameworks;
-      }
+      
       if (isWindows()) {
         LinkSystemLibraries(staticLib, "winmm", "gdi32", "opengl32");
       }
