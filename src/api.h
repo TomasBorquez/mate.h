@@ -56,6 +56,49 @@ typedef struct {
   String ninjaBuildPath;
 } Executable;
 
+typedef enum {
+  ARG_PARSER_TOKEN_INVALID = 0,
+  ARG_PARSER_TOKEN_FLAG = 1,
+  ARG_PARSER_TOKEN_FLAG_OPTION = 2,
+  ARG_PARSER_TOKEN_EQUAL = 3,
+  ARG_PARSER_TOKEN_COMMA = 4,
+  ARG_PARSER_TOKEN_NUMBER = 5,
+  ARG_PARSER_TOKEN_STRING = 6,
+  ARG_PARSER_TOKEN_BOOL_TRUE = 7,
+  ARG_PARSER_TOKEN_BOOL_FALSE = 8,
+} argParserToken;
+
+typedef enum {
+  ARG_PARSER_FLAG_DATA_TYPE_VOID = 0,   // no type
+  ARG_PARSER_FLAG_DATA_TYPE_INT = 1,    // int
+  ARG_PARSER_FLAG_DATA_TYPE_UINT = 2,   // uint
+  ARG_PARSER_FLAG_DATA_TYPE_FLOAT = 2,  // float
+  ARG_PARSER_FLAG_DATA_TYPE_BOOL = 4,   // true | false | 0 | 1
+  ARG_PARSER_FLAG_DATA_TYPE_STRING = 5, // string
+
+  // not sure if these ones are a good idea
+  // FLAG_DATA_TYPE_FEATURE = 6, // on | off | auto (like meson)
+  // FLAG_DATA_TYPE_LIST = 7,
+} flagDataType;
+
+typedef struct {
+  String name;
+  void *data;
+  flagDataType dataType;
+} ArgParserFlagData;
+
+typedef struct {
+  String data;
+  argParserToken type;
+} ArgParserTokenData;
+
+VEC_TYPE(ArgParserTokenVector, ArgParserTokenData);
+VEC_TYPE(VectorU32, u32);
+
+typedef struct {
+  ArgParserTokenVector token_vec;
+} ArgumentDatatypeConfig;
+
 typedef struct {
   Compiler compiler;
 
@@ -74,6 +117,8 @@ typedef struct {
 
   i64 startTime;
   i64 totalTime;
+
+  ArgumentDatatypeConfig argConfig;
 } MateConfig;
 
 typedef enum {
@@ -145,7 +190,7 @@ typedef enum { none = 0, needed, weak } LinkFrameworkOptions;
 typedef StringBuilder FlagBuilder;
 
 /* --- Build System --- */
-void StartBuild(void);
+void StartBuild(int argc, const char **argv);
 void EndBuild(void);
 
 void CreateConfig(MateOptions options);
