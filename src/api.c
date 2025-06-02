@@ -1,4 +1,7 @@
 #include "api.h"
+#include <ctype.h>
+#include <stdio.h>
+#include <string.h>
 
 static MateConfig mateState = {0};
 
@@ -89,7 +92,275 @@ static void mateReadCache(void) {
   Assert(err == SUCCESS, "MateReadCache: Failed writing cache, err: %d", err);
 }
 
-void StartBuild(void) {
+static void mateParserInvalidToken(ArgParserTokenData *token) {
+  LogError("Invalid token while lexing arguments: %s", token->data.data);
+  // yeah that's pretty much it rn, no error handling
+}
+
+static VectorU32 mateParserScanSeperators(const String str, const char *seperators, unsigned int seperators_len) {
+  VectorU32 positions = {0};
+
+  // naturally sorted from low to high
+  for (size_t i = 0; i < str.length; i++) {
+    const char cmpChar = str.data[i];
+
+    for (size_t j = 0; j < seperators_len; j++) {
+      const char sepChar = seperators[j];
+
+      if (sepChar == cmpChar) VecPush(positions, i);
+    }
+  }
+
+  return positions;
+}
+
+// TODO: clean up the mess
+static int mateParseArguments(int argc, const char **argv) {
+  Arena *stringArena = ArenaCreate(8);
+  // examples of possible use cases:
+  // bool: -Dtracy=true | -Dtracy=1 | -Dtracy=false | -Dtracy=-1
+  // uint: -Dcache_size_bytes 124124123123213
+  // int: -Dbraincells -12
+  // string: -Dlog verbose
+  // verbose mate: mate -v
+  // verbose verbose mate: mate -vv
+  // verbose verbese verbose mate: mate -vvv
+  // clean_cache: mate --clean-cace build
+  // set compiler: mate --compiler=/usr/bin/customcompiler
+  // set a samurai binary: --samu_bin_cache_path /usr/local/bin/matesamubincache/v1.9.0/samurai
+
+  ArgParserTokenVector tokenVec = {0};
+
+  int err = 0;
+  if (argc <= 1) {
+    err = -1;
+    return err;
+  }
+
+  // lexer
+
+  // actuall lexer frfr
+  printf("\n");
+  for (int i = 1; i < argc; i++) {
+
+    const String currentWord = s(argv[i]);
+
+    VectorU32 sepPositions = mateParserScanSeperators(currentWord, (const char[]){'=', ','}, 2);
+
+    for (size_t j = 0; j < currentWord.length; j++) {
+      ArgParserTokenData tokenData = {.data = S(""), .type = ARG_PARSER_TOKEN_INVALID};
+
+      const char currentToken = currentWord.data[j];
+
+      switch (currentToken) {
+      case ' ':
+        break;
+      case '-':
+        switch (currentWord.data[j + 1]) {
+        case 'D':
+          tokenData.type = ARG_PARSER_TOKEN_FLAG_OPTION; // -D
+
+          if (currentWord.length <= 2) { // if the entire word is just the flag (e.g. ./mate -D)
+            tokenData.data = S("");
+            j = currentWord.length - 1;
+            continue;
+          }
+          j += 2;
+
+          // find the nearest seperator
+          size_t nearestSep = currentWord.length;
+          for (size_t k = 0; k < sepPositions.length; k++) {
+            const u32 sepPosition = sepPositions.data[k];
+
+            if (j <= sepPosition && sepPosition < nearestSep) nearestSep = sepPosition;
+          }
+
+          // set the data to the rest of the word, unless there is no data (./mate -D)
+          tokenData.data = StrNewSize(stringArena, currentWord.data + j, nearestSep - j);
+
+          // next word
+          j = nearestSep - 1;
+          break;
+        default:
+          // check if it's a negative number
+          if (isdigit((unsigned char)(currentWord.data[j + 1]))) {
+            u32 k = 0;
+            bool nan = false;
+            for (k = j + 2; k < currentWord.length; k++)
+              if (!isdigit((unsigned char)currentWord.data[k]) && currentWord.data[k] != '.') {
+                nan = true;
+                break;
+              }
+
+            Assert(k - j >= 0 && (k - j) <= (currentWord.length - j), "Math ain't mathing");
+            tokenData.data = StrNewSize(stringArena, currentWord.data, k - j);
+
+            tokenData.type = nan ? ARG_PARSER_TOKEN_STRING : ARG_PARSER_TOKEN_NUMBER;
+
+            j = k - 1;
+          } else {
+            tokenData.type = ARG_PARSER_TOKEN_FLAG; // -
+            if (currentWord.length >= 2) {
+              // find the nearest seperator
+              size_t nearestSep = currentWord.length;
+              for (size_t k = 0; k < sepPositions.length; k++) {
+                const u32 sepPosition = sepPositions.data[k];
+
+                if (j <= sepPosition && sepPosition < nearestSep) nearestSep = sepPosition;
+              }
+
+              tokenData.data = StrNewSize(stringArena, currentWord.data + (j + 1), nearestSep - 1);
+
+              j = nearestSep - 1;
+            } else {
+              tokenData.data = S("");
+              j = currentWord.length;
+            };
+          }
+
+          break;
+        }
+        break;
+      case '=':
+        tokenData.data = S("="); // kinda pointless lol
+        tokenData.type = ARG_PARSER_TOKEN_EQUAL;
+        break;
+      case ',':
+        tokenData.data = S(",");
+        tokenData.type = ARG_PARSER_TOKEN_COMMA;
+        break;
+      default:
+        if (currentToken == '"') {
+          // try finding the next "
+          u32 k = j;
+          while (currentWord.data[++k] != '"')
+            if (currentWord.data[k] == '\0' || k > currentWord.length) {
+              mateParserInvalidToken(&tokenData);
+              break;
+            }
+
+          tokenData.data = StrNewSize(stringArena, currentWord.data + j + 1, k - j - 1);
+
+          tokenData.type = ARG_PARSER_TOKEN_STRING;
+
+          j = k; // goto the end of the string
+
+        } else if (currentToken == '\'') { // same thing but for ' instead of "
+          // try finding the next "
+          u32 k = j;
+          while (currentWord.data[++k] != '\'')
+            if (currentWord.data[k] == '\0' || k > currentWord.length) {
+              mateParserInvalidToken(&tokenData);
+              break;
+            }
+
+          tokenData.data = StrNewSize(stringArena, currentWord.data + j + 1, k - j - 1);
+
+          tokenData.type = ARG_PARSER_TOKEN_STRING;
+
+          j = k; // goto the end of the string
+        } else if (strncmp(currentWord.data + j, "true", Min(2, currentWord.length)) == 0 && currentWord.length >= strlen("true")) {
+          tokenData.type = ARG_PARSER_TOKEN_BOOL_TRUE;
+          tokenData.data = S("true");
+          j += strlen("true") - 1;
+        } else if (strncmp(currentWord.data + j, "false", Min(2, currentWord.length)) == 0 && currentWord.length >= strlen("false")) {
+          tokenData.type = ARG_PARSER_TOKEN_BOOL_FALSE;
+          tokenData.data = S("false");
+          j += strlen("false") - 1;
+        } else if (isdigit((unsigned char)currentToken)) {
+          u32 k = 0;
+          bool nan = false;
+          for (k = j + 1; k < currentWord.length; k++)
+            if (!isdigit((unsigned char)currentWord.data[k]) && currentWord.data[k] != '.') {
+              nan = true;
+              break;
+            }
+
+          Assert(k - j >= 0 && (k - j) <= (currentWord.length - j), "Math ain't mathing");
+          tokenData.data = StrNewSize(stringArena, currentWord.data + j, k - j);
+
+          tokenData.type = nan ? ARG_PARSER_TOKEN_STRING : ARG_PARSER_TOKEN_NUMBER;
+
+          j = k - 1;
+        } else {
+          // turn the entire word into a string (until seperator)
+          // find the nearest seperator
+          size_t nearestSep = currentWord.length;
+          for (size_t k = 0; k < sepPositions.length; k++) {
+            const u32 sepPosition = sepPositions.data[k];
+
+            if (j <= sepPosition && sepPosition < nearestSep) nearestSep = sepPosition;
+          }
+
+          tokenData.data = StrNewSize(stringArena, currentWord.data + j, nearestSep - j);
+          tokenData.type = ARG_PARSER_TOKEN_STRING;
+
+          j = nearestSep - 1;
+        }
+        break;
+      }
+
+      VecPush(tokenVec, tokenData);
+    }
+
+    if (sepPositions.data) VecFree(sepPositions);
+  }
+
+  for (size_t i = 0; i < tokenVec.length; i++) {
+    const ArgParserTokenData tokenData = tokenVec.data[i];
+
+    // print token data
+    char *name = "TOK_INVALID";
+    switch (tokenData.type) {
+    default:
+    case ARG_PARSER_TOKEN_INVALID:
+      name = "TOK_INVALID";
+      break;
+    case ARG_PARSER_TOKEN_FLAG:
+      name = "TOK_FLAG_SHORT";
+      break;
+    case ARG_PARSER_TOKEN_FLAG_OPTION:
+      name = "TOK_FLAG_OPTION";
+      break;
+    case ARG_PARSER_TOKEN_EQUAL:
+      name = "TOK_EQUAL";
+      break;
+    case ARG_PARSER_TOKEN_COMMA:
+      name = "TOK_COMMA";
+      break;
+    case ARG_PARSER_TOKEN_NUMBER:
+      name = "TOK_NUMBER";
+      break;
+    case ARG_PARSER_TOKEN_STRING:
+      name = "TOK_STRING";
+      break;
+
+    case ARG_PARSER_TOKEN_BOOL_TRUE:
+      name = "TOK_BOOL_TRUE";
+      break;
+    case ARG_PARSER_TOKEN_BOOL_FALSE:
+      name = "TOK_BOOL_FALSE";
+      break;
+    }
+
+    LogInfo("%s(%s) ", name, tokenData.data.data);
+  }
+  for (int i = 1; i < argc; i++) {
+    printf("`%s` ", argv[i]);
+  }
+  printf("\n");
+
+  // actual parser
+  // TODO
+
+  if (tokenVec.data) VecFree(tokenVec);
+
+  ArenaFree(stringArena);
+
+  return err;
+}
+
+void StartBuild(int argc, const char **argv) {
   LogInit();
   if (!mateState.initConfig) {
     mateSetDefaultState();
@@ -101,6 +372,7 @@ void StartBuild(void) {
   Mkdir(mateState.buildDirectory);
   mateReadCache();
   mateRebuild();
+  mateParseArguments(argc, argv);
 }
 
 static bool mateNeedRebuild(void) {
