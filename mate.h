@@ -2530,6 +2530,18 @@ static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs);
   } while (0)
 static void mateAddIncludePaths(String *targetIncludes, StringVector *vector);
 
+#define AddFrameworkPaths(target, ...)                       \
+  do {                                                       \
+    StringVector _frameworks = {0};                          \
+    StringVectorPushMany(_frameworks, __VA_ARGS__);          \
+    /* Frameworks are just specialized library bundles. */   \
+    mateAddFrameworkPaths(&(target).includes, &_frameworks); \
+                                                             \
+    /* Cleanup */                                            \
+    VecFree(_frameworks);                                    \
+  } while (0)
+static void mateAddFrameworkPaths(String *targetIncludes, StringVector *vector);
+
 #define AddFile(target, source) mateAddFile(&(target).sources, s(source));
 static void mateAddFile(StringVector *sources, String source);
 
