@@ -2438,7 +2438,7 @@ static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs);
   } while (0)
 static void mateLinkFrameworks(String *targetLibs, StringVector *frameworks);
 
-#define LinkFrameworks(target, options, ...)                              \
+#define LinkFrameworksWithOptions(target, options, ...)                              \
   do {                                                                    \
     StringVector _frameworks = {0};                                       \
     StringVectorPushMany(_frameworks, __VA_ARGS__);                       \
