@@ -34,8 +34,6 @@ i32 main(void) {
       StaticLib staticLib = CreateStaticLib((StaticLibOptions){
           .output = "libraylib",
           .flags = GetCFlags(),
-          // Handle linking macOS frameworks manually.
-          .libs = (!isMacOs()) ? "" : "-lm -framework Foundation -framework AppKit -framework IOKit -framework OpenGL -framework CoreVideo",
       });
 
       AddFile(staticLib, "./src/rcore.c");
@@ -54,7 +52,12 @@ i32 main(void) {
       if (isLinux()) {
         LinkSystemLibraries(staticLib, "GL", "rt", "dl", "m", "X11", "Xcursor", "Xext", "Xfixes", "Xi", "Xinerama", "Xrandr", "Xrender");
       }
-      
+      if (isMacOs()) {
+        // Link regular system libraries.
+        LinkSystemLibraries(staticLib, "m");
+        // Link macOS system frameworks.
+        LinkFrameworks(staticLib, "Foundation", "AppKit", "IOKit", "OpenGL", "CoreVideo");
+      }
       if (isWindows()) {
         LinkSystemLibraries(staticLib, "winmm", "gdi32", "opengl32");
       }
@@ -81,11 +84,7 @@ i32 main(void) {
         // Link regular system libraries.
         LinkSystemLibraries(executable, "raylib", "m");
         // Link macOS system frameworks.
-        FlagBuilder frameworkFlagsBuilder = FlagBuilderCreate();
-        FlagBuilderAddString(&frameworkFlagsBuilder, &executable.libs);
-        FlagBuilderAdd(&frameworkFlagsBuilder, "framework CoreVideo", "framework IOKit", "framework Cocoa", "framework GLUT", "framework OpenGL");
-        String libsAndFrameworks = frameworkFlagsBuilder.buffer;
-        executable.libs = libsAndFrameworks;
+        LinkFrameworks(executable, "CoreVideo", "IOKit", "Cocoa", "GLUT", "OpenGL");
       }
       if (isWindows()) {
         LinkSystemLibraries(executable, "raylib", "winmm", "gdi32", "opengl32");
