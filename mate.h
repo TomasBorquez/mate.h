@@ -2438,6 +2438,18 @@ static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs);
   } while (0)
 static void mateLinkFrameworks(String *targetLibs, StringVector *frameworks);
 
+#define LinkFrameworks(target, options, ...)                              \
+  do {                                                                    \
+    StringVector _frameworks = {0};                                       \
+    StringVectorPushMany(_frameworks, __VA_ARGS__);                       \
+    /* Frameworks are just specialized library bundles. */                \
+    mateLinkFrameworksWithOptions(&(target).libs, options, &_frameworks); \
+                                                                          \
+    /* Cleanup */                                                         \
+    VecFree(_frameworks);                                                 \
+  } while (0)
+static void mateLinkFrameworksWithOptions(String *targetLibs, LinkFrameworkOptions options, StringVector *frameworks);
+
 #define AddIncludePaths(target, ...)                     \
   do {                                                   \
     StringVector _includes = {0};                        \
@@ -6545,8 +6557,11 @@ static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs) {
   *targetLibs = builder.buffer;
 }
 
-// TODO: implement support for different linkage hints.
 static void mateLinkFrameworks(String *targetLibs, StringVector *frameworks) {
+  mateLinkFrameworksWithOptions(targetLibs, none, frameworks);
+}
+
+static void mateLinkFrameworksWithOptions(String *targetLibs, LinkFrameworkOptions options, StringVector *frameworks) {
   if (isGCC()) {
     Assert(0,
            "LinkFrameworks: Automatic framework linking is not supported by GCC. "
@@ -6554,21 +6569,35 @@ static void mateLinkFrameworks(String *targetLibs, StringVector *frameworks) {
   }
   Assert(isClang(), "LinkFrameworks: This function is only supported for Clang.");
 
+  char *frameworkFlag = NULL;
+  switch (options) {
+    case none:
+      frameworkFlag = "-framework";
+      break;
+    case needed:
+      frameworkFlag = "-needed_framework";
+      break;
+    case weak:
+      frameworkFlag = "-weak_framework";
+      break;
+    default:
+      Assert(0, "LinkFrameworks: Invalid framework linking option provided.");
+  }
+
   StringBuilder builder = StringBuilderCreate(mateState.arena);
 
   if (targetLibs->length) {
     StringBuilderAppend(mateState.arena, &builder, targetLibs);
   }
 
-  // Clang format: -framework lib
   for (size_t i = 0; i < frameworks->length; i++) {
     String currFW = VecAt((*frameworks), i);
     if (i == 0 && builder.buffer.length == 0) {
-      String buffer = F(mateState.arena, "-framework %s", currFW.data);
+      String buffer = F(mateState.arena, "%s %s", frameworkFlag, currFW.data);
       StringBuilderAppend(mateState.arena, &builder, &buffer);
       continue;
     }
-    String buffer = F(mateState.arena, " -framework %s", currFW.data);
+    String buffer = F(mateState.arena, " %s %s", frameworkFlag, currFW.data);
     StringBuilderAppend(mateState.arena, &builder, &buffer);
   }
 
