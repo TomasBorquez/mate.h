@@ -2460,7 +2460,7 @@ static void mateAddIncludePaths(String *targetIncludes, StringVector *vector);
     /* Cleanup */                                            \
     VecFree(_frameworks);                                    \
   } while (0)
-static void mateAddFrameworkPaths(String *targetIncludes, StringVector *vector);
+static void mateAddFrameworkPaths(String *targetIncludes, StringVector *includes);
 
 #define AddFile(target, source) mateAddFile(&(target).sources, s(source));
 static void mateAddFile(StringVector *sources, String source);
@@ -6613,7 +6613,7 @@ static void mateAddIncludePaths(String *targetIncludes, StringVector *includes) 
   *targetIncludes = builder.buffer;
 }
 
-static void mateAddFrameworkPaths(String *targetIncludes, StringVector *vector) {
+static void mateAddFrameworkPaths(String *targetIncludes, StringVector *includes) {
   Assert(isClang() || isGCC(), "AddFrameworkPaths: This function is only supported for GCC/Clang.");
 
   StringBuilder builder = StringBuilderCreate(mateState.arena);
