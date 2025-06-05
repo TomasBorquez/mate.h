@@ -6541,6 +6541,36 @@ static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs) {
   *targetLibs = builder.buffer;
 }
 
+// TODO: implement support for different linkage hints.
+static void mateLinkFrameworks(String *targetLibs, StringVector *frameworks) {
+  if (isGCC()) {
+    Assert(0,
+           "LinkFrameworks: Automatic framework linking is not supported by GCC. "
+           "Use standard linking functions after adding a framework path instead.");
+  }
+  Assert(isClang(), "LinkFrameworks: This function is only supported for Clang.");
+
+  StringBuilder builder = StringBuilderCreate(mateState.arena);
+
+  if (targetLibs->length) {
+    StringBuilderAppend(mateState.arena, &builder, targetLibs);
+  }
+
+  // Clang format: -framework lib
+  for (size_t i = 0; i < frameworks->length; i++) {
+    String currFW = VecAt((*frameworks), i);
+    if (i == 0 && builder.buffer.length == 0) {
+      String buffer = F(mateState.arena, "-framework %s", currFW.data);
+      StringBuilderAppend(mateState.arena, &builder, &buffer);
+      continue;
+    }
+    String buffer = F(mateState.arena, " -framework %s", currFW.data);
+    StringBuilderAppend(mateState.arena, &builder, &buffer);
+  }
+
+  *targetLibs = builder.buffer;
+}
+
 static void mateAddIncludePaths(String *targetIncludes, StringVector *includes) {
   StringBuilder builder = StringBuilderCreate(mateState.arena);
 
@@ -6573,6 +6603,31 @@ static void mateAddIncludePaths(String *targetIncludes, StringVector *includes) 
       String buffer = F(mateState.arena, " -I\"%s\"", currInclude.data);
       StringBuilderAppend(mateState.arena, &builder, &buffer);
     }
+  }
+
+  *targetIncludes = builder.buffer;
+}
+
+static void mateAddFrameworkPaths(String *targetIncludes, StringVector *vector) {
+  Assert(isClang() || isGCC(), "AddFrameworkPaths: This function is only supported for GCC/Clang.");
+
+  StringBuilder builder = StringBuilderCreate(mateState.arena);
+
+  if (targetIncludes->length) {
+    StringBuilderAppend(mateState.arena, &builder, targetIncludes);
+    StringBuilderAppend(mateState.arena, &builder, &S(" "));
+  }
+ 
+  // GCC/Clang format: -F"path"
+  for (size_t i = 0; i < includes->length; i++) {
+    String currInclude = VecAt((*includes), i);
+    if (i == 0 && builder.buffer.length == 0) {
+      String buffer = F(mateState.arena, "-F\"%s\"", currInclude.data);
+      StringBuilderAppend(mateState.arena, &builder, &buffer);
+      continue;
+    }
+    String buffer = F(mateState.arena, " -F\"%s\"", currInclude.data);
+    StringBuilderAppend(mateState.arena, &builder, &buffer);
   }
 
   *targetIncludes = builder.buffer;
