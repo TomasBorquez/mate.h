@@ -2390,9 +2390,8 @@ typedef struct {
   String ninjaBuildPath;
 } Executable;
 
-typedef struct {
-  bool needed;
-  bool weak;
+typedef enum {
+  none = 0, needed, weak
 } LinkFrameworkOptions;
 
 typedef struct {
