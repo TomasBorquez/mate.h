@@ -2293,10 +2293,6 @@ typedef struct {
   String ninjaBuildPath;
 } Executable;
 
-typedef enum {
-  none = 0, needed, weak
-} LinkFrameworkOptions;
-
 typedef struct {
   Compiler compiler;
 
@@ -2426,30 +2422,6 @@ static void mateAddLibraryPaths(String *targetLibs, StringVector *libs);
   } while (0)
 static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs);
 
-#define LinkFrameworks(target, ...)                        \
-  do {                                                     \
-    StringVector _frameworks = {0};                        \
-    StringVectorPushMany(_frameworks, __VA_ARGS__);        \
-    /* Frameworks are just specialized library bundles. */ \
-    mateLinkFrameworks(&(target).libs, &_frameworks);      \
-                                                           \
-    /* Cleanup */                                          \
-    VecFree(_frameworks);                                  \
-  } while (0)
-static void mateLinkFrameworks(String *targetLibs, StringVector *frameworks);
-
-#define LinkFrameworksWithOptions(target, options, ...)                              \
-  do {                                                                    \
-    StringVector _frameworks = {0};                                       \
-    StringVectorPushMany(_frameworks, __VA_ARGS__);                       \
-    /* Frameworks are just specialized library bundles. */                \
-    mateLinkFrameworksWithOptions(&(target).libs, options, &_frameworks); \
-                                                                          \
-    /* Cleanup */                                                         \
-    VecFree(_frameworks);                                                 \
-  } while (0)
-static void mateLinkFrameworksWithOptions(String *targetLibs, LinkFrameworkOptions options, StringVector *frameworks);
-
 #define AddIncludePaths(target, ...)                     \
   do {                                                   \
     StringVector _includes = {0};                        \
@@ -2460,18 +2432,6 @@ static void mateLinkFrameworksWithOptions(String *targetLibs, LinkFrameworkOptio
     VecFree(_includes);                                  \
   } while (0)
 static void mateAddIncludePaths(String *targetIncludes, StringVector *vector);
-
-#define AddFrameworkPaths(target, ...)                       \
-  do {                                                       \
-    StringVector _frameworks = {0};                          \
-    StringVectorPushMany(_frameworks, __VA_ARGS__);          \
-    /* Frameworks are just specialized library bundles. */   \
-    mateAddFrameworkPaths(&(target).includes, &_frameworks); \
-                                                             \
-    /* Cleanup */                                            \
-    VecFree(_frameworks);                                    \
-  } while (0)
-static void mateAddFrameworkPaths(String *targetIncludes, StringVector *includes);
 
 #define AddFile(target, source) mateAddFile(&(target).sources, s(source));
 static void mateAddFile(StringVector *sources, String source);
@@ -6557,53 +6517,6 @@ static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs) {
   *targetLibs = builder.buffer;
 }
 
-static void mateLinkFrameworks(String *targetLibs, StringVector *frameworks) {
-  mateLinkFrameworksWithOptions(targetLibs, none, frameworks);
-}
-
-static void mateLinkFrameworksWithOptions(String *targetLibs, LinkFrameworkOptions options, StringVector *frameworks) {
-  if (isGCC()) {
-    Assert(0,
-           "LinkFrameworks: Automatic framework linking is not supported by GCC. "
-           "Use standard linking functions after adding a framework path instead.");
-  }
-  Assert(isClang(), "LinkFrameworks: This function is only supported for Clang.");
-
-  char *frameworkFlag = NULL;
-  switch (options) {
-    case none:
-      frameworkFlag = "-framework";
-      break;
-    case needed:
-      frameworkFlag = "-needed_framework";
-      break;
-    case weak:
-      frameworkFlag = "-weak_framework";
-      break;
-    default:
-      Assert(0, "LinkFrameworks: Invalid framework linking option provided.");
-  }
-
-  StringBuilder builder = StringBuilderCreate(mateState.arena);
-
-  if (targetLibs->length) {
-    StringBuilderAppend(mateState.arena, &builder, targetLibs);
-  }
-
-  for (size_t i = 0; i < frameworks->length; i++) {
-    String currFW = VecAt((*frameworks), i);
-    if (i == 0 && builder.buffer.length == 0) {
-      String buffer = F(mateState.arena, "%s %s", frameworkFlag, currFW.data);
-      StringBuilderAppend(mateState.arena, &builder, &buffer);
-      continue;
-    }
-    String buffer = F(mateState.arena, " %s %s", frameworkFlag, currFW.data);
-    StringBuilderAppend(mateState.arena, &builder, &buffer);
-  }
-
-  *targetLibs = builder.buffer;
-}
-
 static void mateAddIncludePaths(String *targetIncludes, StringVector *includes) {
   StringBuilder builder = StringBuilderCreate(mateState.arena);
 
@@ -6636,31 +6549,6 @@ static void mateAddIncludePaths(String *targetIncludes, StringVector *includes) 
       String buffer = F(mateState.arena, " -I\"%s\"", currInclude.data);
       StringBuilderAppend(mateState.arena, &builder, &buffer);
     }
-  }
-
-  *targetIncludes = builder.buffer;
-}
-
-static void mateAddFrameworkPaths(String *targetIncludes, StringVector *includes) {
-  Assert(isClang() || isGCC(), "AddFrameworkPaths: This function is only supported for GCC/Clang.");
-
-  StringBuilder builder = StringBuilderCreate(mateState.arena);
-
-  if (targetIncludes->length) {
-    StringBuilderAppend(mateState.arena, &builder, targetIncludes);
-    StringBuilderAppend(mateState.arena, &builder, &S(" "));
-  }
- 
-  // GCC/Clang format: -F"path"
-  for (size_t i = 0; i < includes->length; i++) {
-    String currInclude = VecAt((*includes), i);
-    if (i == 0 && builder.buffer.length == 0) {
-      String buffer = F(mateState.arena, "-F\"%s\"", currInclude.data);
-      StringBuilderAppend(mateState.arena, &builder, &buffer);
-      continue;
-    }
-    String buffer = F(mateState.arena, " -F\"%s\"", currInclude.data);
-    StringBuilderAppend(mateState.arena, &builder, &buffer);
   }
 
   *targetIncludes = builder.buffer;
