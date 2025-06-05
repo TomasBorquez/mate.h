@@ -2391,6 +2391,11 @@ typedef struct {
 } Executable;
 
 typedef struct {
+  bool needed;
+  bool weak;
+} LinkFrameworkOptions;
+
+typedef struct {
   Compiler compiler;
 
   // Paths
