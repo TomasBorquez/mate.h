@@ -1,9 +1,9 @@
 CompileFlags:
   Add: [
     -std=c99, -Wpedantic, -pedantic-errors,
-    -Werror, -Wall, -Wextra, -Waggregate-return,
-    -Wbad-function-cast, -Wcast-align, -Wcast-qual,
-    -Wfloat-equal, -Wformat=2, -Wlogical-op, -Wmissing-declarations,
+    -Wall, -Wextra, -Waggregate-return, -Wbad-function-cast, 
+    -Wcast-align, -Wcast-qual, -Wfloat-equal, -Wformat=2, 
+    -Wlogical-op, -Wmissing-declarations,
     -Wmissing-include-dirs, -Wmissing-prototypes,
     -Wnested-externs, -Wpointer-arith,
     -Wredundant-decls, -Wsequence-point,

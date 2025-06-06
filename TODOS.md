@@ -12,11 +12,15 @@
 - [x] `clang-formatter` as a github action (when many contributions)
 - [x] `AddFiles` for array, and remove macros
 - [x] Make all macros `()`
+- [ ] Amalgam workflow on PRs
 - [ ] Add `args` parser
 - [ ] Shared libs
-- [ ] `InstallHeader()` and other various library builder functions
 - [ ] `LinkStaticLib()` for linking another `StaticLib`
 - [ ] Full `MSVC` support on static/shared libs
+- [ ] library builder functions
+    - [ ] `InstallHeader()`
+    - [ ] Amalgam functions
+    - [ ] ...
 - [ ] Header tests like on `CMAKE`
 - [ ] Add `MacOS` support (find someone who is willing to help)
 - [ ] Make `samurai` windows compatible

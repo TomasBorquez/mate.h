@@ -13,8 +13,10 @@ Still not super stable but there are running tests for most platforms. It's alre
 [![Discord](https://discord.com/api/guilds/1372689586341285979/widget.png?style=banner2)](https://discord.gg/TSuGhzas5V)
 
 ## About
-Mate is a build system for C in C and all you need to run it is a C compiler, if you want to learn more about it check out our [examples](./examples) which should
-teach you everything you need to know to use it, here is a simple example of a `mate.c`:
+Mate is a build system for C in C, and all you need to run it is a C compiler. If you want to learn more about it, check out our [examples](./examples), which should 
+teach you everything you need to know to use it.
+
+Here is a simple example of a `mate.c`:
 
 ```c 
 #define MATE_IMPLEMENTATION // Adds function implementations 
@@ -44,10 +46,9 @@ i32 main() {
 To use it all you need is [mate.h](./mate.h) file on the same folder you have the `mate.c` example file and you can run by `gcc ./mate.c -o ./mate && ./mate`, after running once
 it will auto detect if you need to rebuild based on `mate-cache.ini`, so you can just run `./mate` directly and it'll rebuild itself.
 
-Under the hood we use [Samurai](https://github.com/michaelforney/samurai) which is a ninja rewrite in C, we boostrapped it to `mate.h` and compile it on the first run, after that
-it is cached and thanks to it builds are extremely fast (because of it the first build usually takes a bit longer but on the second one it should be very fast). If you want even faster 
-builds, you can use [TCC](https://bellard.org/tcc/) which is a tinier and faster C compiler, on medium sized projects our builds go from `600ms` to `20ms` because `tcc` was made to be 
-**very fast** to compile.
+Under the hood we use [Samurai](https://github.com/michaelforney/samurai), which is a ninja rewrite in C. We boostrapped it to `mate.h`, which compiles it on the first run. After that it is cached; 
+thanks to this, builds are extremely fast (the first build usually takes a bit longer, but the second one should be very fast). If you want even faster builds, you can use [TCC](https://bellard.org/tcc/), 
+which is a tinier and faster C compiler. On medium sized projects, our builds go from `600ms` to `20ms` because `tcc` was made to be **very fast** to compile.
 
 ## Operating Systems
 | OS | Status | Notes |
