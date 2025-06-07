@@ -93,6 +93,13 @@ typedef struct {
 } ArgParserTokenData;
 
 VEC_TYPE(ArgParserTokenVector, ArgParserTokenData);
+
+typedef struct {
+  String name;
+  ArgParserTokenVector values;
+} ArgParserOption;
+
+VEC_TYPE(ArgParserOptionVec, ArgParserOption);
 VEC_TYPE(VectorU32, u32);
 
 typedef struct {

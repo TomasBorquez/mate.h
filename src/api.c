@@ -184,16 +184,26 @@ static int mateParseArguments(int argc, const char **argv) {
         default:
           // check if it's a negative number
           if (isdigit((unsigned char)(currentWord.data[j + 1]))) {
+            // find the nearest seperator
+            size_t nearestSep = currentWord.length;
+            for (size_t k = 0; k < sepPositions.length; k++) {
+              const u32 sepPosition = sepPositions.data[k];
+
+              if (j <= sepPosition && sepPosition < nearestSep) nearestSep = sepPosition;
+            }
+
             u32 k = 0;
             bool nan = false;
-            for (k = j + 2; k < currentWord.length; k++)
+            for (k = j + 2; k < nearestSep; k++)
               if (!isdigit((unsigned char)currentWord.data[k]) && currentWord.data[k] != '.') {
                 nan = true;
                 break;
               }
 
+            printf("nan?.... %s\n", nan ? "true" : "false");
+
             Assert(k - j >= 0 && (k - j) <= (currentWord.length - j), "Math ain't mathing");
-            tokenData.data = StrNewSize(stringArena, currentWord.data, k - j);
+            tokenData.data = StrNewSize(stringArena, currentWord.data + j, k - j);
 
             tokenData.type = nan ? ARG_PARSER_TOKEN_STRING : ARG_PARSER_TOKEN_NUMBER;
 
@@ -351,9 +361,107 @@ static int mateParseArguments(int argc, const char **argv) {
   printf("\n");
 
   // actual parser
-  // TODO
+  struct {
+    bool has_name;
+    ArgParserTokenData name;
+    bool has_values;
+    ArgParserTokenVector values;
+  } currentOption = {
+    .has_name = false,
+    .name = {.data = S(""), .type = ARG_PARSER_TOKEN_INVALID},
+    .has_values = false,
+    .values = {0},
+  };
+  VecPush(currentOption.values, ((ArgParserTokenData){.data = S(""), .type = ARG_PARSER_TOKEN_INVALID}));
+  ArgParserOptionVec userOptionVec = {0};
+  ArgParserOptionVec mateOptionVec = {0};
+
+  for (size_t i = 0; i < tokenVec.length; i++) {
+    const ArgParserTokenData tokenData = tokenVec.data[i];
+
+    switch (tokenData.type) {
+    case ARG_PARSER_TOKEN_FLAG:
+    case ARG_PARSER_TOKEN_FLAG_OPTION:
+      // push the option to the vector, we do this here instead of every iteration so we can have multiple values per argument
+      if (currentOption.has_name && currentOption.has_values) {
+        const ArgParserOption option = {.name = currentOption.name.data, .values = currentOption.values};
+        if (currentOption.name.type == ARG_PARSER_TOKEN_FLAG) {
+          VecPush(mateOptionVec, option);
+        } else if (currentOption.name.type == ARG_PARSER_TOKEN_FLAG_OPTION) {
+          VecPush(userOptionVec, option);
+        }
+
+        currentOption.has_name = false;
+        currentOption.name = (ArgParserTokenData){.data = S(""), .type = ARG_PARSER_TOKEN_INVALID};
+        currentOption.has_values = false;
+        currentOption.values.data = 0;
+        currentOption.values.length = 0;
+        currentOption.values.capacity = 0;
+        VecPush(currentOption.values, ((ArgParserTokenData){.data = S(""), .type = ARG_PARSER_TOKEN_INVALID}));
+      }
+
+      if (!currentOption.has_values && currentOption.has_name) LogError("Option: `%s` is unassigned!", currentOption.name.data.data);
+      currentOption.name = tokenData;
+      currentOption.has_name = true;
+      break;
+    case ARG_PARSER_TOKEN_EQUAL:
+    case ARG_PARSER_TOKEN_COMMA:
+      // ignore
+      break;
+    case ARG_PARSER_TOKEN_NUMBER:
+    case ARG_PARSER_TOKEN_STRING:
+    case ARG_PARSER_TOKEN_BOOL_TRUE:
+    case ARG_PARSER_TOKEN_BOOL_FALSE:
+      if (!currentOption.has_name) LogError("Value: `%s` is unassigned!", tokenData.data.data);
+      VecPush(currentOption.values, tokenData);
+      currentOption.has_values = true;
+      break;
+    case ARG_PARSER_TOKEN_INVALID:
+      LogError("MateParser: Invalid token: `%s`", tokenData.data.data);
+      break;
+    default:
+      LogError("MateParser: Unknown token type!");
+      break;
+    }
+
+    // if this is the last iteration, push the option
+    if (currentOption.has_name && currentOption.has_values && i == tokenVec.length - 1) {
+      const ArgParserOption option = {.name = currentOption.name.data, .values = currentOption.values};
+      if (currentOption.name.type == ARG_PARSER_TOKEN_FLAG) {
+        VecPush(mateOptionVec, option);
+      } else if (currentOption.name.type == ARG_PARSER_TOKEN_FLAG_OPTION) {
+        VecPush(userOptionVec, option);
+      }
+
+      currentOption.has_name = false;
+      currentOption.name = (ArgParserTokenData){.data = S(""), .type = ARG_PARSER_TOKEN_INVALID};
+      currentOption.has_values = false;
+      currentOption.values.data = 0;
+      currentOption.values.length = 0;
+      currentOption.values.capacity = 0;
+      VecPush(currentOption.values, ((ArgParserTokenData){.data = S(""), .type = ARG_PARSER_TOKEN_INVALID}));
+    }
+  }
+
+  for (size_t i = 0; i < userOptionVec.length; i++) {
+    const ArgParserOption option = userOptionVec.data[i];
+    printf("User option: %s=", option.name.data);
+    for (size_t j = 1; j < option.values.length; j++) {
+      printf("`%s`", option.values.data[j].data.data);
+      if (j > 0 && j + 1 < option.values.length) printf(",");
+    }
+    printf("\n");
+  }
+
+  for (size_t i = 0; i < mateOptionVec.length; i++) {
+    const ArgParserOption option = mateOptionVec.data[i];
+    printf("Mate option: %s=%s\n", option.name.data, option.name.data);
+  }
 
   if (tokenVec.data) VecFree(tokenVec);
+
+  if (userOptionVec.data) VecFree(userOptionVec);
+  if (mateOptionVec.data) VecFree(mateOptionVec);
 
   ArenaFree(stringArena);
 
