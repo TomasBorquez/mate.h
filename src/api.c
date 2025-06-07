@@ -1109,11 +1109,9 @@ static void mateLinkFrameworks(String *targetLibs, StringVector *frameworks) {
 }
 
 static void mateLinkFrameworksWithOptions(String *targetLibs, LinkFrameworkOptions options, StringVector *frameworks) {
-  if (isGCC()) {
-    Assert(0,
-           "LinkFrameworks: Automatic framework linking is not supported by GCC. "
-           "Use standard linking functions after adding a framework path instead.");
-  }
+  Assert(!isGCC(),
+          "LinkFrameworks: Automatic framework linking is not supported by GCC. "
+          "Use standard linking functions after adding a framework path instead.");
   Assert(isClang(), "LinkFrameworks: This function is only supported for Clang.");
 
   char *frameworkFlag = NULL;
