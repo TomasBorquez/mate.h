@@ -2390,10 +2390,6 @@ typedef struct {
   String ninjaBuildPath;
 } Executable;
 
-typedef enum {
-  none = 0, needed, weak
-} LinkFrameworkOptions;
-
 typedef struct {
   Compiler compiler;
 
@@ -2523,30 +2519,6 @@ static void mateAddLibraryPaths(String *targetLibs, StringVector *libs);
   } while (0)
 static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs);
 
-#define LinkFrameworks(target, ...)                        \
-  do {                                                     \
-    StringVector _frameworks = {0};                        \
-    StringVectorPushMany(_frameworks, __VA_ARGS__);        \
-    /* Frameworks are just specialized library bundles. */ \
-    mateLinkFrameworks(&(target).libs, &_frameworks);      \
-                                                           \
-    /* Cleanup */                                          \
-    VecFree(_frameworks);                                  \
-  } while (0)
-static void mateLinkFrameworks(String *targetLibs, StringVector *frameworks);
-
-#define LinkFrameworksWithOptions(target, options, ...)                              \
-  do {                                                                    \
-    StringVector _frameworks = {0};                                       \
-    StringVectorPushMany(_frameworks, __VA_ARGS__);                       \
-    /* Frameworks are just specialized library bundles. */                \
-    mateLinkFrameworksWithOptions(&(target).libs, options, &_frameworks); \
-                                                                          \
-    /* Cleanup */                                                         \
-    VecFree(_frameworks);                                                 \
-  } while (0)
-static void mateLinkFrameworksWithOptions(String *targetLibs, LinkFrameworkOptions options, StringVector *frameworks);
-
 #define AddIncludePaths(target, ...)                     \
   do {                                                   \
     StringVector _includes = {0};                        \
@@ -2557,18 +2529,6 @@ static void mateLinkFrameworksWithOptions(String *targetLibs, LinkFrameworkOptio
     VecFree(_includes);                                  \
   } while (0)
 static void mateAddIncludePaths(String *targetIncludes, StringVector *vector);
-
-#define AddFrameworkPaths(target, ...)                       \
-  do {                                                       \
-    StringVector _frameworks = {0};                          \
-    StringVectorPushMany(_frameworks, __VA_ARGS__);          \
-    /* Frameworks are just specialized library bundles. */   \
-    mateAddFrameworkPaths(&(target).includes, &_frameworks); \
-                                                             \
-    /* Cleanup */                                            \
-    VecFree(_frameworks);                                    \
-  } while (0)
-static void mateAddFrameworkPaths(String *targetIncludes, StringVector *includes);
 
 #define AddFile(target, source) mateAddFile(&(target).sources, s(source));
 static void mateAddFile(StringVector *sources, String source);
