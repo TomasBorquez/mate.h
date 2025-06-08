@@ -22,7 +22,7 @@ tests=(
   "04-raylib-build"
   "05-samurai-source-code"
   "06-lua-source-code"
-  # "07-raylib-source-code" # Requires framework linking on macOS, which isnt implemented yet
+  "07-raylib-source-code"
 )
 
 echo "NOTE: Skipping 07-raylib-source-code test due to missing framework linking support"
