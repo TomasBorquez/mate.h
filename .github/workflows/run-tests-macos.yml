@@ -33,6 +33,7 @@ jobs:
           "04-raylib-build"
           "05-samurai-source-code"
           "06-lua-source-code"
+          "07-raylib-source-code"
         )
         
         for test in "${tests[@]}"; do
