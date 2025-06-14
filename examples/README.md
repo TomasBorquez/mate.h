@@ -6,7 +6,7 @@ on the first run of your mate build after that it's cached.
 
 You can run all examples it with:
 ```bash
-# Linux
+# Linux / FreeBSD
 "gcc mate.c -o mate && ./mate"
 
 # Windows
@@ -16,7 +16,7 @@ You can run all examples it with:
 Mate rebuilds itself if there were any changes on `mate.c`, so after compiling once you can just run it with `./mate`.
 
 ### Advice
-A build system for very simple projects is overkill, I recommended only moving to a build system if you have many vendor packages or 
+A build system for very simple projects is overkill, I recommended only moving to a build system if you have many vendor packages or
 many C files, this will make compile times usually faster and make your project more organized. In the mean time you can look into
-[unity builds](https://en.wikipedia.org/wiki/Unity_build) which are way simpler, require no build system and will make you happier :) 
+[unity builds](https://en.wikipedia.org/wiki/Unity_build) which are way simpler, require no build system and will make you happier :)
 since you'll have to use no build system

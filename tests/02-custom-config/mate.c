@@ -16,7 +16,7 @@ i32 main(void) {
     AddFile(executable, "./src/main.c");
     AddFile(executable, "./src/t_math.c");
 
-    if (isLinux()) {
+    if (isLinux()||isFreeBSD()) {
       LinkSystemLibraries(executable, "m");
     }
 

@@ -38,12 +38,15 @@ mate.h is a build system for C written in C. It aims to provide a simple, fast, 
    ```bash
    # Linux
    ./scripts/run-tests-linux.sh
-   
-   # macOS  
+
+   # macOS
    ./scripts/run-tests-macos.sh
-   
+
    # Windows
    ./scripts/run-tests-windows.sh
+
+   # FreeBSD
+   ./scripts/run-tests-freebsd.sh
    ```
    This is important to know that you didn't break anything, and if you did you get to know why
 
@@ -84,8 +87,9 @@ You can contribute based on our existing [TODOS](../TODOS.md) or from our [issue
    ```bash
    # Run platform-specific tests
    ./scripts/run-tests-linux.sh      # For Linux
-   ./scripts/run-tests-macos.sh      # For macOS  
+   ./scripts/run-tests-macos.sh      # For macOS
    ./scripts/run-tests-windows.sh    # For Windows
+   ./scripts/run-tests-freebsd.sh    # For FreeBSD
    ```
 5. **Commit your changes:**
    ```bash
@@ -122,7 +126,7 @@ void InstallExecutable(Executable executable);
 // Global variables: PascalCase
 extern const String DefaultCompiler;
 
-// Private functions: camelCase  
+// Private functions: camelCase
 static void buildExecutable(Executable* exec);
 static bool checkFileExists(String* path);
 
@@ -209,6 +213,7 @@ mate.h aims to support multiple platforms:
 - **Linux** ✅ (Primary support)
 - **macOS** ✅ (Supported)
 - **Windows** 🚧 (In progress MSVC, MinGW works fine)
+- **FreeBSD** 🚧 (In progress GCC, Clang works fine)
 - **BSD variants** (Community contributions welcome)
 
 When contributing platform-specific code:
