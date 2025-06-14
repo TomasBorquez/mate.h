@@ -14,7 +14,7 @@ i32 main(void) {
 
     AddFile(executable, "./src/main.c");
 
-    if (isLinux()) {
+    if (isLinux()||isFreeBSD()) {
       AddIncludePaths(executable, "./vendor/raylib/include");
       AddLibraryPaths(executable, "./vendor/raylib/lib/linux_amd64");
       LinkSystemLibraries(executable, "raylib", "m");

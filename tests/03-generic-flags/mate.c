@@ -14,7 +14,7 @@ i32 main(void) {
 
     AddFile(executable, "./src/main.c");
 
-    if (isLinux()) {
+    if (isLinux()||isFreeBSD()) {
       LinkSystemLibraries(executable, "m");
     }
 

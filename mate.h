@@ -6788,7 +6788,7 @@ static void mateAddFrameworkPaths(String *targetIncludes, StringVector *includes
     StringBuilderAppend(mateState.arena, &builder, targetIncludes);
     StringBuilderAppend(mateState.arena, &builder, &S(" "));
   }
- 
+
   // GCC/Clang format: -F"path"
   for (size_t i = 0; i < includes->length; i++) {
     String currInclude = VecAt((*includes), i);
@@ -6811,7 +6811,7 @@ void EndBuild(void) {
 
 /* --- Utils Implementation --- */
 errno_t RunCommand(String command) {
-#if defined(PLATFORM_LINUX) | defined(PLATFORM_MACOS)
+#if defined(PLATFORM_LINUX) | defined(PLATFORM_MACOS) | defined(PLATFORM_FREEBSD)
   return system(command.data) >> 8;
 #else
   return system(command.data);

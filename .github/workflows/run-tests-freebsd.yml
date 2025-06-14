@@ -1,0 +1,70 @@
+name: Run Tests FreeBSD
+
+on:
+  push:
+    paths:
+      - "**/*.c"
+      - "**/*.h"
+      - ".github/workflows/*.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  test-examples:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+
+    env:
+      COMPILER: ${{ matrix.compiler }}
+
+    steps:
+    - name: Checkout code with submodules
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Run tests in FreeBSD VM
+      uses: vmactions/freebsd-vm@v1
+      with:
+        usesh: true
+        release: "14.3"
+        prepare: |
+          pkg update -f
+          if [ "${{ matrix.compiler }}" = "clang" ]; then
+            pkg install -y llvm19
+          else
+            pkg install -y ${{ matrix.compiler }}
+          fi
+          pkg install -y bash lua52 raylib gmake
+          pkg install -y libX11 libXcursor libXrandr libXinerama libXi libXext libXfixes libXrender mesa-libs
+        run: |
+          TESTS="01-basic-build 02-custom-config 03-generic-flags 04-raylib-build 05-samurai-source-code 06-lua-source-code 07-raylib-source-code"
+
+          for test in $TESTS; do
+            if [ "${{ matrix.compiler }}" = "tcc" ] && [ "$test" = "07-raylib-source-code" ]; then
+              echo "Skipping $test for TCC compiler"
+              continue
+            fi
+
+            echo "Running test $test with ${{ matrix.compiler }}..."
+            cd ./tests/$test || exit 1
+
+            ${{ matrix.compiler }} mate.c -o mate
+
+            ./mate
+            result=$?
+
+            cd - > /dev/null
+
+            if [ $result -ne 0 ]; then
+              echo "Test $test failed with ${{ matrix.compiler }}"
+              exit 1
+            fi
+          done
