@@ -65,6 +65,10 @@ which is a tinier and faster C compiler. On medium sized projects, our builds go
 | [**TinyC**](https://bellard.org/tcc/) | ✅ Supported | Recommended if you want fast compile times |
 | [**MSVC**](https://visualstudio.microsoft.com/vs/features/cplusplus/) | ⚠️ Supported | Limiting testing done, MinGW is recommended instead |
 
+## Contributing
+You wanna help out contributing? Great, read our [contribution guidelines](./.github/CONTRIBUTING.md) for information about the project and look into our [TODOS](./TODOS.md) or 
+our [issues](https://github.com/TomasBorquez/mate.h/issues) to see what you would like to contribute on, documentation contributions are also welcomed :)
+
 ## Acknowledgments
 This project incorporates code from [Samurai](https://github.com/michaelforney/samurai), which is primarily licensed under ISC license by Michael Forney, 
 with portions under Apache License 2.0 and MIT licenses. The full license text is available in the [LICENSE-SAMURAI.txt](./LICENSE-SAMURAI.txt) file.
