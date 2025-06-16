@@ -29,7 +29,7 @@
 
 #### Examples
 - [ ] Show how to use FS functions `FileWrite`, `FileDelete`, etc.
-- [ ] Show how to use String functions `F()`, `StrConcat`, etc.
+- [ ] Show how to use String functions from base.h like `F()`, `StrConcat`, `StrEq`, etc.
 - [ ] Show how to use `FlagBuilder`, `AddFiles`, `CreateStaticLib`.
 
 #### Tests
