@@ -14,5 +14,4 @@ Fixes #(issue number)
 
 ## Do you follow our [contribution](./CONTRIBUTING.md) guidelines?
 - [ ] Yes
-- [ ] No
-[If so why?]
+- [ ] No [If so why?]
