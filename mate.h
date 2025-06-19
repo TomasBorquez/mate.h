@@ -72,10 +72,12 @@
 #    define PLATFORM_LINUX
 #  elif defined(__APPLE__) || defined(__MACH__)
 #    define PLATFORM_MACOS
+#  elif defined(__FreeBSD__)
+#    define PLATFORM_FREEBSD
 #  elif defined(__EMSCRIPTEN__)
 #    define PLATFORM_EMSCRIPTEN
 #  else
-#    error "The codebase only supports linux, macos, windows, android and emscripten"
+#    error "The codebase only supports linux, macos, FreeBSD, windows, android and emscripten"
 #  endif
 #endif
 
@@ -262,7 +264,13 @@ void _custom_assert(const char *expr, const char *file, unsigned line, const cha
 #define Assert(expression, ...) (void)((!!(expression)) || (_custom_assert(#expression, __FILE__, __LINE__, __VA_ARGS__), 0))
 
 /* --- Vector --- */
-// TODO: `VecSort` implement some sorting algorithm for sorting the vector
+typedef i32 (*CompareFunc)(const void *a, const void *b);
+
+i32 __base_vec_partition(void **data, size_t element_size, CompareFunc compare, i32 low, i32 high);
+void __base_vec_quicksort(void **data, size_t element_size, CompareFunc compare, i32 low, i32 high);
+
+#define VecSort(vector, compare) __base_vec_quicksort((void **)&(vector).data, sizeof(*(vector).data), compare, 0, (vector).length - 1)
+
 #define VEC_TYPE(typeName, valueType) \
   typedef struct {                    \
     valueType *data;                  \
@@ -311,9 +319,9 @@ bool isWindows(void);
 bool isUnix(void);
 bool isAndroid(void);
 bool isEmscripten(void);
-bool isLinuxDRM(void);
+bool isFreeBSD(void);
 
-typedef enum { WINDOWS = 1, LINUX, MACOS } Platform;
+typedef enum { WINDOWS = 1, LINUX, MACOS, FREEBSD } Platform;
 Platform GetPlatform(void);
 
 typedef enum { GCC = 1, CLANG, TCC, MSVC } Compiler;
@@ -557,6 +565,40 @@ bool IniGetBool(IniFile *ini, String key);
 */
 #if defined(BASE_IMPLEMENTATION)
 // --- Vector Implementation ---
+
+i32 __base_vec_partition(void **data, size_t element_size, CompareFunc compare, i32 low, i32 high) {
+  void *pivot = (char *)(*data) + (high * element_size);
+  i32 i = low - 1;
+  for (i32 j = low; j < high; j++) {
+    void *current = (char *)(*data) + (j * element_size);
+    if (compare(current, pivot) < 0) {
+      i++;
+      void *temp = (char *)(*data) + (i * element_size);
+      char *temp_buffer = Malloc(element_size);
+      memcpy(temp_buffer, temp, element_size);
+      memcpy(temp, current, element_size);
+      memcpy(current, temp_buffer, element_size);
+      Free(temp_buffer);
+    }
+  }
+  i++;
+  void *temp = (char *)(*data) + (i * element_size);
+  char *temp_buffer = Malloc(element_size);
+  memcpy(temp_buffer, temp, element_size);
+  memcpy(temp, pivot, element_size);
+  memcpy(pivot, temp_buffer, element_size);
+  Free(temp_buffer);
+  return i;
+}
+
+void __base_vec_quicksort(void **data, size_t element_size, CompareFunc compare, i32 low, i32 high) {
+  if (low < high) {
+    i32 pi = __base_vec_partition(data, element_size, compare, low, high);
+    __base_vec_quicksort(data, element_size, compare, low, pi - 1);
+    __base_vec_quicksort(data, element_size, compare, pi + 1, high);
+  }
+}
+
 void __base_vec_push(void **data, size_t *length, size_t *capacity, size_t element_size, void *value) {
   // WARNING: Vector must always be initialized to zero `Vector vector = {0}`
   Assert(*length <= *capacity, "VecPush: Possible memory corruption or vector not initialized, `Vector vector = {0}`");
@@ -741,8 +783,8 @@ bool isEmscripten(void) {
 #  endif
 }
 
-bool isLinuxDRM(void) {
-#  if defined(PLATFORM_DRM)
+bool isFreeBSD(void) {
+#  if defined(PLATFORM_FREEBSD)
   return true;
 #  else
   return false;
@@ -768,6 +810,8 @@ Platform GetPlatform(void) {
   return LINUX;
 #  elif defined(PLATFORM_MACOS)
   return MACOS;
+#  elif defined(PLATFORM_FREEBSD)
+  return FREEBSD;
 #  endif
 }
 
