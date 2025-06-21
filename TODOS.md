@@ -28,8 +28,8 @@
 - [ ] Parallel Dependency check
 
 #### Examples
-- [ ] Show how to use FS functions `FileWrite`, `FileDelete`, etc.
-- [ ] Show how to use String functions from base.h like `F()`, `StrConcat`, `StrEq`, etc.
+- [X] Show how to use FS functions `FileWrite`, `FileDelete`, etc.
+- [X] Show how to use String functions from base.h like `F()`, `StrConcat`, `StrEq`, etc.
 - [ ] Show how to use `FlagBuilder`, `AddFiles`, `CreateStaticLib`.
 
 #### Tests
