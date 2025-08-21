@@ -56,6 +56,98 @@ typedef struct {
   String ninjaBuildPath;
 } Executable;
 
+VEC_TYPE(VectorU32, u32);
+
+typedef enum {
+  ARG_PARSER_TOKEN_INVALID = 0,
+  ARG_PARSER_TOKEN_FLAG = 1,      // -option
+  ARG_PARSER_TOKEN_USER_FLAG = 2, // -Doption
+  ARG_PARSER_TOKEN_EQUAL = 3,     // =
+  ARG_PARSER_TOKEN_COMMA = 4,     // ,
+  ARG_PARSER_TOKEN_NUMBER = 5,    // e.g. -100.23
+  ARG_PARSER_TOKEN_STRING = 6,    // e.g. feet / "feet" / 'feet'
+  ARG_PARSER_TOKEN_BOOL = 7,      // true / false
+} argParserToken;
+
+typedef enum {
+  ARG_PARSER_DATA_TYPE_VOID = 0,   // void (no type)
+  ARG_PARSER_DATA_TYPE_INT = 1,    // int
+  ARG_PARSER_DATA_TYPE_FLOAT = 2,  // float
+  ARG_PARSER_DATA_TYPE_BOOL = 3,   // bool
+  ARG_PARSER_DATA_TYPE_STRING = 4, // string
+} argParserDataType;
+
+typedef union {
+  i64 int64;
+  f64 float64;
+  bool boolean;
+  String str;
+} ArgParserData;
+
+typedef struct {
+  ArgParserData data;
+  argParserDataType dataType;
+} ArgParserFlagData;
+VEC_TYPE(ArgParserFlagDataVector, ArgParserFlagData);
+
+typedef struct {
+  String name;
+  ArgParserFlagDataVector flagDataVec;
+} ArgParserFlag;
+VEC_TYPE(ArgParserFlagVector, ArgParserFlag);
+
+typedef struct {
+  ArgParserData data;
+  argParserToken type;
+} ArgParserTokenData;
+VEC_TYPE(ArgParserTokenVector, ArgParserTokenData);
+
+typedef struct {
+  String name;
+  ArgParserFlagVector values;
+  argParserDataType datatype;
+} ArgParserOption;
+VEC_TYPE(ArgParserOptionVec, ArgParserOption);
+
+typedef struct {
+  String name;
+  void *values;
+
+  // types
+  bool string;
+  bool boolean;
+  bool float32;
+  bool int32;
+} ArgumentRule;
+#define DispatchArgumentRules(rules) mateDispatchArgumentRules(rules, sizeof(rules) / sizeof(*(rules)));
+void mateDispatchArgumentRules(ArgumentRule *rules, size_t rulesLength);
+
+typedef struct {
+  /**
+   * @brief If true, the parser will throw an error for any unknown or unconfigured user option
+   *
+   * Default: false
+   */
+  bool errorOnUnknownArgs;
+
+  /**
+   * @brief Defines how the value pointer for a parsed argument is interpreted
+   *
+   * If true: The value pointer must point to a single, uninitialized (NULL) instance of the specified type
+   * If false: The value pointer must be an array of pointers to instances of the specified type
+   *
+   * Default: true
+   */
+  bool valuePointerIsArray;
+} ArgParserConfig;
+
+typedef struct {
+  ArgParserConfig config;
+  ArgParserFlagVector userOptionVec;
+  ArgParserFlagVector mateOptionVec;
+  Arena *stringArena;
+} ArgParserContext;
+
 typedef struct {
   Compiler compiler;
 
@@ -74,6 +166,8 @@ typedef struct {
 
   i64 startTime;
   i64 totalTime;
+
+  ArgParserContext argParserState;
 } MateConfig;
 
 typedef enum {
@@ -145,7 +239,7 @@ typedef enum { none = 0, needed, weak } LinkFrameworkOptions;
 typedef StringBuilder FlagBuilder;
 
 /* --- Build System --- */
-void StartBuild(void);
+void StartBuild(int argc, char **argv);
 void EndBuild(void);
 
 void CreateConfig(MateOptions options);
@@ -187,7 +281,6 @@ static void mateAddLibraryPaths(String *targetLibs, StringVector *libs);
   } while (0)
 static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs);
 
-
 #define LinkFrameworks(target, ...)                        \
   do {                                                     \
     StringVector _frameworks = {0};                        \
@@ -200,7 +293,7 @@ static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs);
   } while (0)
 static void mateLinkFrameworks(String *targetLibs, StringVector *frameworks);
 
-#define LinkFrameworksWithOptions(target, options, ...)                              \
+#define LinkFrameworksWithOptions(target, options, ...)                   \
   do {                                                                    \
     StringVector _frameworks = {0};                                       \
     StringVectorPushMany(_frameworks, __VA_ARGS__);                       \

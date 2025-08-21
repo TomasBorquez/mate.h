@@ -1,4 +1,8 @@
 #include "api.h"
+#include <ctype.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 static MateConfig mateState = {0};
 
@@ -89,7 +93,599 @@ static void mateReadCache(void) {
   Assert(err == SUCCESS, "MateReadCache: Failed writing cache, err: %d", err);
 }
 
-void StartBuild(void) {
+static int mateParserError(const char *error) {
+  Assert(error != NULL, "String pointer is NULL");
+
+  // TODO: free memory on errors
+
+  LogError("mateArgParser: %s", error);
+  return -1;
+}
+
+static VectorU32 mateParserScanSeperators(const String str) {
+  const char seperators[] = {'=', ','};
+  VectorU32 positions = {0};
+
+  for (size_t i = 0; i < str.length; i++) {
+    const char cmpChar = str.data[i];
+
+    for (size_t j = 0; j < sizeof(seperators) / sizeof(*seperators); j++) {
+      const char sepChar = seperators[j];
+
+      if (sepChar == cmpChar) VecPush(positions, i);
+    }
+  }
+
+  return positions;
+}
+
+static size_t mateParserFindNearestSeperator(const String currentWord, const size_t currentPosition) {
+  const VectorU32 sepPositions = mateParserScanSeperators(currentWord);
+
+  size_t nearestSep = currentWord.length;
+  for (size_t k = 0; k < sepPositions.length; k++) {
+    const u32 sepPosition = sepPositions.data[k];
+
+    if (currentPosition <= sepPosition && sepPosition < nearestSep) nearestSep = sepPosition;
+  }
+
+  // sanity check
+  Assert(nearestSep >= currentPosition, "Math ain't mathing");
+
+  return nearestSep;
+}
+
+static size_t mateParserFindMatchingFlagIndex(ArgParserFlagVector *targetVector, const String *const tokenStr) {
+  for (size_t i = 0; i < targetVector->length; i++) {
+    const ArgParserFlag flag = VecAt(*targetVector, i);
+    if (StrEq(flag.name, *tokenStr)) return i;
+  }
+  return -1;
+}
+
+static const char *mateParserTypeToCStr(argParserDataType dataType) {
+  switch (dataType) {
+  default:
+    return "Unknown";
+  case ARG_PARSER_DATA_TYPE_VOID:
+    return "Void";
+  case ARG_PARSER_DATA_TYPE_INT:
+    return "Int";
+  case ARG_PARSER_DATA_TYPE_FLOAT:
+    return "Float";
+  case ARG_PARSER_DATA_TYPE_BOOL:
+    return "Bool";
+  case ARG_PARSER_DATA_TYPE_STRING:
+    return "String";
+  }
+}
+
+/// returns 0 on success
+static int mateParseArguments(int argc, char **argv) {
+  mateState.argParserState.stringArena = ArenaCreate(8);
+
+  ArgParserTokenVector tokenVec = {0};
+
+  if (argc < 1) {
+    return mateParserError("Invalid argc!");
+  } else if (argv == NULL) return mateParserError("Invalid argv!");
+
+  // lexer
+  for (int wordIdx = 1; wordIdx < argc; wordIdx++) {
+    const String currentWord = s(argv[wordIdx]);
+    VectorU32 sepPositions = mateParserScanSeperators(currentWord);
+
+    for (size_t tokenIdx = 0; tokenIdx < currentWord.length; tokenIdx++) {
+      ArgParserTokenData tokenData = {.data.str = S(""), .type = ARG_PARSER_TOKEN_INVALID};
+
+      const char currentToken = currentWord.data[tokenIdx];
+      size_t nearestSep = tokenIdx;
+
+      switch (currentToken) {
+      case ' ':
+        break;
+      case '-':
+        switch (currentWord.data[tokenIdx + 1]) {
+        case 'D':
+          tokenData.type = ARG_PARSER_TOKEN_USER_FLAG;
+
+          if (currentWord.length <= 2) {
+            tokenData.data.str = S("");
+            tokenIdx = currentWord.length - 1;
+            continue;
+          }
+          tokenIdx += 2;
+          nearestSep = mateParserFindNearestSeperator(currentWord, tokenIdx);
+          tokenData.data.str = StrNewSize(mateState.argParserState.stringArena, currentWord.data + tokenIdx, nearestSep - tokenIdx);
+
+          // next word
+          tokenIdx = nearestSep - 1;
+          break;
+        default:
+          // try to convert it to a negative number, if it fails it must be a flag
+          ; // weird C standard thingy or you might get some errors on some compilers (Label followed by a declaration is a C23 extension)
+          char *end = NULL;
+          const double value = strtod(currentWord.data + tokenIdx, &end);
+
+          nearestSep = mateParserFindNearestSeperator(currentWord, tokenIdx);
+
+          if (end == currentWord.data + nearestSep) { // if it's a valid number
+            tokenData.type = ARG_PARSER_TOKEN_NUMBER;
+            tokenData.data.float64 = value;
+          } else {
+            tokenData.type = ARG_PARSER_TOKEN_FLAG;
+            tokenIdx++;
+            tokenData.data.str = StrNewSize(mateState.argParserState.stringArena, currentWord.data + tokenIdx, nearestSep - tokenIdx);
+          }
+
+          tokenIdx = nearestSep - 1;
+          break;
+        }
+        break;
+      case '=':
+        tokenData.data.str = S("=");
+        tokenData.type = ARG_PARSER_TOKEN_EQUAL;
+        break;
+      case ',':
+        tokenData.data.str = S(",");
+        tokenData.type = ARG_PARSER_TOKEN_COMMA;
+        break;
+      default:
+        if (currentToken == '"') {
+          // try finding the next "
+          u32 k = tokenIdx;
+          while (currentWord.data[++k] != '"')
+            if (currentWord.data[k] == '\0' || k > currentWord.length) {
+              return mateParserError("Invalid string!");
+            }
+
+          tokenData.data.str = StrNewSize(mateState.argParserState.stringArena, currentWord.data + tokenIdx + 1, k - tokenIdx - 1);
+
+          tokenData.type = ARG_PARSER_TOKEN_STRING;
+
+          tokenIdx = k;                    // goto the end of the string
+        } else if (currentToken == '\'') { // same thing but for ' instead of "
+          // try finding the next '
+          u32 k = tokenIdx;
+          while (currentWord.data[++k] != '\'')
+            if (currentWord.data[k] == '\0' || k > currentWord.length) {
+              return mateParserError("Invalid string!");
+            }
+
+          tokenData.data.str = StrNewSize(mateState.argParserState.stringArena, currentWord.data + tokenIdx + 1, k - tokenIdx - 1);
+
+          tokenData.type = ARG_PARSER_TOKEN_STRING;
+
+          tokenIdx = k; // goto the end of the string
+        } else if (strncmp(currentWord.data + tokenIdx, "true", Min(2, currentWord.length)) == 0 && currentWord.length >= strlen("true")) {
+          tokenData.type = ARG_PARSER_TOKEN_BOOL;
+          tokenData.data.boolean = true;
+          tokenIdx += strlen("true") - 1;
+        } else if (strncmp(currentWord.data + tokenIdx, "false", Min(2, currentWord.length)) == 0 && currentWord.length >= strlen("false")) {
+          tokenData.type = ARG_PARSER_TOKEN_BOOL;
+          tokenData.data.boolean = false;
+          tokenIdx += strlen("false") - 1;
+        } else {
+          char *end = NULL;
+          const double value = strtod(currentWord.data + tokenIdx, &end);
+
+          nearestSep = mateParserFindNearestSeperator(currentWord, tokenIdx);
+
+          if (end == currentWord.data + nearestSep) { // if it's a valid number
+            tokenData.type = ARG_PARSER_TOKEN_NUMBER;
+            tokenData.data.float64 = value;
+          } else {
+            tokenData.type = ARG_PARSER_TOKEN_STRING;
+            tokenData.data.str = StrNewSize(mateState.argParserState.stringArena, currentWord.data + tokenIdx, nearestSep - tokenIdx);
+          }
+
+          tokenIdx = nearestSep - 1;
+        }
+        break;
+      }
+
+      VecPush(tokenVec, tokenData);
+    }
+
+    if (sepPositions.data) VecFree(sepPositions);
+  }
+
+  // debug some info (TODO: delete this)
+  if (tokenVec.data)
+    for (size_t i = 0; i < tokenVec.length; i++) {
+      const ArgParserTokenData tokenData = VecAt(tokenVec, i);
+
+      char *name = "TOK_INVALID";
+      switch (tokenData.type) {
+      default:
+      case ARG_PARSER_TOKEN_INVALID:
+        name = "TOK_INVALID";
+        LogInfo("%s(%s) ", name, tokenData.data.str.data);
+        break;
+      case ARG_PARSER_TOKEN_FLAG:
+        name = "TOK_FLAG_SHORT";
+        LogInfo("%s(%s) ", name, tokenData.data.str.data);
+        break;
+      case ARG_PARSER_TOKEN_USER_FLAG:
+        name = "TOK_FLAG_OPTION";
+        LogInfo("%s(%s) ", name, tokenData.data.str.data);
+        break;
+      case ARG_PARSER_TOKEN_EQUAL:
+        name = "TOK_EQUAL";
+        LogInfo("%s(%s) ", name, tokenData.data.str.data);
+        break;
+      case ARG_PARSER_TOKEN_COMMA:
+        name = "TOK_COMMA";
+        LogInfo("%s(%s) ", name, tokenData.data.str.data);
+        break;
+      case ARG_PARSER_TOKEN_NUMBER:
+        name = "TOK_NUMBER";
+        LogInfo("%s(%f) ", name, tokenData.data.float64);
+        break;
+      case ARG_PARSER_TOKEN_STRING:
+        name = "TOK_STRING";
+        LogInfo("%s(%s) ", name, tokenData.data.str.data);
+        break;
+      case ARG_PARSER_TOKEN_BOOL:
+        if (tokenData.data.boolean) name = "TOK_BOOL_TRUE";
+        else name = "TOK_BOOL_FALSE";
+        LogInfo("%s(%s) ", name, tokenData.data.boolean ? "true" : "false");
+        break;
+      }
+    }
+  for (int i = 1; i < argc; i++) {
+    printf("`%s` ", argv[i]);
+  }
+  printf("\n");
+
+  // parser
+  ArgParserFlagVector userOptionVec = {0};
+  ArgParserFlagVector mateOptionVec = {0};
+
+  ArgParserFlagVector *targetVector = NULL;
+  size_t targetIdx = 0;
+  for (size_t tokenIdx = 0; tokenIdx < tokenVec.length; tokenIdx++) {
+    const ArgParserTokenData tokenData = VecAt(tokenVec, tokenIdx);
+
+    switch (tokenData.type) {
+    default:
+    case ARG_PARSER_TOKEN_INVALID:
+      return mateParserError("Invalid argument!");
+      break;
+    case ARG_PARSER_TOKEN_FLAG:
+      Assert(tokenData.data.str.data != NULL && tokenData.data.str.length > 0, "Invalid string!");
+      targetVector = &mateOptionVec;
+
+      // check for duplicate options
+      targetIdx = mateParserFindMatchingFlagIndex(targetVector, &tokenData.data.str);
+      if (targetIdx >= 0) continue;
+
+      VecPush(*targetVector, ((ArgParserFlag){.name = tokenData.data.str, .flagDataVec = {0}}));
+      targetIdx = targetVector->length - 1;
+      break;
+    case ARG_PARSER_TOKEN_USER_FLAG:
+      Assert(tokenData.data.str.data != NULL && tokenData.data.str.length > 0, "Invalid string!");
+      targetVector = &userOptionVec;
+
+      // check for duplicate options
+      targetIdx = mateParserFindMatchingFlagIndex(targetVector, &tokenData.data.str);
+      if (targetIdx >= 0) continue;
+
+      VecPush(*targetVector, ((ArgParserFlag){.name = tokenData.data.str, .flagDataVec = {0}}));
+      targetIdx = targetVector->length - 1;
+      break;
+    case ARG_PARSER_TOKEN_EQUAL:
+    case ARG_PARSER_TOKEN_COMMA:
+      // ignore
+      break;
+    case ARG_PARSER_TOKEN_NUMBER:
+      if (targetVector == NULL) {
+        LogWarn("mateArgParser: Unassigned value: `%f`, ignoring...", tokenData.data.float64);
+        break;
+      }
+      VecPush(targetVector->data[targetIdx].flagDataVec, ((ArgParserFlagData){.data = tokenData.data, .dataType = ARG_PARSER_DATA_TYPE_FLOAT}));
+      break;
+    case ARG_PARSER_TOKEN_STRING:
+      if (targetVector == NULL) {
+        LogWarn("mateArgParser: Unassigned value: `%s`, ignoring...", tokenData.data.str.data);
+        break;
+      }
+      VecPush(targetVector->data[targetIdx].flagDataVec, ((ArgParserFlagData){.data = tokenData.data, .dataType = ARG_PARSER_DATA_TYPE_STRING}));
+      break;
+    case ARG_PARSER_TOKEN_BOOL:
+      if (targetVector == NULL) {
+        LogWarn("mateArgParser: Unassigned value: `%s`, ignoring...", tokenData.data.boolean ? "true" : "false");
+        break;
+      }
+      VecPush(targetVector->data[targetIdx].flagDataVec, ((ArgParserFlagData){.data = tokenData.data, .dataType = ARG_PARSER_DATA_TYPE_BOOL}));
+      break;
+    }
+  }
+
+  // debug some more info
+  for (int select = 0; select < 2; select++) {
+    targetVector = select == 0 ? &userOptionVec : &mateOptionVec;
+    for (size_t i = 0; i < targetVector->length; i++) {
+      ArgParserFlag flag = VecAt(*targetVector, i);
+      printf("%s flag %s: ", select == 0 ? "user" : "mate", flag.name.data);
+      for (size_t j = 0; j < flag.flagDataVec.length; j++) {
+        const ArgParserFlagData flagData = VecAt(flag.flagDataVec, j);
+        switch (flagData.dataType) {
+        default:
+        case ARG_PARSER_DATA_TYPE_VOID:
+          printf("INVALID ");
+          break;
+        case ARG_PARSER_DATA_TYPE_INT:
+          printf("%d ", (int)flagData.data.int64);
+          break;
+        case ARG_PARSER_DATA_TYPE_FLOAT:
+          printf("%f ", flagData.data.float64);
+          break;
+        case ARG_PARSER_DATA_TYPE_BOOL:
+          printf("%s ", flagData.data.boolean ? "true" : "false");
+          break;
+        case ARG_PARSER_DATA_TYPE_STRING:
+          printf("%s ", flagData.data.str.data);
+          break;
+        }
+      }
+      printf("\n");
+    }
+  }
+
+  // free the token vector
+  if (tokenVec.data) VecFree(tokenVec);
+
+  // set the variables in mate state
+  mateState.argParserState.userOptionVec = userOptionVec;
+  mateState.argParserState.mateOptionVec = mateOptionVec;
+  return 0;
+}
+
+static ArgParserConfig argParserDefaultConfig(void) {
+  const ArgParserConfig config = {
+    .errorOnUnknownArgs = false,
+    .valuePointerIsArray = false,
+  };
+  return config;
+}
+
+static ArgParserFlagData argParserConvertFlagDataType(ArgParserFlagData flagData, argParserDataType dataType) {
+  // dataType to String function for error logs
+
+  switch (flagData.dataType) {
+  default:
+  case ARG_PARSER_DATA_TYPE_VOID:
+    LogError("Unsupported type conversion: %s -> %s", mateParserTypeToCStr(flagData.dataType), mateParserTypeToCStr(dataType));
+    break;
+  case ARG_PARSER_DATA_TYPE_INT:
+    switch (dataType) {
+    default:
+    case ARG_PARSER_DATA_TYPE_VOID:
+      LogError("Unsupported type conversion: %s -> %s", mateParserTypeToCStr(flagData.dataType), mateParserTypeToCStr(dataType));
+      break;
+    case ARG_PARSER_DATA_TYPE_INT:
+      // already the same data type
+      break;
+    case ARG_PARSER_DATA_TYPE_FLOAT:
+      flagData.data.float64 = (f64)flagData.data.int64;
+      flagData.dataType = dataType;
+      break;
+    case ARG_PARSER_DATA_TYPE_BOOL:
+      flagData.dataType = dataType;
+      flagData.data.boolean = flagData.data.int64 > 0;
+      break;
+    case ARG_PARSER_DATA_TYPE_STRING:
+      // TODO: this
+      flagData.dataType = dataType;
+      break;
+    }
+    break;
+  case ARG_PARSER_DATA_TYPE_FLOAT:
+    switch (dataType) {
+    default:
+    case ARG_PARSER_DATA_TYPE_VOID:
+      LogError("Unsupported type conversion: %s -> %s", mateParserTypeToCStr(flagData.dataType), mateParserTypeToCStr(dataType));
+      break;
+    case ARG_PARSER_DATA_TYPE_INT:
+      flagData.data.int64 = (i64)flagData.data.float64;
+      flagData.dataType = dataType;
+      break;
+    case ARG_PARSER_DATA_TYPE_FLOAT:
+      // already the same data type
+      break;
+    case ARG_PARSER_DATA_TYPE_BOOL:
+      flagData.data.boolean = flagData.data.float64 > 0.0;
+      flagData.dataType = dataType;
+      break;
+    case ARG_PARSER_DATA_TYPE_STRING:
+      // TODO:
+      flagData.dataType = dataType;
+      break;
+    }
+    break;
+  case ARG_PARSER_DATA_TYPE_BOOL:
+    switch (dataType) {
+    default:
+    case ARG_PARSER_DATA_TYPE_VOID:
+      LogError("Unsupported type conversion: %s -> %s", mateParserTypeToCStr(flagData.dataType), mateParserTypeToCStr(dataType));
+      break;
+    case ARG_PARSER_DATA_TYPE_INT:
+      flagData.data.int64 = (i64)flagData.data.boolean;
+      flagData.dataType = dataType;
+      break;
+    case ARG_PARSER_DATA_TYPE_FLOAT:
+      flagData.data.float64 = (f64)flagData.data.boolean;
+      flagData.dataType = dataType;
+      break;
+    case ARG_PARSER_DATA_TYPE_BOOL:
+      // already the same data type
+      break;
+    case ARG_PARSER_DATA_TYPE_STRING:
+      flagData.data.str = flagData.data.boolean ? S("true") : S("false");
+      flagData.dataType = dataType;
+      break;
+    }
+    break;
+  case ARG_PARSER_DATA_TYPE_STRING:
+    switch (dataType) {
+    default:
+    case ARG_PARSER_DATA_TYPE_VOID:
+      LogError("Unsupported type conversion: %s -> %s", mateParserTypeToCStr(flagData.dataType), mateParserTypeToCStr(dataType));
+      break;
+    case ARG_PARSER_DATA_TYPE_INT: {
+      char *endptr = NULL;
+      errno = 0;
+      i64 val = strtoll(flagData.data.str.data, &endptr, 10);
+      if (errno || endptr == flagData.data.str.data || *endptr) val = 0;
+      flagData.data.int64 = val;
+      flagData.dataType = dataType;
+    } break;
+    case ARG_PARSER_DATA_TYPE_FLOAT: {
+      char *endptr = NULL;
+      errno = 0;
+      double val = strtod(flagData.data.str.data, &endptr);
+      if (errno || !isfinite(val) || endptr == flagData.data.str.data || *endptr) val = 0;
+      flagData.data.float64 = val;
+      flagData.dataType = dataType;
+    } break;
+    case ARG_PARSER_DATA_TYPE_BOOL:
+      flagData.dataType = dataType;
+      StrToLower(flagData.data.str);
+      if (StrEq(flagData.data.str, S("true"))) flagData.data.boolean = true;
+      else flagData.data.boolean = false; // default to false
+      break;
+    case ARG_PARSER_DATA_TYPE_STRING:
+      // already the same data type
+      break;
+    }
+    break;
+  }
+  return flagData;
+}
+
+void mateDispatchArgumentRules(ArgumentRule *rules, size_t rulesLength) {
+  Assert(rules != NULL && rulesLength > 0, "Invalid argument rules!");
+  if (mateState.argParserState.config.errorOnUnknownArgs) {
+    for (size_t argIdx = 0; argIdx < mateState.argParserState.userOptionVec.length; argIdx++) {
+      const ArgParserFlag flag = VecAt(mateState.argParserState.userOptionVec, argIdx);
+      bool exists = false;
+      for (size_t rulesIdx = 0; rulesIdx < rulesLength; rulesIdx++)
+        if (StrEq(rules[rulesIdx].name, flag.name)) exists = true;
+      if (!exists) {
+        LogError("Invalid option: %s\n", flag.name.data);
+        EndBuild();
+        exit(1);
+      }
+    }
+  }
+
+  for (size_t rulesIdx = 0; rulesIdx < rulesLength; rulesIdx++) {
+    const ArgumentRule rule = rules[rulesIdx];
+
+    // search for an option an the user option vector
+    ArgParserFlag *assignedFlag = NULL;
+    for (size_t i = 0; i < mateState.argParserState.userOptionVec.length; i++) {
+      assignedFlag = &VecAt(mateState.argParserState.userOptionVec, i);
+      if (StrEq(assignedFlag->name, rule.name)) break;
+      else assignedFlag = NULL;
+    }
+    // if the option isn't specified by the user, ignore the argument rule
+    if (assignedFlag == NULL) continue;
+
+    // assign a datatype
+    argParserDataType dataType = ARG_PARSER_DATA_TYPE_VOID;
+    if (rule.int32) dataType = ARG_PARSER_DATA_TYPE_INT;
+    else if (rule.float32) dataType = ARG_PARSER_DATA_TYPE_FLOAT;
+    else if (rule.boolean) dataType = ARG_PARSER_DATA_TYPE_BOOL;
+    else if (rule.string) dataType = ARG_PARSER_DATA_TYPE_STRING;
+    else if (dataType == ARG_PARSER_DATA_TYPE_VOID) {
+      LogWarn("No data type selected! ignoring argument rule");
+      continue;
+    }
+
+    u32 datatypeSize = 0;
+    switch (dataType) {
+    case ARG_PARSER_DATA_TYPE_INT:
+      datatypeSize = sizeof(i32);
+      break;
+    case ARG_PARSER_DATA_TYPE_FLOAT:
+      datatypeSize = sizeof(f32);
+      break;
+    case ARG_PARSER_DATA_TYPE_BOOL:
+      datatypeSize = sizeof(bool);
+      break;
+    case ARG_PARSER_DATA_TYPE_STRING:
+      datatypeSize = sizeof(String);
+      break;
+    default:
+      LogWarn("Unknown data type! Using size 0");
+      datatypeSize = 0;
+      break;
+    }
+
+    // turn the union vector into a packed array
+    u8 *packedValues = calloc(assignedFlag->flagDataVec.length, datatypeSize);
+    Assert(packedValues != NULL, "Memory allocation failed!");
+    for (size_t i = 0; i < assignedFlag->flagDataVec.length; i++) {
+      ArgParserFlagData flagData = VecAt(assignedFlag->flagDataVec, i);
+      flagData = argParserConvertFlagDataType(flagData, dataType);
+      switch (flagData.dataType) {
+      case ARG_PARSER_DATA_TYPE_VOID:
+        break;
+      case ARG_PARSER_DATA_TYPE_INT: {
+        const i64 source = flagData.data.int64;
+        int err = memcpy_s(packedValues + (i * datatypeSize), datatypeSize, &source, sizeof(i64));
+        Assert(err == 0, "memcpy_s error");
+        break;
+      }
+      case ARG_PARSER_DATA_TYPE_FLOAT: {
+        const f64 source = flagData.data.float64;
+        int err = memcpy_s(packedValues + (i * datatypeSize), datatypeSize, &source, sizeof(f64));
+        Assert(err == 0, "memcpy_s error");
+      } break;
+      case ARG_PARSER_DATA_TYPE_BOOL: {
+        int err = memcpy_s(packedValues + (i * datatypeSize), datatypeSize, &flagData.data.boolean, sizeof(bool));
+
+        Assert(err == 0, "memcpy_s error");
+      } break;
+      case ARG_PARSER_DATA_TYPE_STRING: {
+        int err = memcpy_s(packedValues + (i * datatypeSize), datatypeSize, &flagData.data.str, sizeof(String));
+        Assert(err == 0, "memcpy_s error");
+      } break;
+      }
+    }
+
+    // void* and memory and stuff
+    if (mateState.argParserState.config.valuePointerIsArray) {
+      if (rule.values) *(u8 **)rule.values = packedValues;
+    } else {
+      if (rule.values) *(u8 **)rule.values = packedValues;
+      // if (rule.values) rule.values = *packedValues;
+    }
+  }
+}
+
+static void argParserFreeContext(void) {
+  // free user options
+  for (size_t i = 0; i < mateState.argParserState.userOptionVec.length; i++) {
+    ArgParserFlag flag = VecAt(mateState.argParserState.userOptionVec, i);
+    if (flag.flagDataVec.data != NULL && flag.flagDataVec.length > 0) VecFree(flag.flagDataVec);
+  }
+  if (mateState.argParserState.userOptionVec.data != NULL && mateState.argParserState.userOptionVec.length > 0) VecFree(mateState.argParserState.userOptionVec);
+
+  // free mate options
+  for (size_t i = 0; i < mateState.argParserState.mateOptionVec.length; i++) {
+    ArgParserFlag flag = VecAt(mateState.argParserState.mateOptionVec, i);
+    if (flag.flagDataVec.data != NULL && flag.flagDataVec.length > 0) VecFree(flag.flagDataVec);
+  }
+  if (mateState.argParserState.mateOptionVec.data != NULL && mateState.argParserState.mateOptionVec.length > 0) VecFree(mateState.argParserState.mateOptionVec);
+
+  // free string arena
+  if (mateState.argParserState.stringArena) ArenaFree(mateState.argParserState.stringArena);
+}
+
+void StartBuild(int argc, char **argv) {
   LogInit();
   if (!mateState.initConfig) {
     mateSetDefaultState();
@@ -101,6 +697,9 @@ void StartBuild(void) {
   Mkdir(mateState.buildDirectory);
   mateReadCache();
   mateRebuild();
+
+  mateState.argParserState.config = argParserDefaultConfig();
+  mateParseArguments(argc, argv);
 }
 
 static bool mateNeedRebuild(void) {
@@ -1110,23 +1709,23 @@ static void mateLinkFrameworks(String *targetLibs, StringVector *frameworks) {
 
 static void mateLinkFrameworksWithOptions(String *targetLibs, LinkFrameworkOptions options, StringVector *frameworks) {
   Assert(!isGCC(),
-          "LinkFrameworks: Automatic framework linking is not supported by GCC. "
-          "Use standard linking functions after adding a framework path instead.");
+         "LinkFrameworks: Automatic framework linking is not supported by GCC. "
+         "Use standard linking functions after adding a framework path instead.");
   Assert(isClang(), "LinkFrameworks: This function is only supported for Clang.");
 
   char *frameworkFlag = NULL;
   switch (options) {
-    case none:
-      frameworkFlag = "-framework";
-      break;
-    case needed:
-      frameworkFlag = "-needed_framework";
-      break;
-    case weak:
-      frameworkFlag = "-weak_framework";
-      break;
-    default:
-      Assert(0, "LinkFrameworks: Invalid framework linking option provided.");
+  case none:
+    frameworkFlag = "-framework";
+    break;
+  case needed:
+    frameworkFlag = "-needed_framework";
+    break;
+  case weak:
+    frameworkFlag = "-weak_framework";
+    break;
+  default:
+    Assert(0, "LinkFrameworks: Invalid framework linking option provided.");
   }
 
   StringBuilder builder = StringBuilderCreate(mateState.arena);
@@ -1214,6 +1813,8 @@ static void mateAddFrameworkPaths(String *targetIncludes, StringVector *includes
 void EndBuild(void) {
   LogInfo("Build took: " FMT_I64 "ms", mateState.totalTime);
   ArenaFree(mateState.arena);
+
+  argParserFreeContext();
 }
 
 /* --- Utils Implementation --- */
