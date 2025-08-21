@@ -56,15 +56,17 @@ typedef struct {
   String ninjaBuildPath;
 } Executable;
 
+VEC_TYPE(VectorU32, u32);
+
 typedef enum {
   ARG_PARSER_TOKEN_INVALID = 0,
-  ARG_PARSER_TOKEN_FLAG = 1,
-  ARG_PARSER_TOKEN_FLAG_OPTION = 2,
-  ARG_PARSER_TOKEN_EQUAL = 3,
-  ARG_PARSER_TOKEN_COMMA = 4,
-  ARG_PARSER_TOKEN_NUMBER = 5,
-  ARG_PARSER_TOKEN_STRING = 6,
-  ARG_PARSER_TOKEN_BOOL = 7,
+  ARG_PARSER_TOKEN_FLAG = 1,      // -option
+  ARG_PARSER_TOKEN_USER_FLAG = 2, // -Doption
+  ARG_PARSER_TOKEN_EQUAL = 3,     // =
+  ARG_PARSER_TOKEN_COMMA = 4,     // ,
+  ARG_PARSER_TOKEN_NUMBER = 5,    // e.g. -100.23
+  ARG_PARSER_TOKEN_STRING = 6,    // e.g. feet / "feet" / 'feet'
+  ARG_PARSER_TOKEN_BOOL = 7,      // true / false
 } argParserToken;
 
 typedef enum {
@@ -75,8 +77,9 @@ typedef enum {
   ARG_PARSER_DATA_TYPE_STRING = 4, // string
 } argParserDataType;
 
-typedef union ArgParserTypeData {
-  double number;
+typedef union {
+  i64 int64;
+  f64 float64;
   bool boolean;
   String str;
 } ArgParserData;
@@ -104,11 +107,42 @@ typedef struct {
   ArgParserFlagVector values;
   argParserDataType datatype;
 } ArgParserOption;
-
 VEC_TYPE(ArgParserOptionVec, ArgParserOption);
-VEC_TYPE(VectorU32, u32);
 
 typedef struct {
+  String name;
+  void *values;
+
+  // types
+  bool string;
+  bool boolean;
+  bool float32;
+  bool int32;
+} ArgumentRule;
+#define DispatchArgumentRules(rules) mateDispatchArgumentRules(rules, sizeof(rules) / sizeof(*(rules)));
+void mateDispatchArgumentRules(ArgumentRule *rules, size_t rulesLength);
+
+typedef struct {
+  /**
+   * @brief If true, the parser will throw an error for any unknown or unconfigured user option
+   *
+   * Default: false
+   */
+  bool errorOnUnknownArgs;
+
+  /**
+   * @brief Defines how the value pointer for a parsed argument is interpreted
+   *
+   * If true: The value pointer must point to a single, uninitialized (NULL) instance of the specified type
+   * If false: The value pointer must be an array of pointers to instances of the specified type
+   *
+   * Default: true
+   */
+  bool valuePointerIsArray;
+} ArgParserConfig;
+
+typedef struct {
+  ArgParserConfig config;
   ArgParserFlagVector userOptionVec;
   ArgParserFlagVector mateOptionVec;
   Arena *stringArena;
@@ -133,7 +167,7 @@ typedef struct {
   i64 startTime;
   i64 totalTime;
 
-  ArgParserContext argParserCtx;
+  ArgParserContext argParserState;
 } MateConfig;
 
 typedef enum {
@@ -205,7 +239,7 @@ typedef enum { none = 0, needed, weak } LinkFrameworkOptions;
 typedef StringBuilder FlagBuilder;
 
 /* --- Build System --- */
-void StartBuild(int argc, const char **argv);
+void StartBuild(int argc, char **argv);
 void EndBuild(void);
 
 void CreateConfig(MateOptions options);
