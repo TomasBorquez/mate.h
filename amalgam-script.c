@@ -1,5 +1,4 @@
 // NOTE: Run simply with `./scripts/run-amalgam.sh`
-// TODO: Add delimiter #ifdef cplusplus or whatever it is
 #define BASE_IMPLEMENTATION
 #include "vendor/base/base.h"
 

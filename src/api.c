@@ -1126,7 +1126,7 @@ static void mateLinkFrameworksWithOptions(String *targetLibs, LinkFrameworkOptio
       frameworkFlag = "-weak_framework";
       break;
     default:
-      Assert(0, "LinkFrameworks: Invalid framework linking option provided.");
+      Unreachable("LinkFrameworks: Invalid framework linking option provided.");
   }
 
   StringBuilder builder = StringBuilderCreate(mateState.arena);
@@ -1236,7 +1236,7 @@ String CompilerToStr(Compiler compiler) {
   case MSVC:
     return S("cl.exe");
   default:
-    Assert(0, "CompilerToStr: failed, should never get here, compiler given does not exist: %d", compiler);
+    Unreachable("CompilerToStr: failed, should never get here, compiler given does not exist: %d", compiler);
   }
 }
 

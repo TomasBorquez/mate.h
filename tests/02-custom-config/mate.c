@@ -2,7 +2,7 @@
 #include "../../mate.h"
 
 i32 main(void) {
-  CreateConfig((MateOptions){.compiler = CLANG, .buildDirectory = "./custom-dir"});
+  CreateConfig((MateOptions){.buildDirectory = "./custom-dir"});
 
   StartBuild();
   {

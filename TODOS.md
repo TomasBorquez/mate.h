@@ -1,45 +1,33 @@
 # [TODOS](https://github.com/TomasBorquez/mate.h/issues/9)
 
-## v0.2
+## v0.3
+- [ ] Parallel Dependency check
+- [ ] Make `samurai` windows compatible
+- [ ] Full `MSVC` support on static/shared libs
+- [ ] `InstallHeader()`
 
-#### Bugs
+## v0.2
 - [x] Samurai does not generate `compile_commands.json`?
 - [x] Move `AddFile/RemoveFile` to use `s()` for the file names
 - [x] `CreateStaticLib/CreateExecutable` were using includes instead of libs
-
-#### Features
 - [x] When parsing `ExecutableOptions.output`, make sure it is not a path, just a name with/without .exe
 - [x] `clang-formatter` as a github action (when many contributions)
 - [x] `AddFiles` for array, and remove macros
-- [x] Make all macros `()`
-- [ ] Amalgam workflow on PRs
+- [x] Make all macros safe -> `()`
+- [x] Scripts for tests are pretty bad, fix them
+- [x] Remove CPP support on mate.h
+- [ ] ^ Add ability to compile with g++ and other cpp compilers
+- [ ] Path handling is pretty ugly, improve it
+- [ ] Amalgamation should be done on a buffer and then create a file
 - [ ] Add `args` parser
 - [ ] Shared libs
 - [ ] `LinkStaticLib()` for linking another `StaticLib`
-- [ ] Full `MSVC` support on static/shared libs
-- [ ] library builder functions
-    - [ ] `InstallHeader()`
-    - [ ] Amalgam functions
-    - [ ] ...
-- [ ] Header tests like on `CMAKE`
-- [ ] Add `MacOS` support (find someone who is willing to help)
-- [ ] Make `samurai` windows compatible
-- [ ] Properly clean the state of arenas and vectors
-- [ ] Parallel Dependency check
+- [ ] Add `MacOS` support (does work well atm)
 
 #### Examples
 - [ ] Show how to use FS functions `FileWrite`, `FileDelete`, etc.
 - [ ] Show how to use String functions from base.h like `F()`, `StrConcat`, `StrEq`, etc.
 - [ ] Show how to use `FlagBuilder`, `AddFiles`, `CreateStaticLib`.
-
-#### Tests
-- [ ] test mate functions and that the output is correct
-    - [ ] `AddFiles` and `AddFile`
-    - [ ] check `CreateCompileCommands` works correctly
-- [ ] test that checks rebuild works correctly
-- [ ] test that checks illegal stuff doesn't pass without an assertion
-    - [ ] like `InstallExecutable` without `CreateExecutable`
-    - [ ] like `CreateExecutable` without `StartBuild`
 - [ ] raylib-source-code
     - [ ] option shared (`-fPIC`, `-DBUILD_LIBTYPE_SHARED`)
     - [ ] option linux_backend (`wayland/x11`)

@@ -90,6 +90,9 @@
 #if defined(PLATFORM_WIN)
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
+#  if !defined(ENABLE_VIRTUAL_TERMINAL_PROCESSING) // Old SDKs sometimes dont have it
+#    define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
+#  endif
 #else
 #  define _POSIX_C_SOURCE 200809L
 #  define _GNU_SOURCE
@@ -100,10 +103,6 @@
 #  include <sys/stat.h>
 #  include <sys/types.h>
 #  include <unistd.h>
-#endif
-
-#ifdef __cplusplus
-extern "C" {
 #endif
 
 #if defined(__STDC_VERSION__)
@@ -258,10 +257,12 @@ typedef struct {
 #define I64_MAX INT64_MAX
 #define I64_MIN INT64_MIN
 
-#define TYPE_INIT(type) (type)
-
+/* --- Assertions --- */
 void _custom_assert(const char *expr, const char *file, unsigned line, const char *format, ...) FORMAT_CHECK(4, 5);
 #define Assert(expression, ...) (void)((!!(expression)) || (_custom_assert(#expression, __FILE__, __LINE__, __VA_ARGS__), 0))
+
+void _custom_unreachable(const char *file, unsigned line, const char *format, ...) FORMAT_CHECK(3, 4);
+#define Unreachable(...) (void)((_custom_unreachable(__FILE__, __LINE__, __VA_ARGS__), 0))
 
 /* --- Vector --- */
 typedef i32 (*CompareFunc)(const void *a, const void *b);
@@ -366,6 +367,7 @@ void *Malloc(size_t size);
 void Free(void *address);
 
 /* --- String and Macros --- */
+#define TYPE_INIT(type) (type)
 #define STRING_LENGTH(s) ((sizeof((s)) / sizeof((s)[0])) - sizeof((s)[0])) // NOTE: Inspired from clay.h
 #define ENSURE_STRING_LITERAL(x) ("" x "")
 
@@ -493,10 +495,8 @@ void LogSuccess(const char *format, ...) FORMAT_CHECK(1, 2);
   } while (0);
 
 /* --- Defer Macros --- */
-#if defined(DEFER_MACRO) // NOTE: Optional since not all compilers support it and not all C versions do either
-/* - GCC implementation -
-  NOTE: Must use C23 (depending on the platform)
-*/
+#if defined(DEFER_MACRO)
+/* [GCC implementation] Must use C23 (depending on the platform) */
 #  if defined(COMPILER_GCC)
 #    define defer __DEFER(__COUNTER__)
 #    define __DEFER(N) __DEFER_(N)
@@ -506,9 +506,7 @@ void LogSuccess(const char *format, ...) FORMAT_CHECK(1, 2);
       [[gnu::cleanup(F)]] int V; \
       auto void F(int *)
 
-/* - Clang implementation -
-  NOTE: Must compile with flag `-fblocks`
-*/
+/* [Clang implementation] Must compile with flag `-fblocks` */
 #  elif defined(COMPILER_CLANG)
 typedef void (^const __df_t)(void);
 
@@ -522,9 +520,7 @@ static inline void __df_cb(__df_t *__fp) {
 #    define __DEFER_(N) __DEFER__(__DEFER_VARIABLE_##N)
 #    define __DEFER__(V) [[gnu::cleanup(__df_cb)]] __df_t V = ^void(void)
 
-/* -- MSVC implementation --
-  NOTE: Not available yet in MSVC, use `_try/_finally`
-*/
+/* [MSVC implementation] */
 #  elif defined(COMPILER_MSVC)
 #    error "Not available yet in MSVC, use `_try/_finally`"
 #  endif
@@ -555,17 +551,13 @@ i64 IniGetLong(IniFile *ini, String key);
 f64 IniGetDouble(IniFile *ini, String key);
 bool IniGetBool(IniFile *ini, String key);
 
-#ifdef __cplusplus
-}
-#endif
-
 /* MIT License
    base.h - Implementation of base.h
    https://github.com/TomasBorquez/base.h
 */
 #if defined(BASE_IMPLEMENTATION)
-// --- Vector Implementation ---
 
+/* --- Vector Implementation --- */
 i32 __base_vec_partition(void **data, size_t element_size, CompareFunc compare, i32 low, i32 high) {
   void *pivot = (char *)(*data) + (high * element_size);
   i32 i = low - 1;
@@ -674,7 +666,7 @@ void __base_vec_free(void **data, size_t *length, size_t *capacity) {
   *capacity = 0;
 }
 
-// --- Time and Platforms Implementation ---
+/* --- Time and Platforms Implementation --- */
 #  if !defined(PLATFORM_WIN)
 
 #    if !defined(EINVAL)
@@ -949,6 +941,19 @@ void _custom_assert(const char *expr, const char *file, unsigned line, const cha
   abort();
 }
 
+void _custom_unreachable(const char *file, unsigned line, const char *format, ...) {
+  printf("%sReached Unreachable code at file %s, line %u %s\n", _RED, file, line, _RESET);
+
+  if (format) {
+    va_list args;
+    va_start(args, format);
+    logErrorV(format, args);
+    va_start(args, format);
+  }
+
+  abort();
+}
+
 /* --- Arena Implementation --- */
 // Allocate or iterate to next chunk that can fit `bytes`
 static void __ArenaNextChunk(Arena *arena, size_t bytes) {
@@ -1028,7 +1033,7 @@ Arena *ArenaCreate(size_t chunkSize) {
   return res;
 }
 
-/* Memory Allocations */
+/* --- Memory Allocations --- */
 // TODO: Add hashmap that checks for unfreed values only on DEBUG, __FILE__ and __LINE__
 void *Malloc(size_t size) {
   Assert(size > 0, "Malloc: size cant be negative");
@@ -1050,7 +1055,7 @@ void Free(void *address) {
   free(address);
 }
 
-/* String Implementation */
+/* --- String Implementation --- */
 static size_t maxStringSize = 10000;
 
 static size_t strLength(char *str, size_t maxSize) {
@@ -1544,7 +1549,7 @@ void StringBuilderAppend(Arena *arena, StringBuilder *builder, String *string) {
   builder->buffer.data[builder->buffer.length] = '\0';
 }
 
-/* Random Implemenation */
+/* --- Random Implemenation --- */
 static u64 seed = 0;
 
 u64 RandomGetSeed(void) {
@@ -1581,7 +1586,7 @@ f32 RandomFloat(f32 min, f32 max) {
   return min + normalized * (max - min);
 }
 
-/* File System Implementation */
+/* --- File System Implementation --- */
 #  if defined(PLATFORM_WIN)
 char *GetCwd(void) {
   static char currentPath[MAX_PATH];
@@ -2179,7 +2184,7 @@ FileWriteError FileReset(String path) {
   return FileWrite(path, S(""));
 }
 
-/* Logger Implemenation */
+/* --- Logger Implemenation --- */
 void LogInfo(const char *format, ...) {
   printf("%s[INFO]: ", _GRAY);
   va_list args;
@@ -2241,7 +2246,7 @@ errno_t IniParse(String path, IniFile *result) {
     FileWriteError errWrite = FileReset(path);
     Assert(errWrite == FILE_WRITE_SUCCESS, "IniParse: Failed creating file for path %s, err: %d", path.data, err);
 
-    result->arena = ArenaCreate(sizeof(String) * 10); // Initialize arena
+    result->arena = ArenaCreate(sizeof(String) * 10);
     return SUCCESS;
   }
 
@@ -2564,7 +2569,6 @@ static void mateAddLibraryPaths(String *targetLibs, StringVector *libs);
     VecFree(_libs);                                  \
   } while (0)
 static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs);
-
 
 #define LinkFrameworks(target, ...)                        \
   do {                                                     \
@@ -6719,7 +6723,7 @@ static void mateLinkFrameworksWithOptions(String *targetLibs, LinkFrameworkOptio
       frameworkFlag = "-weak_framework";
       break;
     default:
-      Assert(0, "LinkFrameworks: Invalid framework linking option provided.");
+      Unreachable("LinkFrameworks: Invalid framework linking option provided.");
   }
 
   StringBuilder builder = StringBuilderCreate(mateState.arena);
@@ -6829,7 +6833,7 @@ String CompilerToStr(Compiler compiler) {
   case MSVC:
     return S("cl.exe");
   default:
-    Assert(0, "CompilerToStr: failed, should never get here, compiler given does not exist: %d", compiler);
+    Unreachable("CompilerToStr: failed, should never get here, compiler given does not exist: %d", compiler);
   }
 }
 

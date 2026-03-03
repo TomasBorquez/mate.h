@@ -187,7 +187,6 @@ static void mateAddLibraryPaths(String *targetLibs, StringVector *libs);
   } while (0)
 static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs);
 
-
 #define LinkFrameworks(target, ...)                        \
   do {                                                     \
     StringVector _frameworks = {0};                        \
