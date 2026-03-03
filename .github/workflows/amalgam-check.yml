@@ -14,7 +14,7 @@ permissions:
 jobs:
   build-and-run:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code with submodules
       uses: actions/checkout@v3
@@ -22,23 +22,23 @@ jobs:
         submodules: recursive
         fetch-depth: 0  
         token: ${{ secrets.GITHUB_TOKEN }}
-    
+
     - name: Build and run amalgam script
       run: |
         gcc amalgam-script.c -o amalgam-script
         ./amalgam-script
-    
+
     - name: Configure Git
       run: |
         git config --global user.name 'Mate Bot'
         git config --global user.email 'mate@yerba.ar'
-    
+
     - name: Check for changes
       id: git-check
       run: |
         git status
         echo "changed=$(git status --porcelain | wc -l)" >> $GITHUB_OUTPUT
-    
+
     - name: Commit and push if changed
       if: steps.git-check.outputs.changed != '0' && github.event_name == 'push'
       run: |

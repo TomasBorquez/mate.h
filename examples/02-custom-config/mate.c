@@ -21,7 +21,7 @@ i32 main(void) {
 
     RunCommand(executable.outputPath);
     // Create compile commands for better LSP support
-    CreateCompileCommands(executable); // executable.ninjaBuildPath is the path where the build.ninja is at, here is where we grab all the commands from
+    CreateCompileCommands(executable);
   }
   EndBuild();
 }
