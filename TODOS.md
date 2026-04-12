@@ -1,7 +1,6 @@
 # [TODOS](https://github.com/TomasBorquez/mate.h/issues/9)
 
 ## v0.3
-- [ ] Parallel Dependency check
 - [ ] Make `samurai` windows compatible
 - [ ] Full `MSVC` support on static/shared libs
 - [ ] `InstallHeader()`
@@ -15,8 +14,9 @@
 - [x] `AddFiles` for array, and remove macros
 - [x] Make all macros safe -> `()`
 - [x] Scripts for tests are pretty bad, fix them
+- [x] Header Dependency check
 - [x] Remove CPP support on mate.h
-- [ ] ^ Add ability to compile with g++ and other cpp compilers
+- [ ] ^ Add ability to compile with g++ and other c/cpp compilers
 - [ ] Path handling is pretty ugly, improve it
 - [ ] Amalgamation should be done on a buffer and then create a file
 - [ ] Add `args` parser

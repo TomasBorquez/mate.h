@@ -76,7 +76,7 @@ static void mateReadCache(void) {
     String outputPath = F(mateState.arena, "%s/samurai", mateState.buildDirectory.data);
     String compileCommand = F(mateState.arena, "%s \"%s\" -o \"%s\" -std=c99", CompilerToStr(mateState.compiler).data, sourcePath.data, outputPath.data);
 
-    errno_t err = RunCommand(compileCommand);
+    err = RunCommand(compileCommand);
     Assert(err == SUCCESS, "MateReadCache: Error meanwhile compiling samurai at %s, if you are seeing this please make an issue at github.com/TomasBorquez/mate.h", sourcePath.data);
 
     LogSuccess("Successfully compiled samurai");
@@ -762,90 +762,100 @@ static void mateInstallExecutable(Executable *executable) {
   StringBuilder builder = StringBuilderReserve(mateState.arena, 1024);
 
   // Compiler
-  StringBuilderAppend(mateState.arena, &builder, &S("cc = "));
+  StringBuilderAppend(mateState.arena, &builder, S("cc = "));
   String compiler = CompilerToStr(mateState.compiler);
-  StringBuilderAppend(mateState.arena, &builder, &compiler);
-  StringBuilderAppend(mateState.arena, &builder, &S("\n"));
+  StringBuilderAppend(mateState.arena, &builder, compiler);
+  StringBuilderAppend(mateState.arena, &builder, S("\n"));
 
   // Linker flags
   if (executable->linkerFlags.length > 0) {
-    StringBuilderAppend(mateState.arena, &builder, &S("linker_flags = "));
-    StringBuilderAppend(mateState.arena, &builder, &executable->linkerFlags);
-    StringBuilderAppend(mateState.arena, &builder, &S("\n"));
+    StringBuilderAppend(mateState.arena, &builder, S("linker_flags = "));
+    StringBuilderAppend(mateState.arena, &builder, executable->linkerFlags);
+    StringBuilderAppend(mateState.arena, &builder, S("\n"));
   }
 
   // Compiler flags
   if (executable->flags.length > 0) {
-    StringBuilderAppend(mateState.arena, &builder, &S("flags = "));
-    StringBuilderAppend(mateState.arena, &builder, &executable->flags);
-    StringBuilderAppend(mateState.arena, &builder, &S("\n"));
+    StringBuilderAppend(mateState.arena, &builder, S("flags = "));
+    StringBuilderAppend(mateState.arena, &builder, executable->flags);
+    StringBuilderAppend(mateState.arena, &builder, S("\n"));
   }
 
   // Include paths
   if (executable->includes.length > 0) {
-    StringBuilderAppend(mateState.arena, &builder, &S("includes = "));
-    StringBuilderAppend(mateState.arena, &builder, &executable->includes);
-    StringBuilderAppend(mateState.arena, &builder, &S("\n"));
+    StringBuilderAppend(mateState.arena, &builder, S("includes = "));
+    StringBuilderAppend(mateState.arena, &builder, executable->includes);
+    StringBuilderAppend(mateState.arena, &builder, S("\n"));
   }
 
   // Libraries
   if (executable->libs.length > 0) {
-    StringBuilderAppend(mateState.arena, &builder, &S("libs = "));
-    StringBuilderAppend(mateState.arena, &builder, &executable->libs);
-    StringBuilderAppend(mateState.arena, &builder, &S("\n"));
+    StringBuilderAppend(mateState.arena, &builder, S("libs = "));
+    StringBuilderAppend(mateState.arena, &builder, executable->libs);
+    StringBuilderAppend(mateState.arena, &builder, S("\n"));
   }
 
   // Current working directory
   String cwd_path = mateConvertNinjaPath(s(GetCwd()));
-  StringBuilderAppend(mateState.arena, &builder, &S("cwd = "));
-  StringBuilderAppend(mateState.arena, &builder, &cwd_path);
-  StringBuilderAppend(mateState.arena, &builder, &S("\n"));
+  StringBuilderAppend(mateState.arena, &builder, S("cwd = "));
+  StringBuilderAppend(mateState.arena, &builder, cwd_path);
+  StringBuilderAppend(mateState.arena, &builder, S("\n"));
 
   // Build directory
   String build_dir_path = mateConvertNinjaPath(mateState.buildDirectory);
-  StringBuilderAppend(mateState.arena, &builder, &S("builddir = "));
-  StringBuilderAppend(mateState.arena, &builder, &build_dir_path);
-  StringBuilderAppend(mateState.arena, &builder, &S("\n"));
+  StringBuilderAppend(mateState.arena, &builder, S("builddir = "));
+  StringBuilderAppend(mateState.arena, &builder, build_dir_path);
+  StringBuilderAppend(mateState.arena, &builder, S("\n"));
 
   // Target
-  StringBuilderAppend(mateState.arena, &builder, &S("target = $builddir/"));
-  StringBuilderAppend(mateState.arena, &builder, &executable->output);
-  StringBuilderAppend(mateState.arena, &builder, &S("\n\n"));
+  StringBuilderAppend(mateState.arena, &builder, S("target = $builddir/"));
+  StringBuilderAppend(mateState.arena, &builder, executable->output);
+  StringBuilderAppend(mateState.arena, &builder, S("\n"));
+
+  StringBuilderAppend(mateState.arena, &builder, S("\n"));
 
   // Link command
-  StringBuilderAppend(mateState.arena, &builder, &S("rule link\n  command = $cc"));
+  StringBuilderAppend(mateState.arena, &builder, S("rule link\n  command = $cc"));
   if (executable->flags.length > 0) {
-    StringBuilderAppend(mateState.arena, &builder, &S(" $flags"));
+    StringBuilderAppend(mateState.arena, &builder, S(" $flags"));
   }
 
   if (executable->linkerFlags.length > 0) {
-    StringBuilderAppend(mateState.arena, &builder, &S(" $linker_flags"));
+    StringBuilderAppend(mateState.arena, &builder, S(" $linker_flags"));
   }
 
   if (isMSVC()) {
-    StringBuilderAppend(mateState.arena, &builder, &S(" /Fe:$out $in"));
+    StringBuilderAppend(mateState.arena, &builder, S(" /Fe:$out $in"));
   } else {
-    StringBuilderAppend(mateState.arena, &builder, &S(" -o $out $in"));
+    StringBuilderAppend(mateState.arena, &builder, S(" -o $out $in"));
   }
 
   if (executable->libs.length > 0) {
-    StringBuilderAppend(mateState.arena, &builder, &S(" $libs"));
+    StringBuilderAppend(mateState.arena, &builder, S(" $libs"));
   }
-  StringBuilderAppend(mateState.arena, &builder, &S("\n\n"));
+  StringBuilderAppend(mateState.arena, &builder, S("\n\n"));
 
   // Compile command
-  StringBuilderAppend(mateState.arena, &builder, &S("rule compile\n  command = $cc"));
+  StringBuilderAppend(mateState.arena, &builder, S("rule compile\n  command = $cc"));
   if (executable->flags.length > 0) {
-    StringBuilderAppend(mateState.arena, &builder, &S(" $flags"));
+    StringBuilderAppend(mateState.arena, &builder, S(" $flags"));
   }
   if (executable->includes.length > 0) {
-    StringBuilderAppend(mateState.arena, &builder, &S(" $includes"));
+    StringBuilderAppend(mateState.arena, &builder, S(" $includes"));
   }
 
   if (isMSVC()) {
-    StringBuilderAppend(mateState.arena, &builder, &S(" /c $in /Fo:$out\n\n"));
+    StringBuilderAppend(mateState.arena, &builder, S(" /showIncludes /c $in /Fo:$out\n"));
+    StringBuilderAppend(mateState.arena, &builder, S("  deps = msvc\n\n"));
   } else {
-    StringBuilderAppend(mateState.arena, &builder, &S(" -c $in -o $out\n\n"));
+    StringBuilderAppend(mateState.arena, &builder, S(" -c $in -o $out -MMD -MF $depfile\n"));
+    if (mateState.compiler == GCC || mateState.compiler == CLANG) {
+      StringBuilderAppend(mateState.arena, &builder, S("  depfile = $depfile\n"));
+      StringBuilderAppend(mateState.arena, &builder, S("  deps = "));
+      StringBuilderAppend(mateState.arena, &builder, compiler);
+      StringBuilderAppend(mateState.arena, &builder, S("\n"));
+    }
+    StringBuilderAppend(mateState.arena, &builder, S("\n"));
   }
 
   // Build individual source files
@@ -859,29 +869,37 @@ static void mateInstallExecutable(Executable *executable) {
     String sourceFile = NormalizePathStart(mateState.arena, currSource);
 
     // Source build command
-    StringBuilderAppend(mateState.arena, &builder, &S("build $builddir/"));
-    StringBuilderAppend(mateState.arena, &builder, &outputFile);
-    StringBuilderAppend(mateState.arena, &builder, &S(": compile $cwd/"));
-    StringBuilderAppend(mateState.arena, &builder, &sourceFile);
-    StringBuilderAppend(mateState.arena, &builder, &S("\n"));
+    StringBuilderAppend(mateState.arena, &builder, S("build $builddir/"));
+    StringBuilderAppend(mateState.arena, &builder, outputFile);
+    StringBuilderAppend(mateState.arena, &builder, S(": compile $cwd/"));
+    StringBuilderAppend(mateState.arena, &builder, sourceFile);
+    StringBuilderAppend(mateState.arena, &builder, S("\n"));
+
+    if (mateState.compiler == GCC || mateState.compiler == CLANG) {
+      String depFile = StrNew(mateState.arena, outputFile.data);
+      depFile.data[depFile.length - 1] = 'd';
+      StringBuilderAppend(mateState.arena, &builder, S("  depfile = $builddir/"));
+      StringBuilderAppend(mateState.arena, &builder, depFile);
+      StringBuilderAppend(mateState.arena, &builder, S("\n"));
+    }
 
     // Add to output files list
     if (outputBuilder.buffer.length == 0) {
-      StringBuilderAppend(mateState.arena, &outputBuilder, &S("$builddir/"));
-      StringBuilderAppend(mateState.arena, &outputBuilder, &outputFile);
+      StringBuilderAppend(mateState.arena, &outputBuilder, S("$builddir/"));
+      StringBuilderAppend(mateState.arena, &outputBuilder, outputFile);
     } else {
-      StringBuilderAppend(mateState.arena, &outputBuilder, &S(" $builddir/"));
-      StringBuilderAppend(mateState.arena, &outputBuilder, &outputFile);
+      StringBuilderAppend(mateState.arena, &outputBuilder, S(" $builddir/"));
+      StringBuilderAppend(mateState.arena, &outputBuilder, outputFile);
     }
   }
 
   // Build target
-  StringBuilderAppend(mateState.arena, &builder, &S("build $target: link "));
-  StringBuilderAppend(mateState.arena, &builder, &outputBuilder.buffer);
-  StringBuilderAppend(mateState.arena, &builder, &S("\n\n"));
+  StringBuilderAppend(mateState.arena, &builder, S("build $target: link "));
+  StringBuilderAppend(mateState.arena, &builder, outputBuilder.buffer);
+  StringBuilderAppend(mateState.arena, &builder, S("\n\n"));
 
   // Default target
-  StringBuilderAppend(mateState.arena, &builder, &S("default $target\n"));
+  StringBuilderAppend(mateState.arena, &builder, S("default $target\n"));
 
   String ninjaBuildPath = executable->ninjaBuildPath;
   errno_t errWrite = FileWrite(ninjaBuildPath, builder.buffer);
@@ -898,7 +916,6 @@ static void mateInstallExecutable(Executable *executable) {
   i64 err = RunCommand(buildCommand);
   Assert(err == SUCCESS, "InstallExecutable: Ninja file compilation failed with code: " FMT_I64, err);
 
-  LogSuccess("Ninja file compilation done for %s", NormalizePathEnd(mateState.arena, ninjaBuildPath).data);
   mateState.totalTime = TimeNow() - mateState.startTime;
 
 #if defined(PLATFORM_WIN)
@@ -915,64 +932,71 @@ static void mateInstallStaticLib(StaticLib *staticLib) {
   StringBuilder builder = StringBuilderReserve(mateState.arena, 1024);
 
   // Compiler
-  StringBuilderAppend(mateState.arena, &builder, &S("cc = "));
+  StringBuilderAppend(mateState.arena, &builder, S("cc = "));
   String compiler = CompilerToStr(mateState.compiler);
-  StringBuilderAppend(mateState.arena, &builder, &compiler);
-  StringBuilderAppend(mateState.arena, &builder, &S("\n"));
+  StringBuilderAppend(mateState.arena, &builder, compiler);
+  StringBuilderAppend(mateState.arena, &builder, S("\n"));
 
   // Archive
-  StringBuilderAppend(mateState.arena, &builder, &S("ar = ar\n")); // TODO: Add different ar for MSVC
+  StringBuilderAppend(mateState.arena, &builder, S("ar = ar\n")); // TODO: Add different ar for MSVC
 
   // Compiler flags
   if (staticLib->flags.length > 0) {
-    StringBuilderAppend(mateState.arena, &builder, &S("flags = "));
-    StringBuilderAppend(mateState.arena, &builder, &staticLib->flags);
-    StringBuilderAppend(mateState.arena, &builder, &S("\n"));
+    StringBuilderAppend(mateState.arena, &builder, S("flags = "));
+    StringBuilderAppend(mateState.arena, &builder, staticLib->flags);
+    StringBuilderAppend(mateState.arena, &builder, S("\n"));
   }
 
   // Archive flags
   if (staticLib->arFlags.length > 0) {
-    StringBuilderAppend(mateState.arena, &builder, &S("ar_flags = "));
-    StringBuilderAppend(mateState.arena, &builder, &staticLib->arFlags);
-    StringBuilderAppend(mateState.arena, &builder, &S("\n"));
+    StringBuilderAppend(mateState.arena, &builder, S("ar_flags = "));
+    StringBuilderAppend(mateState.arena, &builder, staticLib->arFlags);
+    StringBuilderAppend(mateState.arena, &builder, S("\n"));
   }
 
   // Include paths
   if (staticLib->includes.length > 0) {
-    StringBuilderAppend(mateState.arena, &builder, &S("includes = "));
-    StringBuilderAppend(mateState.arena, &builder, &staticLib->includes);
-    StringBuilderAppend(mateState.arena, &builder, &S("\n"));
+    StringBuilderAppend(mateState.arena, &builder, S("includes = "));
+    StringBuilderAppend(mateState.arena, &builder, staticLib->includes);
+    StringBuilderAppend(mateState.arena, &builder, S("\n"));
   }
 
   // Current working directory
   String cwd_path = mateConvertNinjaPath(s(GetCwd()));
-  StringBuilderAppend(mateState.arena, &builder, &S("cwd = "));
-  StringBuilderAppend(mateState.arena, &builder, &cwd_path);
-  StringBuilderAppend(mateState.arena, &builder, &S("\n"));
+  StringBuilderAppend(mateState.arena, &builder, S("cwd = "));
+  StringBuilderAppend(mateState.arena, &builder, cwd_path);
+  StringBuilderAppend(mateState.arena, &builder, S("\n"));
 
   // Build directory
   String build_dir_path = mateConvertNinjaPath(mateState.buildDirectory);
-  StringBuilderAppend(mateState.arena, &builder, &S("builddir = "));
-  StringBuilderAppend(mateState.arena, &builder, &build_dir_path);
-  StringBuilderAppend(mateState.arena, &builder, &S("\n"));
+  StringBuilderAppend(mateState.arena, &builder, S("builddir = "));
+  StringBuilderAppend(mateState.arena, &builder, build_dir_path);
+  StringBuilderAppend(mateState.arena, &builder, S("\n"));
 
   // Target
-  StringBuilderAppend(mateState.arena, &builder, &S("target = $builddir/"));
-  StringBuilderAppend(mateState.arena, &builder, &staticLib->output);
-  StringBuilderAppend(mateState.arena, &builder, &S("\n\n"));
+  StringBuilderAppend(mateState.arena, &builder, S("target = $builddir/"));
+  StringBuilderAppend(mateState.arena, &builder, staticLib->output);
+  StringBuilderAppend(mateState.arena, &builder, S("\n\n"));
 
   // Archive command
-  StringBuilderAppend(mateState.arena, &builder, &S("rule archive\n  command = $ar $ar_flags $out $in\n\n"));
+  StringBuilderAppend(mateState.arena, &builder, S("rule archive\n  command = $ar $ar_flags $out $in\n\n"));
 
   // Compile command
-  StringBuilderAppend(mateState.arena, &builder, &S("rule compile\n  command = $cc"));
+  StringBuilderAppend(mateState.arena, &builder, S("rule compile\n  command = $cc"));
   if (staticLib->flags.length > 0) {
-    StringBuilderAppend(mateState.arena, &builder, &S(" $flags"));
+    StringBuilderAppend(mateState.arena, &builder, S(" $flags"));
   }
   if (staticLib->includes.length > 0) {
-    StringBuilderAppend(mateState.arena, &builder, &S(" $includes"));
+    StringBuilderAppend(mateState.arena, &builder, S(" $includes"));
   }
-  StringBuilderAppend(mateState.arena, &builder, &S(" -c $in -o $out\n\n"));
+  StringBuilderAppend(mateState.arena, &builder, S(" -c $in -o $out -MMD -MF $depfile\n"));
+  if (mateState.compiler == GCC || mateState.compiler == CLANG) {
+    StringBuilderAppend(mateState.arena, &builder, S("  depfile = $depfile\n"));
+    StringBuilderAppend(mateState.arena, &builder, S("  deps = "));
+    StringBuilderAppend(mateState.arena, &builder, compiler);
+    StringBuilderAppend(mateState.arena, &builder, S("\n"));
+  }
+  StringBuilderAppend(mateState.arena, &builder, S("\n"));
 
   // Build individual source files
   StringVector outputFiles = mateOutputTransformer(staticLib->sources);
@@ -985,29 +1009,37 @@ static void mateInstallStaticLib(StaticLib *staticLib) {
     String sourceFile = NormalizePathStart(mateState.arena, currSource);
 
     // Source build command
-    StringBuilderAppend(mateState.arena, &builder, &S("build $builddir/"));
-    StringBuilderAppend(mateState.arena, &builder, &outputFile);
-    StringBuilderAppend(mateState.arena, &builder, &S(": compile $cwd/"));
-    StringBuilderAppend(mateState.arena, &builder, &sourceFile);
-    StringBuilderAppend(mateState.arena, &builder, &S("\n"));
+    StringBuilderAppend(mateState.arena, &builder, S("build $builddir/"));
+    StringBuilderAppend(mateState.arena, &builder, outputFile);
+    StringBuilderAppend(mateState.arena, &builder, S(": compile $cwd/"));
+    StringBuilderAppend(mateState.arena, &builder, sourceFile);
+    StringBuilderAppend(mateState.arena, &builder, S("\n"));
+
+    if (mateState.compiler == GCC || mateState.compiler == CLANG) {
+      String depFile = StrNew(mateState.arena, outputFile.data);
+      depFile.data[depFile.length - 1] = 'd';
+      StringBuilderAppend(mateState.arena, &builder, S("  depfile = $builddir/"));
+      StringBuilderAppend(mateState.arena, &builder, depFile);
+      StringBuilderAppend(mateState.arena, &builder, S("\n"));
+    }
 
     // Add to output files list
     if (outputBuilder.buffer.length == 0) {
-      StringBuilderAppend(mateState.arena, &outputBuilder, &S("$builddir/"));
-      StringBuilderAppend(mateState.arena, &outputBuilder, &outputFile);
+      StringBuilderAppend(mateState.arena, &outputBuilder, S("$builddir/"));
+      StringBuilderAppend(mateState.arena, &outputBuilder, outputFile);
     } else {
-      StringBuilderAppend(mateState.arena, &outputBuilder, &S(" $builddir/"));
-      StringBuilderAppend(mateState.arena, &outputBuilder, &outputFile);
+      StringBuilderAppend(mateState.arena, &outputBuilder, S(" $builddir/"));
+      StringBuilderAppend(mateState.arena, &outputBuilder, outputFile);
     }
   }
 
   // Build target
-  StringBuilderAppend(mateState.arena, &builder, &S("build $target: archive "));
-  StringBuilderAppend(mateState.arena, &builder, &outputBuilder.buffer);
-  StringBuilderAppend(mateState.arena, &builder, &S("\n\n"));
+  StringBuilderAppend(mateState.arena, &builder, S("build $target: archive "));
+  StringBuilderAppend(mateState.arena, &builder, outputBuilder.buffer);
+  StringBuilderAppend(mateState.arena, &builder, S("\n\n"));
 
   // Default target
-  StringBuilderAppend(mateState.arena, &builder, &S("default $target\n"));
+  StringBuilderAppend(mateState.arena, &builder, S("default $target\n"));
 
   String ninjaBuildPath = staticLib->ninjaBuildPath;
   errno_t errWrite = FileWrite(ninjaBuildPath, builder.buffer);
@@ -1038,11 +1070,11 @@ static void mateAddLibraryPaths(String *targetLibs, StringVector *libs) {
   StringBuilder builder = StringBuilderCreate(mateState.arena);
 
   if (isMSVC() && targetLibs->length == 0) {
-    StringBuilderAppend(mateState.arena, &builder, &S("/link"));
+    StringBuilderAppend(mateState.arena, &builder, S("/link"));
   }
 
   if (targetLibs->length) {
-    StringBuilderAppend(mateState.arena, &builder, targetLibs);
+    StringBuilderAppend(mateState.arena, &builder, *targetLibs);
   }
 
   if (isMSVC()) {
@@ -1050,7 +1082,7 @@ static void mateAddLibraryPaths(String *targetLibs, StringVector *libs) {
     for (size_t i = 0; i < libs->length; i++) {
       String currLib = VecAt((*libs), i);
       String buffer = F(mateState.arena, " /LIBPATH:\"%s\"", currLib.data);
-      StringBuilderAppend(mateState.arena, &builder, &buffer);
+      StringBuilderAppend(mateState.arena, &builder, buffer);
     }
   } else {
     // GCC/Clang format: -L"path"
@@ -1058,11 +1090,11 @@ static void mateAddLibraryPaths(String *targetLibs, StringVector *libs) {
       String currLib = VecAt((*libs), i);
       if (i == 0 && builder.buffer.length == 0) {
         String buffer = F(mateState.arena, "-L\"%s\"", currLib.data);
-        StringBuilderAppend(mateState.arena, &builder, &buffer);
+        StringBuilderAppend(mateState.arena, &builder, buffer);
         continue;
       }
       String buffer = F(mateState.arena, " -L\"%s\"", currLib.data);
-      StringBuilderAppend(mateState.arena, &builder, &buffer);
+      StringBuilderAppend(mateState.arena, &builder, buffer);
     }
   }
 
@@ -1073,11 +1105,11 @@ static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs) {
   StringBuilder builder = StringBuilderCreate(mateState.arena);
 
   if (isMSVC() && targetLibs->length == 0) {
-    StringBuilderAppend(mateState.arena, &builder, &S("/link"));
+    StringBuilderAppend(mateState.arena, &builder, S("/link"));
   }
 
   if (targetLibs->length) {
-    StringBuilderAppend(mateState.arena, &builder, targetLibs);
+    StringBuilderAppend(mateState.arena, &builder, *targetLibs);
   }
 
   if (isMSVC()) {
@@ -1085,7 +1117,7 @@ static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs) {
     for (size_t i = 0; i < libs->length; i++) {
       String currLib = VecAt((*libs), i);
       String buffer = F(mateState.arena, " %s.lib", currLib.data);
-      StringBuilderAppend(mateState.arena, &builder, &buffer);
+      StringBuilderAppend(mateState.arena, &builder, buffer);
     }
   } else {
     // GCC/Clang format: -llib
@@ -1093,11 +1125,11 @@ static void mateLinkSystemLibraries(String *targetLibs, StringVector *libs) {
       String currLib = VecAt((*libs), i);
       if (i == 0 && builder.buffer.length == 0) {
         String buffer = F(mateState.arena, "-l%s", currLib.data);
-        StringBuilderAppend(mateState.arena, &builder, &buffer);
+        StringBuilderAppend(mateState.arena, &builder, buffer);
         continue;
       }
       String buffer = F(mateState.arena, " -l%s", currLib.data);
-      StringBuilderAppend(mateState.arena, &builder, &buffer);
+      StringBuilderAppend(mateState.arena, &builder, buffer);
     }
   }
 
@@ -1132,18 +1164,18 @@ static void mateLinkFrameworksWithOptions(String *targetLibs, LinkFrameworkOptio
   StringBuilder builder = StringBuilderCreate(mateState.arena);
 
   if (targetLibs->length) {
-    StringBuilderAppend(mateState.arena, &builder, targetLibs);
+    StringBuilderAppend(mateState.arena, &builder, *targetLibs);
   }
 
   for (size_t i = 0; i < frameworks->length; i++) {
     String currFW = VecAt((*frameworks), i);
     if (i == 0 && builder.buffer.length == 0) {
       String buffer = F(mateState.arena, "%s %s", frameworkFlag, currFW.data);
-      StringBuilderAppend(mateState.arena, &builder, &buffer);
+      StringBuilderAppend(mateState.arena, &builder, buffer);
       continue;
     }
     String buffer = F(mateState.arena, " %s %s", frameworkFlag, currFW.data);
-    StringBuilderAppend(mateState.arena, &builder, &buffer);
+    StringBuilderAppend(mateState.arena, &builder, buffer);
   }
 
   *targetLibs = builder.buffer;
@@ -1153,8 +1185,8 @@ static void mateAddIncludePaths(String *targetIncludes, StringVector *includes) 
   StringBuilder builder = StringBuilderCreate(mateState.arena);
 
   if (targetIncludes->length) {
-    StringBuilderAppend(mateState.arena, &builder, targetIncludes);
-    StringBuilderAppend(mateState.arena, &builder, &S(" "));
+    StringBuilderAppend(mateState.arena, &builder, *targetIncludes);
+    StringBuilderAppend(mateState.arena, &builder, S(" "));
   }
 
   if (isMSVC()) {
@@ -1163,11 +1195,11 @@ static void mateAddIncludePaths(String *targetIncludes, StringVector *includes) 
       String currInclude = VecAt((*includes), i);
       if (i == 0 && builder.buffer.length == 0) {
         String buffer = F(mateState.arena, "/I\"%s\"", currInclude.data);
-        StringBuilderAppend(mateState.arena, &builder, &buffer);
+        StringBuilderAppend(mateState.arena, &builder, buffer);
         continue;
       }
       String buffer = F(mateState.arena, " /I\"%s\"", currInclude.data);
-      StringBuilderAppend(mateState.arena, &builder, &buffer);
+      StringBuilderAppend(mateState.arena, &builder, buffer);
     }
   } else {
     // GCC/Clang format: -I"path"
@@ -1175,11 +1207,11 @@ static void mateAddIncludePaths(String *targetIncludes, StringVector *includes) 
       String currInclude = VecAt((*includes), i);
       if (i == 0 && builder.buffer.length == 0) {
         String buffer = F(mateState.arena, "-I\"%s\"", currInclude.data);
-        StringBuilderAppend(mateState.arena, &builder, &buffer);
+        StringBuilderAppend(mateState.arena, &builder, buffer);
         continue;
       }
       String buffer = F(mateState.arena, " -I\"%s\"", currInclude.data);
-      StringBuilderAppend(mateState.arena, &builder, &buffer);
+      StringBuilderAppend(mateState.arena, &builder, buffer);
     }
   }
 
@@ -1192,8 +1224,8 @@ static void mateAddFrameworkPaths(String *targetIncludes, StringVector *includes
   StringBuilder builder = StringBuilderCreate(mateState.arena);
 
   if (targetIncludes->length) {
-    StringBuilderAppend(mateState.arena, &builder, targetIncludes);
-    StringBuilderAppend(mateState.arena, &builder, &S(" "));
+    StringBuilderAppend(mateState.arena, &builder, *targetIncludes);
+    StringBuilderAppend(mateState.arena, &builder, S(" "));
   }
 
   // GCC/Clang format: -F"path"
@@ -1201,11 +1233,11 @@ static void mateAddFrameworkPaths(String *targetIncludes, StringVector *includes
     String currInclude = VecAt((*includes), i);
     if (i == 0 && builder.buffer.length == 0) {
       String buffer = F(mateState.arena, "-F\"%s\"", currInclude.data);
-      StringBuilderAppend(mateState.arena, &builder, &buffer);
+      StringBuilderAppend(mateState.arena, &builder, buffer);
       continue;
     }
     String buffer = F(mateState.arena, " -F\"%s\"", currInclude.data);
-    StringBuilderAppend(mateState.arena, &builder, &buffer);
+    StringBuilderAppend(mateState.arena, &builder, buffer);
   }
 
   *targetIncludes = builder.buffer;
@@ -1249,24 +1281,24 @@ static FlagBuilder mateFlagBuilderReserve(size_t count) {
 }
 
 void FlagBuilderAddString(FlagBuilder *builder, String *flag) {
-  StringBuilderAppend(mateState.arena, builder, flag);
+  StringBuilderAppend(mateState.arena, builder, *flag);
 }
 
 static void mateFlagBuilderAdd(FlagBuilder *builder, StringVector flags) {
   size_t count = 0;
   if (mateState.compiler == MSVC) {
-    String *first = VecAtPtr(flags, 0);
-    Assert(first->data[0] != '/', "FlagBuilderAdd: failed, flag should not contain /, e.g usage FlagBuilderAdd(\"W4\")");
+    String first = VecAt(flags, 0);
+    Assert(first.data[0] != '/', "FlagBuilderAdd: failed, flag should not contain /, e.g usage FlagBuilderAdd(\"W4\")");
 
     if (builder->buffer.length == 0) {
-      StringBuilderAppend(mateState.arena, builder, &S("/"));
+      StringBuilderAppend(mateState.arena, builder, S("/"));
       StringBuilderAppend(mateState.arena, builder, first);
       count = 1;
     }
 
     for (size_t i = count; i < flags.length; i++) {
-      StringBuilderAppend(mateState.arena, builder, &S(" /"));
-      StringBuilderAppend(mateState.arena, builder, VecAtPtr(flags, i));
+      StringBuilderAppend(mateState.arena, builder, S(" /"));
+      StringBuilderAppend(mateState.arena, builder, VecAt(flags, i));
     }
     return;
   }
@@ -1275,14 +1307,14 @@ static void mateFlagBuilderAdd(FlagBuilder *builder, StringVector flags) {
   Assert(first->data[0] != '-', "FlagBuilderAdd: failed, flag should not contain -, e.g usage FlagBuilderAdd(\"Wall\")");
 
   if (builder->buffer.length == 0) {
-    StringBuilderAppend(mateState.arena, builder, &S("-"));
-    StringBuilderAppend(mateState.arena, builder, VecAtPtr(flags, 0));
+    StringBuilderAppend(mateState.arena, builder, S("-"));
+    StringBuilderAppend(mateState.arena, builder, VecAt(flags, 0));
     count = 1;
   }
 
   for (size_t i = count; i < flags.length; i++) {
-    StringBuilderAppend(mateState.arena, builder, &S(" -"));
-    StringBuilderAppend(mateState.arena, builder, VecAtPtr(flags, i));
+    StringBuilderAppend(mateState.arena, builder, S(" -"));
+    StringBuilderAppend(mateState.arena, builder, VecAt(flags, i));
   }
 }
 
