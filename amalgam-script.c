@@ -1,4 +1,3 @@
-// NOTE: Run simply with `./scripts/run-amalgam.sh`
 #define BASE_IMPLEMENTATION
 #include "vendor/base/base.h"
 
@@ -8,9 +7,9 @@ typedef struct {
   String buffer;
 } FileResult;
 
-String resultPath = S("./mate.h");
+String result_path = S("./mate.h");
 
-static FileResult readSource(String path) {
+static FileResult read_source(String path) {
   FileResult result = {0};
   errno_t err = FileStats(path, &result.stats);
   if (err != SUCCESS) {
@@ -28,153 +27,173 @@ static FileResult readSource(String path) {
   return result;
 }
 
-// NOTE: Set file empty before writing
-static void resetAmalgamFile(void) {
-  errno_t err = FileWrite(resultPath, S(""));
+static void reset_amalgam_file(void) {
+  errno_t err = FileWrite(result_path, S(""));
   if (err != SUCCESS) {
     LogError("Error on FileWrite: %d", err);
   }
 }
 
-static String escapeString(Arena *arena, String *str) {
+static String escape_string(Arena *arena, String *str) {
   if (str->length == 0) {
     return S("");
   }
 
   char *buffer = ArenaAlloc(arena, str->length * 2);
-  size_t bufferIndex = 0;
+  size_t buffer_index = 0;
 
   for (size_t i = 0; i < str->length; i++) {
     char c = str->data[i];
 
     switch (c) {
     case '\\':
-      buffer[bufferIndex++] = '\\';
-      buffer[bufferIndex++] = '\\';
+      buffer[buffer_index++] = '\\';
+      buffer[buffer_index++] = '\\';
       break;
     case '"':
-      buffer[bufferIndex++] = '\\';
-      buffer[bufferIndex++] = '"';
+      buffer[buffer_index++] = '\\';
+      buffer[buffer_index++] = '"';
       break;
     case '\n':
-      buffer[bufferIndex++] = '\\';
-      buffer[bufferIndex++] = 'n';
+      buffer[buffer_index++] = '\\';
+      buffer[buffer_index++] = 'n';
       break;
     case '\r':
-      buffer[bufferIndex++] = '\\';
-      buffer[bufferIndex++] = 'r';
+      buffer[buffer_index++] = '\\';
+      buffer[buffer_index++] = 'r';
       break;
     case '\t':
-      buffer[bufferIndex++] = '\\';
-      buffer[bufferIndex++] = 't';
+      buffer[buffer_index++] = '\\';
+      buffer[buffer_index++] = 't';
       break;
     default:
-      buffer[bufferIndex++] = c;
+      buffer[buffer_index++] = c;
       break;
     }
   }
 
   String result;
   result.data = buffer;
-  result.length = bufferIndex;
+  result.length = buffer_index;
   return result;
 }
 
+Arena *builder_arena;
+StringBuilder builder;
+#define SB_STR(str)                                       \
+  do {                                                     \
+    StringBuilderAppend(builder_arena, &builder, S(str));  \
+    StringBuilderAppend(builder_arena, &builder, S("\n")); \
+  } while (0)
+#define SB_VAR(var)                                       \
+  do {                                                     \
+    StringBuilderAppend(builder_arena, &builder, var);     \
+    StringBuilderAppend(builder_arena, &builder, S("\n")); \
+  } while (0)
+
 i32 main(void) {
-  resetAmalgamFile();
+  reset_amalgam_file();
 
-  // NOTE: Sources
-  FileResult apiHeader = readSource(S("./src/api.h"));
-  FileResult apiImp = readSource(S("./src/api.c"));
-  FileResult vendorBase = readSource(S("./vendor/base/base.h"));
-  FileResult samuraiSource = readSource(S("./vendor/samurai/samurai.c"));
+  FileResult api_header = read_source(S("./src/api.h"));
+  FileResult api_impl = read_source(S("./src/api.c"));
+  FileResult vendor_base = read_source(S("./vendor/base/base.h"));
+  FileResult samurai_source = read_source(S("./vendor/samurai/samurai.c"));
 
-  Arena *arena = ArenaCreate((apiHeader.stats.size * 2) + (apiImp.stats.size * 2) + (vendorBase.stats.size * 2) + (samuraiSource.stats.size * 2));
+  size_t total_size = (api_header.stats.size + api_impl.stats.size + vendor_base.stats.size + samurai_source.stats.size) * 2;
+  Arena *arena = ArenaCreate(total_size);
+  builder_arena = ArenaCreate(total_size);
+  builder = StringBuilderReserve(builder_arena, total_size);
 
-  StringVector apiHeaderSplit = StrSplitNewLine(arena, apiHeader.buffer);
-  StringVector apiImpSplit = StrSplitNewLine(arena, apiImp.buffer);
-  StringVector vendorBaseSplit = StrSplitNewLine(arena, vendorBase.buffer);
-  StringVector samuraiSourceSplit = StrSplitNewLine(arena, samuraiSource.buffer);
+  StringVector api_header_split = StrSplitNewLine(arena, api_header.buffer);
+  StringVector api_impl_split = StrSplitNewLine(arena, api_impl.buffer);
+  StringVector vendor_base_split = StrSplitNewLine(arena, vendor_base.buffer);
+  StringVector samurai_source_split = StrSplitNewLine(arena, samurai_source.buffer);
 
-  String delimiterBase = S("#include \"../vendor/base/base.h\"");
-  String delimiterMate = S("// --- MATE.H END ---");
-  String samuraiMacro = S("#define SAMURAI_AMALGAM \"SAMURAI SOURCE\"");
-  VecForEach(apiHeaderSplit, currLine) {
-    if (StrEq(*currLine, delimiterBase)) {
-      FileAdd(resultPath, S("// --- BASE.H START ---"));
+  String delim_base = S("#include \"../vendor/base/base.h\"");
+  String delim_mate = S("// --- MATE.H END ---");
+  String samurai_macro = S("#define SAMURAI_AMALGAM \"SAMURAI SOURCE\"");
+  VecForEach(api_header_split, api_header_curr_line) {
+    if (StrEq(*api_header_curr_line, delim_base)) {
+      SB_STR("// --- BASE.H START ---");
 
-      String pragmaOnce = S("#pragma once");
-      for (size_t j = 0; j < vendorBaseSplit.length; j++) {
-        String currLine = VecAt(vendorBaseSplit, j);
-        if (StrEq(currLine, pragmaOnce)) {
+      String pragma_once = S("#pragma once");
+      for (size_t j = 0; j < vendor_base_split.length; j++) {
+        String curr_line = VecAt(vendor_base_split, j);
+        if (StrEq(curr_line, pragma_once)) {
           continue;
         }
-        FileAdd(resultPath, currLine);
+        SB_VAR(curr_line);
       }
 
-      FileAdd(resultPath, S("// --- BASE.H END ---"));
+      SB_STR("// --- BASE.H END ---");
       continue;
     }
 
-    if (StrEq(*currLine, delimiterMate)) {
-      String implementationComment = S("/* MIT License\n"
+    if (StrEq(*api_header_curr_line, delim_mate)) {
+      String impl_comment = S("/* MIT License\n"
                                        "   mate.h - Mate Implementations start here\n"
                                        "   Guide on the `README.md`\n"
                                        "*/");
-      String mateImplementationStart = S("#ifdef MATE_IMPLEMENTATION");
-      FileAdd(resultPath, implementationComment);
-      FileAdd(resultPath, mateImplementationStart);
+      String mate_impl_start = S("#ifdef MATE_IMPLEMENTATION");
+      SB_VAR(impl_comment);
+      SB_VAR(mate_impl_start);
 
-      for (size_t j = 2; j < apiImpSplit.length; j++) {
-        String currLine = VecAt(apiImpSplit, j);
-        FileAdd(resultPath, currLine);
+      for (size_t j = 2; j < api_impl_split.length; j++) {
+        String curr_line = VecAt(api_impl_split, j);
+        SB_VAR(curr_line);
       }
 
-      FileAdd(resultPath, S("#endif"));
-      FileAdd(resultPath, S("// --- MATE.H END ---"));
+      SB_STR("#endif");
+      SB_STR("// --- MATE.H END ---");
       continue;
     }
 
-    if (StrEq(*currLine, samuraiMacro)) {
-      FileAdd(resultPath, S("// clang-format off"));
-      FileAdd(resultPath, S("// --- SAMURAI START ---"));
-      FileAdd(resultPath, S("/* This code comes from Samurai (https://github.com/michaelforney/samurai)"));
-      FileAdd(resultPath, S("*  Copyright © 2017-2021 Michael Forney"));
-      FileAdd(resultPath, S("*  Licensed under ISC license, with portions under Apache License 2.0 and MIT licenses."));
-      FileAdd(resultPath, S("*  See LICENSE-SAMURAI.txt for the full license text."));
-      FileAdd(resultPath, S("*/"));
-      for (size_t j = 0; j < samuraiSourceSplit.length; j++) {
-        String currLine = VecAt(samuraiSourceSplit, j);
+    if (StrEq(*api_header_curr_line, samurai_macro)) {
+      SB_STR("// clang-format off");
+      SB_STR("// --- SAMURAI START ---");
+      SB_STR("/* This code comes from Samurai (https://github.com/michaelforney/samurai)");
+      SB_STR("*  Copyright © 2017-2021 Michael Forney");
+      SB_STR("*  Licensed under ISC license, with portions under Apache License 2.0 and MIT licenses.");
+      SB_STR("*  See LICENSE-SAMURAI.txt for the full license text.");
+      SB_STR("*/");
+      for (size_t j = 0; j < samurai_source_split.length; j++) {
+        String curr_line = VecAt(samurai_source_split, j);
 
         if (j == 0) {
-          String firstLine = F(arena, "#define SAMURAI_AMALGAM \"%s\\n\"  \\", currLine.data);
-          FileAdd(resultPath, firstLine);
+          String first_line = F(arena, "#define SAMURAI_AMALGAM \"%s\\n\"  \\", curr_line.data);
+          SB_VAR(first_line);
           continue;
         }
 
-        if (j == samuraiSourceSplit.length - 1) {
-          String escapedLine = escapeString(arena, &currLine);
-          String lastLine = F(arena, "            \"%s\"", escapedLine.data);
-          FileAdd(resultPath, lastLine);
+        if (j == samurai_source_split.length - 1) {
+          String escaped_line = escape_string(arena, &curr_line);
+          String last_line = F(arena, "            \"%s\"", escaped_line.data);
+          SB_VAR(last_line);
           continue;
         }
 
-        if (currLine.length == 0 || (currLine.data[0] == '/' && currLine.data[1] == '/')) {
+        if (curr_line.length == 0 || (curr_line.data[0] == '/' && curr_line.data[1] == '/')) {
           continue;
         }
 
-        String escapedLine = escapeString(arena, &currLine);
-        String middleLine = F(arena, "            \"%s\\n\"\\", escapedLine.data);
-        FileAdd(resultPath, middleLine);
+        String escaped_line = escape_string(arena, &curr_line);
+        String middle_line = F(arena, "            \"%s\\n\"\\", escaped_line.data);
+        SB_VAR(middle_line);
       }
 
-      FileAdd(resultPath, S("// --- SAMURAI END ---"));
-      FileAdd(resultPath, S("// clang-format on"));
+      SB_STR("// --- SAMURAI END ---");
+      SB_STR("// clang-format on");
       continue;
     }
 
-    FileAdd(resultPath, *currLine);
+    SB_VAR(*api_header_curr_line);
   }
 
-  LogSuccess("Successfully created amalgam %s", resultPath.data);
+  FileWriteError result = FileWrite(result_path, builder.buffer);
+  if (result != 0) {
+    LogError("FileWrite on path %s, failed with error %d", result_path.data, result);
+    return -result;
+  }
+
+  LogSuccess("created amalgam %s", result_path.data);
 }

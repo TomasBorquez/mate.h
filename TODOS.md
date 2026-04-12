@@ -15,14 +15,14 @@
 - [x] Make all macros safe -> `()`
 - [x] Scripts for tests are pretty bad, fix them
 - [x] Header Dependency check
+- [x] Add `MacOS` support (does work well atm)
 - [x] Remove CPP support on mate.h
-- [ ] ^ Add ability to compile with g++ and other c/cpp compilers
+- [x] Amalgamation should be done on a buffer and then create a file
+- [ ] Add ability to compile with g++ and other c/cpp compilers
 - [ ] Path handling is pretty ugly, improve it
-- [ ] Amalgamation should be done on a buffer and then create a file
 - [ ] Add `args` parser
 - [ ] Shared libs
 - [ ] `LinkStaticLib()` for linking another `StaticLib`
-- [ ] Add `MacOS` support (does work well atm)
 
 #### Examples
 - [ ] Show how to use FS functions `FileWrite`, `FileDelete`, etc.
