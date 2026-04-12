@@ -848,8 +848,11 @@ static void mateInstallExecutable(Executable *executable) {
     StringBuilderAppend(mateState.arena, &builder, S(" /showIncludes /c $in /Fo:$out\n"));
     StringBuilderAppend(mateState.arena, &builder, S("  deps = msvc\n\n"));
   } else {
-    StringBuilderAppend(mateState.arena, &builder, S(" -c $in -o $out -MMD -MF $depfile\n"));
+    if (mateState.compiler == TCC) {
+      StringBuilderAppend(mateState.arena, &builder, S(" -c $in -o $out\n"));
+    }
     if (mateState.compiler == GCC || mateState.compiler == CLANG) {
+      StringBuilderAppend(mateState.arena, &builder, S(" -c $in -o $out -MMD -MF $depfile\n"));
       StringBuilderAppend(mateState.arena, &builder, S("  depfile = $depfile\n"));
       StringBuilderAppend(mateState.arena, &builder, S("  deps = "));
       StringBuilderAppend(mateState.arena, &builder, compiler);
@@ -989,8 +992,12 @@ static void mateInstallStaticLib(StaticLib *staticLib) {
   if (staticLib->includes.length > 0) {
     StringBuilderAppend(mateState.arena, &builder, S(" $includes"));
   }
-  StringBuilderAppend(mateState.arena, &builder, S(" -c $in -o $out -MMD -MF $depfile\n"));
+
+  if (mateState.compiler == TCC) {
+    StringBuilderAppend(mateState.arena, &builder, S(" -c $in -o $out\n"));
+  }
   if (mateState.compiler == GCC || mateState.compiler == CLANG) {
+    StringBuilderAppend(mateState.arena, &builder, S(" -c $in -o $out -MMD -MF $depfile\n"));
     StringBuilderAppend(mateState.arena, &builder, S("  depfile = $depfile\n"));
     StringBuilderAppend(mateState.arena, &builder, S("  deps = "));
     StringBuilderAppend(mateState.arena, &builder, compiler);
