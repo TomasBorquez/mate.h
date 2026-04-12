@@ -6470,9 +6470,7 @@ static void mateInstallExecutable(Executable *executable) {
     if (mateState.compiler == GCC || mateState.compiler == CLANG) {
       StringBuilderAppend(mateState.arena, &builder, S(" -c $in -o $out -MMD -MF $depfile\n"));
       StringBuilderAppend(mateState.arena, &builder, S("  depfile = $depfile\n"));
-      StringBuilderAppend(mateState.arena, &builder, S("  deps = "));
-      StringBuilderAppend(mateState.arena, &builder, compiler);
-      StringBuilderAppend(mateState.arena, &builder, S("\n"));
+      StringBuilderAppend(mateState.arena, &builder, S("  deps = gcc\n")); // INFO: since clang replicates this
     }
     StringBuilderAppend(mateState.arena, &builder, S("\n"));
   }
@@ -6615,9 +6613,7 @@ static void mateInstallStaticLib(StaticLib *staticLib) {
   if (mateState.compiler == GCC || mateState.compiler == CLANG) {
     StringBuilderAppend(mateState.arena, &builder, S(" -c $in -o $out -MMD -MF $depfile\n"));
     StringBuilderAppend(mateState.arena, &builder, S("  depfile = $depfile\n"));
-    StringBuilderAppend(mateState.arena, &builder, S("  deps = "));
-    StringBuilderAppend(mateState.arena, &builder, compiler);
-    StringBuilderAppend(mateState.arena, &builder, S("\n"));
+    StringBuilderAppend(mateState.arena, &builder, S("  deps = gcc\n")); // INFO: since clang replicates this
   }
   StringBuilderAppend(mateState.arena, &builder, S("\n"));
 
