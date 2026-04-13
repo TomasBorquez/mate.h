@@ -5657,7 +5657,7 @@ static void mate_read_cache(void) {
   }
 
 #if defined(PLATFORM_WIN)
-  if (mateState.mateCache.firstBuild) {
+  if (mate_state.mate_cache.first_build) {
     errno_t ninjaCheck = RunCommand(S("ninja --version > nul 2> nul"));
     Assert(ninjaCheck == SUCCESS, "MateReadCache: Ninja build system not found. Please install Ninja and add it to your PATH.");
   }
@@ -6244,7 +6244,7 @@ static void mate_install_executable(Executable *executable) {
   mate_state.total_time = TimeNow() - mate_state.start_time;
 
 #if defined(PLATFORM_WIN)
-  executable->outputPath = F(mateState.arena, "%s\\%s", mateState.buildDirectory.data, executable->output.data);
+  executable->outputPath = F(mate_state.arena, "%s\\%s", mate_state.build_directory.data, executable->output.data);
 #else
   executable->outputPath = F(mate_state.arena, "%s/%s", mate_state.build_directory.data, executable->output.data);
 #endif
@@ -6387,7 +6387,7 @@ static void mate_install_static_lib(StaticLib *staticLib) {
   mate_state.total_time = TimeNow() - mate_state.start_time;
 
 #if defined(PLATFORM_WIN)
-  staticLib->outputPath = F(mateState.arena, "%s\\%s", mateState.buildDirectory.data, staticLib->output.data);
+  staticLib->outputPath = F(mate_state.arena, "%s\\%s", mate_state.build_directory.data, staticLib->output.data);
 #else
   staticLib->outputPath = F(mate_state.arena, "%s/%s", mate_state.build_directory.data, staticLib->output.data);
 #endif
@@ -6657,7 +6657,7 @@ static bool mate_is_valid_executable(String *exePath) {
 static String mate_fix_path_exe(String str) {
   String path = NormalizeExePath(mate_state.arena, str);
 #if defined(PLATFORM_WIN)
-  return F(mateState.arena, "%s\\%s", GetCwd(), path.data);
+  return F(mate_state.arena, "%s\\%s", GetCwd(), path.data);
 #else
   return F(mate_state.arena, "%s/%s", GetCwd(), path.data);
 #endif
@@ -6666,7 +6666,7 @@ static String mate_fix_path_exe(String str) {
 static String mate_fix_path(String str) {
   String path = NormalizePath(mate_state.arena, str);
 #if defined(PLATFORM_WIN)
-  return F(mateState.arena, "%s\\%s", GetCwd(), path.data);
+  return F(mate_state.arena, "%s\\%s", GetCwd(), path.data);
 #else
   return F(mate_state.arena, "%s/%s", GetCwd(), path.data);
 #endif
@@ -6674,7 +6674,7 @@ static String mate_fix_path(String str) {
 
 static String mate_convert_ninja_path(String str) {
 #if defined(PLATFORM_WIN)
-  String copy = StrNewSize(mateState.arena, str.data, str.length + 1);
+  String copy = StrNewSize(mate_state.arena, str.data, str.length + 1);
   memmove(&copy.data[2], &copy.data[1], str.length - 1);
   copy.data[1] = '$';
   copy.data[2] = ':';
