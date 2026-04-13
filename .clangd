@@ -1,6 +1,6 @@
 CompileFlags:
   Add: [
-    -std=c99, -Wpedantic, -pedantic-errors,
+    -xc, -std=c99, -Wpedantic, -pedantic-errors,
     -Wall, -Wextra, -Waggregate-return, -Wbad-function-cast, 
     -Wcast-align, -Wcast-qual, -Wfloat-equal, -Wformat=2, 
     -Wlogical-op, -Wmissing-declarations,
@@ -12,5 +12,6 @@ CompileFlags:
     -Wunused-but-set-parameter, -Wwrite-strings,
 
     -Wno-macro-redefined, -Wno-incompatible-pointer-types-discards-qualifiers,
+    -Wno-unused-function,
     -DBASE_IMPLEMENTATION, -DMATE_IMPLEMENTATION
   ]

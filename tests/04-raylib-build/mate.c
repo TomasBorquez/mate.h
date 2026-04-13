@@ -39,8 +39,12 @@ i32 main(void) {
     }
 
     InstallExecutable(executable);
-    RunCommand(executable.outputPath);
-    CreateCompileCommands(executable);
+    errno_t errExe = RunCommand(executable.outputPath);
+    if (errExe != SUCCESS) {
+      LogError("Running the executable failed with err: %d", errExe);
+    }
+    errno_t errCompileCmd = CreateCompileCommands(executable);
+    Assert(errCompileCmd == SUCCESS, "Failed errCompileCmd should be SUCCESS");
   }
   EndBuild();
 }

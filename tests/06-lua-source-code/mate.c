@@ -25,7 +25,7 @@ i32 main(void) {
     RemoveFile(staticLib, "./src/lua.c");
     RemoveFile(staticLib, "./src/onelua.c");
 
-    mateInstallStaticLib(&staticLib);
+    InstallStaticLib(staticLib);
 
     Executable executable = CreateExecutable((ExecutableOptions){.output = "lua", .std = FLAG_STD_C99, .warnings = FLAG_WARNINGS_NONE, .flags = GetCFlags()});
     AddFile(executable, "./src/lua.c");
@@ -38,7 +38,7 @@ i32 main(void) {
 
     InstallExecutable(executable);
 
-    errno_t errExe = RunCommand(F(mateState.arena, "%s -e \"os.exit(69)\"", executable.outputPath.data));
+    errno_t errExe = RunCommand(F(mate_state.arena, "%s -e \"os.exit(69)\"", executable.outputPath.data));
     errno_t errCompileCommands = CreateCompileCommands(executable);
     Assert(errExe == 69 && errCompileCommands == SUCCESS, "Failed, errExe equal %d should be 69, errCompileCommands equal %d should be SUCCESS", errExe, errCompileCommands);
   }

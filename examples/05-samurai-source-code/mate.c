@@ -15,18 +15,10 @@ i32 main(void) {
       AddFile(executable, "./src/deps.c");
       AddFile(executable, "./src/env.c");
       AddFile(executable, "./src/graph.c");
-      AddFile(executable, "./src/htab.c");
-      AddFile(executable, "./src/log.c");
-      AddFile(executable, "./src/parse.c");
-      AddFile(executable, "./src/samu.c");
-      AddFile(executable, "./src/scan.c");
-      AddFile(executable, "./src/tool.c");
-      AddFile(executable, "./src/tree.c");
-      AddFile(executable, "./src/util.c");
-      AddFile(executable, "./src/os-posix.c");
+      ...
     */
 
-    // Or this
+    // Or use this wildcard
     AddFile(executable, "./src/*.c");
 
     if (isLinux()) {

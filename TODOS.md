@@ -1,6 +1,11 @@
 # [TODOS](https://github.com/TomasBorquez/mate.h/issues/9)
 
 ## v0.3
+- [ ] Make flags OR values
+- [ ] Add ability to compile with g++ and other c/cpp compilers
+- [ ] Minify samurai output file
+- [ ] Add `args` parser
+- [ ] Shared libs
 - [ ] Make `samurai` windows compatible
 - [ ] Full `MSVC` support on static/shared libs
 - [ ] `InstallHeader()`
@@ -18,11 +23,16 @@
 - [x] Add `MacOS` support (does work well atm)
 - [x] Remove CPP support on mate.h
 - [x] Amalgamation should be done on a buffer and then create a file
-- [ ] Add ability to compile with g++ and other c/cpp compilers
+- [x] Simplify Default flag creation
+- [x] snake_case for local names, PascalCase for public funcs, camelCase for public struct members
+- [x] Remove unnecessary functions
+- [ ] RunCommandF for running commands with formatting
+- [ ] Add Asan flags
+- [ ] Look to not create new strings on heap when not necessary
+- [ ] Simplify StringBuilderAppend pattern
 - [ ] Path handling is pretty ugly, improve it
-- [ ] Add `args` parser
-- [ ] Shared libs
 - [ ] `LinkStaticLib()` for linking another `StaticLib`
+- [ ] Output should be able to have path and should be parsed out of `ExecutableOptions/StaticLibOptions`
 
 #### Examples
 - [ ] Show how to use FS functions `FileWrite`, `FileDelete`, etc.
