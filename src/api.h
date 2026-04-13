@@ -277,6 +277,8 @@ static bool mate_global_match(String pattern, String text);
 
 /* --- Utils --- */
 WARN_UNUSED errno_t RunCommand(String command);
+#define RunCommandF(format, ...) RunCommand(F(mate_state.arena, format, __VA_ARGS__))
+
 String CompilerToStr(Compiler compiler);
 
 bool isMSVC(void);

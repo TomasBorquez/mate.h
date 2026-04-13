@@ -38,9 +38,9 @@ i32 main(void) {
 
     InstallExecutable(executable);
 
-    errno_t errExe = RunCommand(F(mate_state.arena, "%s -e \"os.exit(69)\"", executable.outputPath.data));
-    errno_t errCompileCommands = CreateCompileCommands(executable);
-    Assert(errExe == 69 && errCompileCommands == SUCCESS, "Failed, errExe equal %d should be 69, errCompileCommands equal %d should be SUCCESS", errExe, errCompileCommands);
+    errno_t errExe = RunCommandF("%s -e \"os.exit(69)\"", executable.outputPath.data);
+    errno_t errCompileCmd = CreateCompileCommands(executable);
+    Assert(errExe == 69 && errCompileCmd == SUCCESS, "Failed, errExe equal %d should be 69, errCompileCommands equal %d should be SUCCESS", errExe, errCompileCmd);
   }
   EndBuild();
 }

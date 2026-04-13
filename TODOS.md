@@ -26,13 +26,14 @@
 - [x] Simplify Default flag creation
 - [x] snake_case for local names, PascalCase for public funcs, camelCase for public struct members
 - [x] Remove unnecessary functions
-- [ ] RunCommandF for running commands with formatting
+- [x] RunCommandF for running commands with formatting
 - [ ] Add Asan flags
 - [ ] Look to not create new strings on heap when not necessary
 - [ ] Simplify StringBuilderAppend pattern
 - [ ] Path handling is pretty ugly, improve it
 - [ ] `LinkStaticLib()` for linking another `StaticLib`
 - [ ] Output should be able to have path and should be parsed out of `ExecutableOptions/StaticLibOptions`
+- [ ] Proper cleanup
 
 #### Examples
 - [ ] Show how to use FS functions `FileWrite`, `FileDelete`, etc.

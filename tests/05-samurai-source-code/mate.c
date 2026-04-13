@@ -23,8 +23,8 @@ i32 main(void) {
 
     InstallExecutable(executable);
 
-    errno_t err = RunCommand(F(mate_state.arena, "%s -version", executable.outputPath.data));
-    Assert(err == SAMU_VERSION_OUTPUT, "RunCommand: failed output did not equal SAMU_VERSION_OUTPUT");
+    errno_t errExe = RunCommandF("%s -version", executable.outputPath.data);
+    Assert(errExe == SAMU_VERSION_OUTPUT, "RunCommand: failed output did not equal SAMU_VERSION_OUTPUT");
   }
   EndBuild();
 }

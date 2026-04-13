@@ -39,6 +39,7 @@ i32 main(void) {
     }
 
     InstallExecutable(executable);
+
     errno_t errExe = RunCommand(executable.outputPath);
     if (errExe != SUCCESS) {
       LogError("Running the executable failed with err: %d", errExe);
