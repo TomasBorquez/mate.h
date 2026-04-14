@@ -40,9 +40,9 @@ typedef struct {
   String ninjaBuildPath;
 
   String flags;
-  String arFlags;
   String libs;
   String includes;
+  String arFlags;
   StringVector sources;
 } StaticLib;
 
@@ -52,25 +52,22 @@ typedef struct {
   String ninjaBuildPath;
 
   String flags;
-  String linkerFlags;
   String libs;
   String includes;
+  String linkerFlags;
   StringVector sources;
 } Executable;
 
 typedef struct {
   Compiler compiler;
 
-  // Paths
   String build_directory;
   String mate_source;
   String mate_exe;
 
-  // Cache
   MateCache mate_cache;
   IniFile cache;
 
-  // Misc
   Arena *arena;
   bool init_config;
 
@@ -108,38 +105,46 @@ typedef enum {
 } FlagSTD;
 
 typedef enum {
-  FLAG_ERROR = 0, // -fdiagnostics-color=always
+  FLAG_SANITIZER_ADDRESS = 1, // fsanitize=address
+  FLAG_SANITIZER_UB,          // fsanitize=undefined
+  FLAG_SANITIZER,             // fsanitize=address,undefined
+} FlagSanitizer;
+
+typedef enum {
+  FLAG_ERROR,     // -fdiagnostics-color=always
   FLAG_ERROR_MAX  // -fdiagnostics-color=always -fcolor-diagnostics ...
 } FlagErrorFormat;
 
 typedef struct {
   char *output; // WARNING: Required
   char *flags;
-  char *linker_flags;
-  char *includes;
-  char *libs;
 
-  // NOTE: Flag options
-  FlagSTD std;
-  FlagDebug debug;
+  char *libs;
+  char *includes;
+  char *linkerFlags;
+
   FlagWarnings warnings;
-  FlagErrorFormat error;
+  FlagDebug debug;
   FlagOptimization optimization;
+  FlagSTD std;
+  FlagSanitizer sanitizer;
+  FlagErrorFormat error;
 } ExecutableOptions;
 
 typedef struct {
   char *output; // WARNING: Required
   char *flags;
-  char *arFlags;
-  char *includes;
-  char *libs;
 
-  // NOTE: Flag options
-  FlagSTD std;
-  FlagDebug debug;
+  char *libs;
+  char *includes;
+  char *arFlags;
+
   FlagWarnings warnings;
-  FlagErrorFormat error;
+  FlagDebug debug;
   FlagOptimization optimization;
+  FlagSTD std;
+  FlagSanitizer sanitizer;
+  FlagErrorFormat error;
 } StaticLibOptions;
 
 typedef enum { NONE = 0, NEEDED, WEAK } LinkFrameworkOptions;
@@ -239,7 +244,7 @@ static void mate_add_file(StringVector *sources, String source);
 #define AddFiles(target, files)                                                                           \
   do {                                                                                                    \
     Assert(sizeof(files) != sizeof(*(files)), "AddFiles: failed, files must be an array, not a pointer"); \
-    mate_add_files(&(target).sources, files, sizeof(files) / sizeof(*(files)));                             \
+    mate_add_files(&(target).sources, files, sizeof(files) / sizeof(*(files)));                           \
   } while (0);
 static void mate_add_files(StringVector *sources, char **source, size_t size);
 
@@ -250,23 +255,12 @@ static bool mate_remove_file(StringVector *sources, String source);
 StringBuilder FlagBuilderCreate(void);
 FlagBuilder FlagBuilderReserve(size_t count);
 
-#define FlagBuilderAdd(builder, ...)           \
-  do {                                         \
-    StringVector _flags = {0};                 \
-    StringVectorPushMany(_flags, __VA_ARGS__); \
-    mate_flag_builder_add(builder, _flags);       \
-                                               \
-    /* Cleanup */                              \
-    VecFree(_flags);                           \
-  } while (0)
-
-/* --- Path Utils --- */
-static void mate_flag_builder_add(FlagBuilder *builder, StringVector flags);
-static void mate_flag_builder_add_single(FlagBuilder *builder, char *flag);
-static void mate_flag_builder_add_string(FlagBuilder *builder, String *flag);
+#define FlagBuilderAdd(builder, ...) mate_flag_builder_add_list(builder, (char *[]){__VA_ARGS__, NULL})
+static void mate_flag_builder_add_string(FlagBuilder *builder, char *flag);
 static void mate_flag_builder_add_list(FlagBuilder *fb, char **flags);
 
-static bool mate_is_valid_executable(String *exePath);
+/* --- Path Utils --- */
+static bool mate_is_valid_output(String output);
 
 static String mate_fix_path(String str);
 static String mate_fix_path_exe(String str);

@@ -2,6 +2,8 @@
 
 ## v0.3
 - [ ] Make flags OR values
+- [ ] `LinkStaticLib()` for linking another `StaticLib`
+- [ ] Add better error messages with different colors for examples
 - [ ] Add ability to compile with g++ and other c/cpp compilers
 - [ ] Minify samurai output file
 - [ ] Add `args` parser
@@ -27,12 +29,23 @@
 - [x] snake_case for local names, PascalCase for public funcs, camelCase for public struct members
 - [x] Remove unnecessary functions
 - [x] RunCommandF for running commands with formatting
-- [ ] Add Asan flags
-- [ ] Look to not create new strings on heap when not necessary
+- [x] Add Asan flags
+- [x] Look to not create new strings on heap when not necessary
+    - [x] StrNew
+    - [x] StrNewSize
+- [ ] Avoid using StringVector for simple stuff instead use __VA_ARGS__
+    - [ ] AddLibraryPaths
+    - [ ] LinkSystemLibraries
+    - [ ] LinkFrameworks
+    - [ ] LinkFrameworksWithOptions
+    - [ ] AddIncludePaths
+    - [ ] AddFrameworkPaths
+    - [ ] AddFile/AddFiles should just be one
 - [ ] Simplify StringBuilderAppend pattern
+    - [ ] F() -> StringBuilderAppendF with custom fast formatting
+    - [ ] Macro for less verbosity like in amalgam-script
+- [ ] Add cleaner build messages in ninja like cmake does
 - [ ] Path handling is pretty ugly, improve it
-- [ ] `LinkStaticLib()` for linking another `StaticLib`
-- [ ] Output should be able to have path and should be parsed out of `ExecutableOptions/StaticLibOptions`
 - [ ] Proper cleanup
 
 #### Examples

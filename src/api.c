@@ -10,28 +10,16 @@ static void mate_set_default_state(void) {
   mate_state.mate_exe = mate_fix_path_exe(S("./mate"));
   mate_state.mate_source = mate_fix_path(S("./mate.c"));
   mate_state.build_directory = mate_fix_path(S("./build"));
-}
 
-static MateConfig mate_parse_mate_config(MateOptions options) {
-  MateConfig result = {0};
-  result.compiler = options.compiler;
-  result.mate_exe = StrNew(mate_state.arena, options.mateExe);
-  result.mate_source = StrNew(mate_state.arena, options.mateSource);
-  result.build_directory = StrNew(mate_state.arena, options.buildDirectory);
-  return result;
+  mate_state.init_config = true;
 }
 
 void CreateConfig(MateOptions options) {
   mate_set_default_state();
-  MateConfig config = mate_parse_mate_config(options);
-
-  if (config.compiler != 0) mate_state.compiler = config.compiler;
-
-  if (!StrIsNull(config.mate_exe)) mate_state.mate_exe = mate_fix_path_exe(config.mate_exe);
-  if (!StrIsNull(config.mate_source)) mate_state.mate_source = mate_fix_path(config.mate_source);
-  if (!StrIsNull(config.build_directory)) mate_state.build_directory = mate_fix_path(config.build_directory);
-
-  mate_state.init_config = true;
+  if (options.compiler != 0) mate_state.compiler = options.compiler;
+  if (options.mateExe != NULL) mate_state.mate_exe = mate_fix_path_exe(s(options.mateExe));
+  if (options.mateSource != NULL) mate_state.mate_source = mate_fix_path(s(options.mateSource));
+  if (options.buildDirectory != NULL) mate_state.build_directory = mate_fix_path(s(options.buildDirectory));
 }
 
 static void mate_read_cache(void) {
@@ -82,7 +70,7 @@ static void mate_read_cache(void) {
 static bool mate_need_rebuild(void) {
   File stats = {0};
   errno_t err = FileStats(mate_state.mate_source, &stats);
-  Assert(err == SUCCESS, "Aborting rebuild: Could not read fileStats for %s, error: %d", mate_state.mate_source.data, err);
+  Assert(err == SUCCESS, "could not read fileStats for %s, error: %d", mate_state.mate_source.data, err);
 
   if (stats.modifyTime <= mate_state.mate_cache.last_build) {
     return false;
@@ -93,7 +81,7 @@ static bool mate_need_rebuild(void) {
   IniSet(&mate_state.cache, S("modify-time"), modifyTime);
 
   err = IniWrite(mateCachePath, &mate_state.cache);
-  Assert(err == SUCCESS, "Aborting rebuild: Could not write cache for path %s, error: %d", mateCachePath.data, err);
+  Assert(err == SUCCESS, "could not write cache for path %s, error: %d", mateCachePath.data, err);
 
   return true;
 }
@@ -125,8 +113,7 @@ static void mate_rebuild(void) {
   Assert(renameErr == SUCCESS, "MateRebuild: failed renaming new executable into old: %d", renameErr);
 
   LogInfo("Rebuild finished, running %s", mateExe.data);
-  errno_t err = RunCommand(mateExe);
-  exit(err);
+  exit(RunCommand(mateExe));
 }
 
 void StartBuild(void) {
@@ -135,7 +122,6 @@ void StartBuild(void) {
     mate_set_default_state();
   }
 
-  mate_state.init_config = true;
   mate_state.start_time = TimeNow();
 
   Mkdir(mate_state.build_directory);
@@ -143,40 +129,89 @@ void StartBuild(void) {
   mate_rebuild();
 }
 
-static StaticLib mate_default_static_lib(void) {
-  StaticLib result = {0};
-  result.output = S("");
-  result.flags = S("");
-  result.arFlags = S("rcs");
-  return result;
+static void mate_apply_warning_flags(FlagBuilder *fb, Compiler c, FlagWarnings w) {
+  static char *general[][4] = {
+      [FLAG_WARNINGS_NONE] = {"w", NULL},
+      [FLAG_WARNINGS_MINIMAL] = {"Wall", NULL},
+      [FLAG_WARNINGS] = {"Wall", "Wextra", NULL},
+      [FLAG_WARNINGS_VERBOSE] = {"Wall", "Wextra", "Wpedantic", NULL},
+  };
+  static char *msvc[][2] = {
+      [FLAG_WARNINGS_NONE] = {"W0", NULL},
+      [FLAG_WARNINGS_MINIMAL] = {"W3", NULL},
+      [FLAG_WARNINGS] = {"W4", NULL},
+      [FLAG_WARNINGS_VERBOSE] = {"Wall", NULL},
+  };
+  mate_flag_builder_add_list(fb, c == MSVC ? msvc[w] : general[w]);
 }
 
-static StaticLib mate_parse_static_lib_options(StaticLibOptions *options) {
-  StaticLib result = {0};
-  result.output = StrNew(mate_state.arena, options->output);
-  Assert(!StrIsNull(result.output),
-         "MateParseStaticLibOptions: failed, StaticLibOptions.output should never be null, please define the output name like this: \n"
-         "\n"
-         "CreateStaticLib((StaticLibOptions) { .output = \"libexample\"});");
+static void mate_apply_debug_flags(FlagBuilder *fb, Compiler c, FlagDebug d) {
+  static char *general[][2] = {
+      [FLAG_DEBUG_MINIMAL] = {"g1", NULL},
+      [FLAG_DEBUG_MEDIUM] = {"g2", NULL},
+      [FLAG_DEBUG] = {"g3", NULL},
+  };
+  static char *msvc[][2] = {
+      [FLAG_DEBUG_MINIMAL] = {"Zi", NULL},
+      [FLAG_DEBUG_MEDIUM] = {"ZI", NULL},
+      [FLAG_DEBUG] = {"ZI", NULL},
+  };
+  mate_flag_builder_add_list(fb, c == MSVC ? msvc[d] : general[d]);
+}
 
-  // NOTE: For custom build folder look into `CreateConfig`, e.g:
-  // CreateConfig((MateOptions){ .buildDirectory = "./custom-dir" });
-  Assert(mate_is_valid_executable(&result.output),
-         "MateParseStaticLibOptions: failed, StaticLibOptions.output shouldn't be a path, e.g: \n"
-         "\n"
-         "Correct:\n"
-         "CreateStaticLib((StaticLibOptions) { .output = \"libexample\"});\n"
-         "\n"
-         "Incorrect:\n"
-         "CreateStaticLib((StaticLibOptions) { .output = \"./output/libexample.a\"});");
+static void mate_apply_optimization_flags(FlagBuilder *fb, Compiler c, FlagOptimization o) {
+  static char *general[][2] = {
+      [FLAG_OPTIMIZATION_NONE] = {"O0", NULL},
+      [FLAG_OPTIMIZATION_BASIC] = {"O1", NULL},
+      [FLAG_OPTIMIZATION] = {"O2", NULL},
+      [FLAG_OPTIMIZATION_SIZE] = {"Os", NULL},
+      [FLAG_OPTIMIZATION_AGGRESSIVE] = {"O3", NULL},
+  };
+  static char *msvc[][2] = {
+      [FLAG_OPTIMIZATION_NONE] = {"Od", NULL},
+      [FLAG_OPTIMIZATION_BASIC] = {"O1", NULL},
+      [FLAG_OPTIMIZATION] = {"O2", NULL},
+      [FLAG_OPTIMIZATION_SIZE] = {"O1", NULL},
+      [FLAG_OPTIMIZATION_AGGRESSIVE] = {"Ox", NULL},
+  };
+  mate_flag_builder_add_list(fb, c == MSVC ? msvc[o] : general[o]);
+}
 
-  result.flags = StrNew(mate_state.arena, options->flags);
-  result.arFlags = StrNew(mate_state.arena, options->arFlags);
-  return result;
+static void mate_apply_std_flags(FlagBuilder *fb, Compiler c, FlagSTD std) {
+  static char *general[][2] = {
+      [FLAG_STD_C99] = {"std=c99", NULL},
+      [FLAG_STD_C11] = {"std=c11", NULL},
+      [FLAG_STD_C17] = {"std=c17", NULL},
+      [FLAG_STD_C23] = {"std=c2x", NULL},
+      [FLAG_STD_C2X] = {"std=c2x", NULL},
+  };
+  static char *msvc[][2] = {
+      [FLAG_STD_C99] = {"std:c11", NULL}, // closest available
+      [FLAG_STD_C11] = {"std:c11", NULL},
+      [FLAG_STD_C17] = {"std:c17", NULL},
+      [FLAG_STD_C23] = {"std:clatest", NULL},
+      [FLAG_STD_C2X] = {"std:clatest", NULL},
+  };
+  mate_flag_builder_add_list(fb, c == MSVC ? msvc[std] : general[std]);
+}
+
+static void mate_apply_sanitizer_flags(FlagBuilder *fb, Compiler c, FlagSanitizer s) {
+  static char *general[][4] = {
+      [FLAG_SANITIZER_ADDRESS] = {"fsanitize=address", "fno-omit-frame-pointer", NULL},
+      [FLAG_SANITIZER_UB] = {"fsanitize=undefined", NULL},
+      [FLAG_SANITIZER] = {"fsanitize=address,undefined", "fno-omit-frame-pointer", NULL},
+  };
+  // NOTE: only on VS 2019 16.9+
+  static char *msvc[][2] = {
+      [FLAG_SANITIZER_ADDRESS] = {"fsanitize=address", NULL},
+      [FLAG_SANITIZER_UB] = {NULL},
+      [FLAG_SANITIZER] = {"fsanitize=address", NULL},
+  };
+  mate_flag_builder_add_list(fb, c == MSVC ? msvc[s] : general[s]);
 }
 
 static void mate_apply_error_flags(FlagBuilder *fb, Compiler c, FlagErrorFormat e) {
-  static char *gcc[][4] = {
+  static char *general[][4] = {
       [FLAG_ERROR] = {"fdiagnostics-color=always", NULL},
       [FLAG_ERROR_MAX] = {"fdiagnostics-color=always", "fdiagnostics-show-caret", "fdiagnostics-show-option", "fdiagnostics-generate-patch"},
   };
@@ -188,130 +223,10 @@ static void mate_apply_error_flags(FlagBuilder *fb, Compiler c, FlagErrorFormat 
       [FLAG_ERROR] = {"nologo", NULL},
       [FLAG_ERROR_MAX] = {"nologo", "diagnostics:caret", NULL},
   };
-  char **row = c == MSVC ? msvc[e] : c == CLANG ? clang[e] : gcc[e];
+  char **row = c == MSVC ? msvc[e] : c == CLANG ? clang[e] : general[e];
   mate_flag_builder_add_list(fb, row);
 }
 
-static void mate_apply_warning_flags(FlagBuilder *fb, Compiler c, FlagWarnings w) {
-  static char *gcc[] [4] = {
-    [FLAG_WARNINGS_NONE]    = {"w",    NULL},
-    [FLAG_WARNINGS_MINIMAL] = {"Wall", NULL},
-    [FLAG_WARNINGS]         = {"Wall", "Wextra", NULL},
-    [FLAG_WARNINGS_VERBOSE] = {"Wall", "Wextra", "Wpedantic", NULL},
-  };
-  static char *msvc[][2] = {
-    [FLAG_WARNINGS_NONE]    = {"W0",   NULL},
-    [FLAG_WARNINGS_MINIMAL] = {"W3",   NULL},
-    [FLAG_WARNINGS]         = {"W4",   NULL},
-    [FLAG_WARNINGS_VERBOSE] = {"Wall", NULL},
-  };
-  mate_flag_builder_add_list(fb, c == MSVC ? msvc[w] : gcc[w]);
-}
-
-static void mate_apply_debug_flags(FlagBuilder *fb, Compiler c, FlagDebug d) {
-  static char *gcc[] [2] = {
-    [FLAG_DEBUG_MINIMAL] = {"g1", NULL},
-    [FLAG_DEBUG_MEDIUM]  = {"g2", NULL},
-    [FLAG_DEBUG]         = {"g3", NULL},
-  };
-  static char *msvc[][2] = {
-    [FLAG_DEBUG_MINIMAL] = {"Zi", NULL},
-    [FLAG_DEBUG_MEDIUM]  = {"ZI", NULL},
-    [FLAG_DEBUG]         = {"ZI", NULL},
-  };
-  mate_flag_builder_add_list(fb, c == MSVC ? msvc[d] : gcc[d]);
-}
-
-static void mate_apply_optimization_flags(FlagBuilder *fb, Compiler c, FlagOptimization o) {
-  static char *gcc[] [2] = {
-    [FLAG_OPTIMIZATION_NONE]       = {"O0", NULL},
-    [FLAG_OPTIMIZATION_BASIC]      = {"O1", NULL},
-    [FLAG_OPTIMIZATION]            = {"O2", NULL},
-    [FLAG_OPTIMIZATION_SIZE]       = {"Os", NULL},
-    [FLAG_OPTIMIZATION_AGGRESSIVE] = {"O3", NULL},
-  };
-  static char *msvc[][2] = {
-    [FLAG_OPTIMIZATION_NONE]       = {"Od", NULL},
-    [FLAG_OPTIMIZATION_BASIC]      = {"O1", NULL},
-    [FLAG_OPTIMIZATION]            = {"O2", NULL},
-    [FLAG_OPTIMIZATION_SIZE]       = {"O1", NULL},
-    [FLAG_OPTIMIZATION_AGGRESSIVE] = {"Ox", NULL},
-  };
-  mate_flag_builder_add_list(fb, c == MSVC ? msvc[o] : gcc[o]);
-}
-
-static void mate_apply_std_flags(FlagBuilder *fb, Compiler c, FlagSTD std) {
-  static char *gcc[] [2] = {
-    [FLAG_STD_C99]  = {"std=c99", NULL},
-    [FLAG_STD_C11]  = {"std=c11", NULL},
-    [FLAG_STD_C17]  = {"std=c17", NULL},
-    [FLAG_STD_C23]  = {"std=c2x", NULL},
-    [FLAG_STD_C2X]  = {"std=c2x", NULL},
-  };
-  static char *msvc[][2] = {
-    [FLAG_STD_C99]  = {"std:c11",     NULL}, // closest available
-    [FLAG_STD_C11]  = {"std:c11",     NULL},
-    [FLAG_STD_C17]  = {"std:c17",     NULL},
-    [FLAG_STD_C23]  = {"std:clatest", NULL},
-    [FLAG_STD_C2X]  = {"std:clatest", NULL},
-  };
-  mate_flag_builder_add_list(fb, c == MSVC ? msvc[std] : gcc[std]);
-}
-
-StaticLib CreateStaticLib(StaticLibOptions opts) {
-  Assert(!isMSVC(), "CreateStaticLib: MSVC compiler not yet implemented for static libraries");
-  Assert(mate_state.init_config,
-         "CreateStaticLib: before creating a static library you must use StartBuild(), like this: \n"
-         "\n"
-         "StartBuild()\n"
-         "{\n"
-         " // ...\n"
-         "}\n"
-         "EndBuild()");
-
-  StaticLib result = mate_default_static_lib();
-  StaticLib options = mate_parse_static_lib_options(&opts); // TODO: necessary to transform maybe just validate?
-
-  String staticLibOutput = NormalizeStaticLibPath(mate_state.arena, options.output);
-  result.output = NormalizePath(mate_state.arena, staticLibOutput);
-
-  FlagBuilder fb = FlagBuilderCreate();
-  if (!StrIsNull(options.flags)) mate_flag_builder_add_string(&fb, &options.flags);
-  if (opts.error != 0) mate_apply_error_flags(&fb, mate_state.compiler, opts.error);
-  if (opts.warnings != 0) mate_apply_warning_flags(&fb, mate_state.compiler, opts.warnings);
-  if (opts.debug != 0) mate_apply_debug_flags(&fb, mate_state.compiler, opts.debug);
-  if (opts.optimization != 0) mate_apply_optimization_flags(&fb, mate_state.compiler, opts.optimization);
-  if (opts.std != 0) mate_apply_std_flags(&fb, mate_state.compiler, opts.std);
-
-  if (!StrIsNull(fb.buffer)) result.flags = fb.buffer;
-  if (!StrIsNull(options.arFlags)) result.arFlags = options.arFlags;
-
-  String optionIncludes = s(opts.includes);
-  if (!StrIsNull(optionIncludes)) result.includes = optionIncludes;
-
-  String optionLibs = s(opts.libs);
-  if (!StrIsNull(optionLibs)) result.libs = optionLibs;
-
-  result.ninjaBuildPath = F(mate_state.arena, "%s/static-%s.ninja", mate_state.build_directory.data, NormalizeExtension(mate_state.arena, result.output).data);
-  return result;
-}
-
-static Executable mate_default_executable(void) {
-  Executable result = {0};
-  String executableOutput = NormalizeExePath(mate_state.arena, S("main"));
-  result.output = NormalizePath(mate_state.arena, executableOutput);
-  result.linkerFlags = S("");
-  result.flags = S("");
-  return result;
-}
-
-static Executable mate_parse_executable_options(ExecutableOptions *options) {
-  Executable result = {0};
-  result.output = StrNew(mate_state.arena, options->output);
-  result.flags = StrNew(mate_state.arena, options->flags);
-  result.linkerFlags = StrNew(mate_state.arena, options->linker_flags);
-  return result;
-}
 
 Executable CreateExecutable(ExecutableOptions opts) {
   Assert(mate_state.init_config,
@@ -322,45 +237,94 @@ Executable CreateExecutable(ExecutableOptions opts) {
          " // ...\n"
          "}\n"
          "EndBuild()");
+  Assert(opts.output != NULL,
+      "CreateExecutable: failed, ExecutableOptions.output should never be null, please define the output name like this: \n"
+      "\n"
+      "CreateExecutable((ExecutableOptions) { .output = \"main\"});");
 
-  Executable result = mate_default_executable(); // TODO: necessary to transform maybe just validate?
-  Executable options = mate_parse_executable_options(&opts);
-  if (!StrIsNull(options.output)) {
-    String executableOutput = NormalizeExePath(mate_state.arena, options.output);
-    Assert(mate_is_valid_executable(&executableOutput),
-           "MateParseExecutable: failed, ExecutableOptions.output shouldn't be a path, e.g: \n"
-           "\n"
-           "Correct:\n"
-           "CreateExecutable((ExecutableOptions) { .output = \"main\"});\n"
-           "\n"
-           "Incorrect:\n"
-           "CreateExecutable((ExecutableOptions) { .output = \"./output/main\"});\n"
-           "\n"
-           "TIP: For custom build folder look into `CreateConfig, e.g:\n"
-           "CreateConfig((MateOptions){ .buildDirectory = \"./custom-dir\" });");
-    result.output = NormalizePath(mate_state.arena, executableOutput);
-  }
+  String executable_output = NormalizeExePath(mate_state.arena, s(opts.output));
+  Assert(mate_is_valid_output(executable_output),
+         "CreateExecutable: ExecutableOptions.output shouldn't be a path, e.g: \n"
+         "\n"
+         "Correct:\n"
+         "CreateExecutable((ExecutableOptions){.output = \"main\"});\n"
+         "\n"
+         "Incorrect:\n"
+         "CreateExecutable((ExecutableOptions){.output = \"./output/main\"});\n"
+         "\n"
+         "TIP: For custom build folder look into `CreateConfig, e.g:\n"
+         "CreateConfig((MateOptions){.buildDirectory = \"./custom-dir\"});");
+
+  Executable result = {0};
+  result.output = executable_output;
 
   FlagBuilder fb = FlagBuilderCreate();
-  if (!StrIsNull(options.flags)) mate_flag_builder_add_string(&fb, &options.flags);
-  if (opts.error != 0) mate_apply_error_flags(&fb, mate_state.compiler, opts.error);
+  if (opts.flags != NULL) StringBuilderAppend(mate_state.arena, &fb, s(opts.flags));
   if (opts.warnings != 0) mate_apply_warning_flags(&fb, mate_state.compiler, opts.warnings);
   if (opts.debug != 0) mate_apply_debug_flags(&fb, mate_state.compiler, opts.debug);
   if (opts.optimization != 0) mate_apply_optimization_flags(&fb, mate_state.compiler, opts.optimization);
   if (opts.std != 0) mate_apply_std_flags(&fb, mate_state.compiler, opts.std);
+  if (opts.sanitizer != 0) mate_apply_sanitizer_flags(&fb, mate_state.compiler, opts.sanitizer);
 
+  mate_apply_error_flags(&fb, mate_state.compiler, opts.error);
   if (!StrIsNull(fb.buffer)) result.flags = fb.buffer;
-  if (!StrIsNull(options.linkerFlags)) result.linkerFlags = options.linkerFlags;
 
-  String optionIncludes = s(opts.includes);
-  if (!StrIsNull(optionIncludes)) result.includes = optionIncludes;
-
-  String optionLibs = s(opts.libs);
-  if (!StrIsNull(optionLibs)) result.libs = optionLibs;
+  if (opts.libs != NULL) result.libs = s(opts.libs);
+  if (opts.includes != NULL) result.includes = s(opts.includes);
+  if (opts.linkerFlags != NULL) result.linkerFlags = s(opts.linkerFlags);
 
   result.ninjaBuildPath = F(mate_state.arena, "%s/exe-%s.ninja", mate_state.build_directory.data, NormalizeExtension(mate_state.arena, result.output).data);
   return result;
 }
+
+StaticLib CreateStaticLib(StaticLibOptions opts) {
+  Assert(!isMSVC(), "CreateStaticLib: MSVC compiler not yet implemented for static libraries");
+  Assert(mate_state.init_config,
+         "CreateStaticLib: before creating a static library you must use StartBuild(), like this: \n"
+         "\n"
+         "StartBuild();\n"
+         "{\n"
+         "CreateStaticLib(...);\n"
+         " // ...\n"
+         "}\n"
+         "EndBuild();");
+  Assert(opts.output != NULL,
+      "CreateStaticLib: failed, StaticLibOptions.output should never be null, please define the output name like this: \n"
+      "\n"
+      "CreateStaticLib((StaticLibOptions) { .output = \"libexample\"});");
+  String staticLibOutput = NormalizeStaticLibPath(mate_state.arena, s(opts.output)); // necessary?
+  Assert(mate_is_valid_output(s(opts.output)),
+         "MateParseStaticLibOptions: failed, StaticLibOptions.output shouldn't be a path, e.g: \n"
+         "\n"
+         "Correct:\n"
+         "CreateStaticLib((StaticLibOptions) { .output = \"libexample\"});\n"
+         "\n"
+         "Incorrect:\n"
+         "CreateStaticLib((StaticLibOptions) { .output = \"./output/libexample.a\"});");
+
+  StaticLib result = {0};
+  result.output = NormalizePath(mate_state.arena, staticLibOutput);
+  result.arFlags = S("rcs");
+
+  FlagBuilder fb = FlagBuilderCreate();
+  if (opts.flags != NULL) StringBuilderAppend(mate_state.arena, &fb, s(opts.flags));
+  if (opts.warnings != 0) mate_apply_warning_flags(&fb, mate_state.compiler, opts.warnings);
+  if (opts.debug != 0) mate_apply_debug_flags(&fb, mate_state.compiler, opts.debug);
+  if (opts.optimization != 0) mate_apply_optimization_flags(&fb, mate_state.compiler, opts.optimization);
+  if (opts.std != 0) mate_apply_std_flags(&fb, mate_state.compiler, opts.std);
+  if (opts.sanitizer != 0) mate_apply_sanitizer_flags(&fb, mate_state.compiler, opts.sanitizer);
+
+  mate_apply_error_flags(&fb, mate_state.compiler, opts.error);
+  if (!StrIsNull(fb.buffer)) result.flags = fb.buffer;
+
+  if (opts.libs != NULL) result.libs = s(opts.libs);
+  if (opts.includes != NULL) result.includes = s(opts.includes);
+  if (opts.arFlags != NULL) result.arFlags = s(opts.arFlags);
+
+  result.ninjaBuildPath = F(mate_state.arena, "%s/static-%s.ninja", mate_state.build_directory.data, NormalizeExtension(mate_state.arena, result.output).data);
+  return result;
+}
+
 static CreateCompileCommandsError mate_create_compile_commands(String ninjaBuildPath) {
   FILE *ninjaPipe;
   FILE *outputFile;
@@ -735,7 +699,7 @@ static void mate_install_static_lib(StaticLib *staticLib) {
     StringBuilderAppend(mate_state.arena, &builder, S("\n"));
 
     if (mate_state.compiler == GCC || mate_state.compiler == CLANG) {
-      String depFile = StrNew(mate_state.arena, outputFile.data);
+      String depFile = StrNewSize(mate_state.arena, outputFile.data, outputFile.length);
       depFile.data[depFile.length - 1] = 'd';
       StringBuilderAppend(mate_state.arena, &builder, S("  depfile = $builddir/"));
       StringBuilderAppend(mate_state.arena, &builder, depFile);
@@ -968,7 +932,6 @@ void EndBuild(void) {
 }
 
 /* --- Flag Builder Implementation --- */
-
 FlagBuilder FlagBuilderCreate(void) {
   return StringBuilderCreate(mate_state.arena);
 }
@@ -977,69 +940,29 @@ FlagBuilder FlagBuilderReserve(size_t count) {
   return StringBuilderReserve(mate_state.arena, count);
 }
 
-static void mate_flag_builder_add_string(FlagBuilder *builder, String *flag) {
-  StringBuilderAppend(mate_state.arena, builder, *flag);
-}
-
-static void mate_flag_builder_add(FlagBuilder *builder, StringVector flags) {
-  size_t count = 0;
-  if (mate_state.compiler == MSVC) {
-    String first = VecAt(flags, 0);
-    Assert(first.data[0] != '/', "FlagBuilderAdd: failed, flag should not contain /, e.g usage FlagBuilderAdd(\"W4\")");
-
-    if (builder->buffer.length == 0) {
-      StringBuilderAppend(mate_state.arena, builder, S("/"));
-      StringBuilderAppend(mate_state.arena, builder, first);
-      count = 1;
-    }
-
-    for (size_t i = count; i < flags.length; i++) {
-      StringBuilderAppend(mate_state.arena, builder, S(" /"));
-      StringBuilderAppend(mate_state.arena, builder, VecAt(flags, i));
-    }
-    return;
-  }
-
-  String *first = VecAtPtr(flags, 0);
-  Assert(first->data[0] != '-', "FlagBuilderAdd: failed, flag should not contain -, e.g usage FlagBuilderAdd(\"Wall\")");
-
-  if (builder->buffer.length == 0) {
-    StringBuilderAppend(mate_state.arena, builder, S("-"));
-    StringBuilderAppend(mate_state.arena, builder, VecAt(flags, 0));
-    count = 1;
-  }
-
-  for (size_t i = count; i < flags.length; i++) {
-    StringBuilderAppend(mate_state.arena, builder, S(" -"));
-    StringBuilderAppend(mate_state.arena, builder, VecAt(flags, i));
-  }
-}
-
-static void mate_flag_builder_add_single(FlagBuilder *builder, char *flag) {
+static void mate_flag_builder_add_string(FlagBuilder *builder, char *flag) {
   bool empty = builder->buffer.length == 0;
   if (mate_state.compiler == MSVC) {
-    Assert(flag[0] != '/', "FlagBuilderAdd: flag should not contain /, e.g FlagBuilderAdd(\"W4\")");
+    Assert(flag[0] != '/', "FlagBuilderAdd: flag should not contain '/'. Your flag:\n%s \n\ne.g usage FlagBuilderAdd(\"W4\")", flag);
     StringBuilderAppend(mate_state.arena, builder, empty ? S("/") : S(" /"));
   } else {
-    Assert(flag[0] != '-', "FlagBuilderAdd: flag should not contain -, e.g FlagBuilderAdd(\"Wall\")");
+    Assert(flag[0] != '-', "FlagBuilderAdd: flag should not contain '-'. Your flag:\n%s \n\ne.g usage FlagBuilderAdd(\"Wall\")", flag);
     StringBuilderAppend(mate_state.arena, builder, empty ? S("-") : S(" -"));
   }
   StringBuilderAppend(mate_state.arena, builder, s(flag));
 }
 
 static void mate_flag_builder_add_list(FlagBuilder *fb, char **flags) {
-  for (; *flags != NULL; flags++) mate_flag_builder_add_single(fb, *flags);
+  for (; *flags != NULL; flags++) {
+    mate_flag_builder_add_string(fb, *flags);
+  }
 }
 
 /* --- Path Utils Implementation --- */
-static bool mate_is_valid_executable(String *exePath) {
-  if (exePath->data[0] == '.') {
-    return false;
-  }
-
-  for (size_t i = 0; i < exePath->length; i++) {
-    char currChar = exePath->data[i];
-    if (currChar == '/' || currChar == '\\') {
+static bool mate_is_valid_output(String output) {
+  for (size_t i = 0; i < output.length; i++) {
+    char curr_char = output.data[i];
+    if (curr_char == '/' || curr_char == '\\' || curr_char == '.') {
       return false;
     }
   }
