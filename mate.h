@@ -1404,7 +1404,7 @@ String NormalizeExePath(Arena *arena, String path) {
   bool hasExe = false;
   String exeExtension = S(".exe");
   if (result.length >= exeExtension.length) {
-    String resultEnd = StrSlice(arena, result, result.length - exeExtension.length, result.length); // refactor, assert we dont have
+    String resultEnd = StrSlice(arena, result, result.length - exeExtension.length, result.length);
     if (StrEq(resultEnd, exeExtension)) {
       hasExe = true;
     }
