@@ -2,6 +2,7 @@
 
 ## v0.3
 - [ ] Make flags OR values
+- [ ] Move to `exec` && `CreateProcess` for executables
 - [ ] `LinkStaticLib()` for linking another `StaticLib`
 - [ ] Add better error messages with different colors for examples
 - [ ] Add ability to compile with g++ and other c/cpp compilers
