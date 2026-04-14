@@ -1111,6 +1111,7 @@ String CompilerToStr(Compiler compiler) {
     return S("cl.exe");
   default:
     Unreachable("CompilerToStr: failed, should never get here, compiler given does not exist: %d", compiler);
+    return S("");
   }
 }
 
