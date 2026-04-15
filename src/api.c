@@ -755,7 +755,7 @@ static void mate_install_static_lib(StaticLib *static_lib) {
   mate_state.total_time = TimeNow() - mate_state.start_time;
 
 #if defined(PLATFORM_WIN)
-  static_lib->outputPath = F(mate_state.arena, "%s\\%s", mate_state.build_directory.data, staticLib->output.data);
+  static_lib->outputPath = F(mate_state.arena, "%s\\%s", mate_state.build_directory.data, static_lib->output.data);
 #else
   static_lib->outputPath = F(mate_state.arena, "%s/%s", mate_state.build_directory.data, static_lib->output.data);
 #endif
