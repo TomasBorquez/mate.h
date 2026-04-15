@@ -60,8 +60,7 @@ for test in "${TESTS[@]}"; do
   cd "$ROOT_DIR/tests/$test" || { echo "Error: could not cd into tests/$test"; exit 1; }
   cleanup
 
-  # if ! "$COMPILER" -g3 -fsanitize=address,undefined mate.c -o "mate${EXE}"; then
-  if ! "$COMPILER" mate.c -o "mate${EXE}"; then
+  if ! "$COMPILER" -g3 -fsanitize=address,undefined mate.c -o "mate${EXE}"; then
     echo ""
     echo "Compilation of $test failed"
     exit 1

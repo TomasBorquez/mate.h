@@ -2553,6 +2553,8 @@ typedef enum { NONE = 0, NEEDED, WEAK } LinkFrameworkOptions;
 
 typedef StringBuilder FlagBuilder;
 
+#define ARR_LEN(arr) sizeof((arr)) / sizeof(*(arr))
+
 /* --- Build System --- */
 void CreateConfig(MateOptions options);
 
@@ -2571,83 +2573,54 @@ typedef enum { COMPILE_COMMANDS_SUCCESS = 0, COMPILE_COMMANDS_FAILED_OPEN_FILE =
 #define CreateCompileCommands(target) mate_create_compile_commands((target).ninjaBuildPath);
 static WARN_UNUSED CreateCompileCommandsError mate_create_compile_commands(String ninjaBuildPath);
 
-#define AddLibraryPaths(target, ...)             \
-  do {                                           \
-    StringVector _libs = {0};                    \
-    StringVectorPushMany(_libs, __VA_ARGS__);    \
-    mate_add_library_paths(&(target).libs, &_libs); \
-                                                 \
-    /* Cleanup */                                \
-    VecFree(_libs);                              \
+#define AddLibraryPaths(target, ...)                               \
+  do {                                                             \
+    char *_libs[] = {__VA_ARGS__};                                 \
+    mate_add_library_paths(&(target).libs, _libs, ARR_LEN(_libs)); \
   } while (0)
-static void mate_add_library_paths(String *targetLibs, StringVector *libs);
+static void mate_add_library_paths(String *targetLibs, char **libs, size_t libs_size);
 
-#define LinkSystemLibraries(target, ...)             \
-  do {                                               \
-    StringVector _libs = {0};                        \
-    StringVectorPushMany(_libs, __VA_ARGS__);        \
-    mate_link_system_libraries(&(target).libs, &_libs); \
-                                                     \
-    /* Cleanup */                                    \
-    VecFree(_libs);                                  \
+#define LinkSystemLibraries(target, ...)                               \
+  do {                                                                 \
+    char *_libs[] = {__VA_ARGS__};                                       \
+    mate_link_system_libraries(&(target).libs, _libs, ARR_LEN(_libs)); \
   } while (0)
-static void mate_link_system_libraries(String *targetLibs, StringVector *libs);
+static void mate_link_system_libraries(String *targetLibs, char **libs, size_t libs_size);
 
-#define LinkFrameworks(target, ...)                        \
-  do {                                                     \
-    StringVector _frameworks = {0};                        \
-    StringVectorPushMany(_frameworks, __VA_ARGS__);        \
-    /* Frameworks are just specialized library bundles. */ \
-    mate_link_frameworks(&(target).libs, &_frameworks);      \
-                                                           \
-    /* Cleanup */                                          \
-    VecFree(_frameworks);                                  \
+#define LinkFrameworks(target, ...)                                          \
+  do {                                                                       \
+    char *_frameworks[] = {__VA_ARGS__};                                     \
+    mate_link_frameworks(&(target).libs, _frameworks, ARR_LEN(_frameworks)); \
   } while (0)
-static void mate_link_frameworks(String *targetLibs, StringVector *frameworks);
+static void mate_link_frameworks(String *targetLibs, char **frameworks, size_t frameworks_size);
 
-#define LinkFrameworksWithOptions(target, options, ...)                              \
-  do {                                                                    \
-    StringVector _frameworks = {0};                                       \
-    StringVectorPushMany(_frameworks, __VA_ARGS__);                       \
-    /* Frameworks are just specialized library bundles. */                \
-    mate_link_frameworks_with_options(&(target).libs, options, &_frameworks); \
-                                                                          \
-    /* Cleanup */                                                         \
-    VecFree(_frameworks);                                                 \
+#define LinkFrameworksWithOptions(target, options, ...)                                            \
+  do {                                                                                             \
+    char *_frameworks[] = {__VA_ARGS__};                                                           \
+    mate_link_frameworks_with_options(&(target).libs, options, _frameworks, ARR_LEN(_frameworks)); \
   } while (0)
-static void mate_link_frameworks_with_options(String *targetLibs, LinkFrameworkOptions options, StringVector *frameworks);
+static void mate_link_frameworks_with_options(String *targetLibs, LinkFrameworkOptions options, char **frameworks, size_t frameworks_size);
 
-#define AddIncludePaths(target, ...)                     \
-  do {                                                   \
-    StringVector _includes = {0};                        \
-    StringVectorPushMany(_includes, __VA_ARGS__);        \
-    mate_add_include_paths(&(target).includes, &_includes); \
-                                                         \
-    /* Cleanup */                                        \
-    VecFree(_includes);                                  \
+#define AddIncludePaths(target, ...)                                           \
+  do {                                                                         \
+    char *_includes[] = {__VA_ARGS__};                                         \
+    mate_add_include_paths(&(target).includes, _includes, ARR_LEN(_includes)); \
   } while (0)
-static void mate_add_include_paths(String *targetIncludes, StringVector *vector);
+static void mate_add_include_paths(String *targetIncludes, char **includes, size_t includes_size);
 
-#define AddFrameworkPaths(target, ...)                       \
-  do {                                                       \
-    StringVector _frameworks = {0};                          \
-    StringVectorPushMany(_frameworks, __VA_ARGS__);          \
-    /* Frameworks are just specialized library bundles. */   \
-    mate_add_framework_paths(&(target).includes, &_frameworks); \
-                                                             \
-    /* Cleanup */                                            \
-    VecFree(_frameworks);                                    \
+#define AddFrameworkPaths(target, ...)                                               \
+  do {                                                                               \
+    char *_frameworks[] = {__VA_ARGS__};                                             \
+    mate_add_framework_paths(&(target).includes, _frameworks, ARR_LEN(_frameworks)); \
   } while (0)
-static void mate_add_framework_paths(String *targetIncludes, StringVector *includes);
+static void mate_add_framework_paths(String *targetIncludes, char **includes, size_t includes_size);
 
-#define AddFile(target, source) mate_add_file(&(target).sources, s(source));
-static void mate_add_file(StringVector *sources, String source);
-
-#define AddFiles(target, files)                                                                           \
-  do {                                                                                                    \
-    Assert(sizeof(files) != sizeof(*(files)), "AddFiles: failed, files must be an array, not a pointer"); \
-    mate_add_files(&(target).sources, files, sizeof(files) / sizeof(*(files)));                           \
+#define AddFile(target, ...)                                   \
+  do {                                                          \
+    char *_files[] = {__VA_ARGS__};                             \
+    mate_add_files(&(target).sources, _files, ARR_LEN(_files)); \
   } while (0);
+static void mate_add_file(StringVector *sources, String source);
 static void mate_add_files(StringVector *sources, char **source, size_t size);
 
 #define RemoveFile(target, source) mate_remove_file(&(target).sources, s(source));
@@ -6026,6 +5999,7 @@ static void mate_add_file(StringVector *sources, String source) {
       VecPush((*sources), finalSource);
     }
   }
+  VecFree(files);
 }
 
 static bool mate_remove_file(StringVector *sources, String source) {
@@ -6136,25 +6110,24 @@ static void mate_install_executable(Executable *executable) {
     StringBuilderAppend(mate_state.arena, &builder, S(" /showIncludes /c $in /Fo:$out\n"));
     StringBuilderAppend(mate_state.arena, &builder, S("  deps = msvc\n\n"));
   } else {
-    if (mate_state.compiler == TCC) {
-      StringBuilderAppend(mate_state.arena, &builder, S(" -c $cwd/$in -o $out\n"));
-    }
+    StringBuilderAppend(mate_state.arena, &builder, S(" -c $cwd/$in -o $out"));
     if (mate_state.compiler == GCC || mate_state.compiler == CLANG) {
-      StringBuilderAppend(mate_state.arena, &builder, S(" -c $cwd/$in -o $out -MMD -MF $depfile\n"));
+      StringBuilderAppend(mate_state.arena, &builder, S(" -MMD -MF $depfile\n"));
       StringBuilderAppend(mate_state.arena, &builder, S("  depfile = $depfile\n"));
-      StringBuilderAppend(mate_state.arena, &builder, S("  deps = gcc\n")); // INFO: since clang replicates this
+      StringBuilderAppend(mate_state.arena, &builder, S("  deps = gcc")); // INFO: since clang replicates this
     }
+    StringBuilderAppend(mate_state.arena, &builder, S("\n"));
     StringBuilderAppend(mate_state.arena, &builder, S("  description = Building C object ./$in\n\n"));
   }
 
   // Build individual source files
-  StringVector outputFiles = mate_output_transformer(executable->sources);
-  StringBuilder outputBuilder = StringBuilderCreate(mate_state.arena);
+  StringVector output_files = mate_output_transformer(executable->sources);
+  StringBuilder output_builder = StringBuilderCreate(mate_state.arena);
   for (size_t i = 0; i < executable->sources.length; i++) {
     String currSource = VecAt(executable->sources, i);
     if (StrIsNull(currSource)) continue;
 
-    String outputFile = VecAt(outputFiles, i);
+    String outputFile = VecAt(output_files, i);
     String sourceFile = NormalizePathStart(mate_state.arena, currSource);
 
     // Source build command
@@ -6173,18 +6146,20 @@ static void mate_install_executable(Executable *executable) {
     }
 
     // Add to output files list
-    if (outputBuilder.buffer.length == 0) {
-      StringBuilderAppend(mate_state.arena, &outputBuilder, S("$builddir/"));
-      StringBuilderAppend(mate_state.arena, &outputBuilder, outputFile);
+    bool is_empty = output_builder.buffer.length == 0;
+    if (is_empty) {
+      StringBuilderAppend(mate_state.arena, &output_builder, S("$builddir/"));
+      StringBuilderAppend(mate_state.arena, &output_builder, outputFile);
     } else {
-      StringBuilderAppend(mate_state.arena, &outputBuilder, S(" $builddir/"));
-      StringBuilderAppend(mate_state.arena, &outputBuilder, outputFile);
+      StringBuilderAppend(mate_state.arena, &output_builder, S(" $builddir/"));
+      StringBuilderAppend(mate_state.arena, &output_builder, outputFile);
     }
   }
+  VecFree(output_files);
 
   // Build target
   StringBuilderAppend(mate_state.arena, &builder, S("build $target: link "));
-  StringBuilderAppend(mate_state.arena, &builder, outputBuilder.buffer);
+  StringBuilderAppend(mate_state.arena, &builder, output_builder.buffer);
   StringBuilderAppend(mate_state.arena, &builder, S("\n\n"));
 
   // Default target
@@ -6212,11 +6187,13 @@ static void mate_install_executable(Executable *executable) {
 #else
   executable->outputPath = F(mate_state.arena, "%s/%s", mate_state.build_directory.data, executable->output.data);
 #endif
+
+  VecFree(executable->sources);
 }
 
-static void mate_install_static_lib(StaticLib *staticLib) {
-  Assert(staticLib->sources.length != 0, "InstallStaticLib: Static Library has zero sources, add at least one with AddFile(\"./main.c\")");
-  Assert(!StrIsNull(staticLib->output), "InstallStaticLib: Before installing static library you must first CreateStaticLib()");
+static void mate_install_static_lib(StaticLib *static_lib) {
+  Assert(static_lib->sources.length != 0, "InstallStaticLib: Static Library has zero sources, add at least one with AddFile(\"./main.c\")");
+  Assert(!StrIsNull(static_lib->output), "InstallStaticLib: Before installing static library you must first CreateStaticLib()");
 
   StringBuilder builder = StringBuilderReserve(mate_state.arena, 1024);
 
@@ -6230,23 +6207,23 @@ static void mate_install_static_lib(StaticLib *staticLib) {
   StringBuilderAppend(mate_state.arena, &builder, S("ar = ar\n")); // TODO: Add different ar for MSVC
 
   // Compiler flags
-  if (staticLib->flags.length > 0) {
+  if (static_lib->flags.length > 0) {
     StringBuilderAppend(mate_state.arena, &builder, S("flags = "));
-    StringBuilderAppend(mate_state.arena, &builder, staticLib->flags);
+    StringBuilderAppend(mate_state.arena, &builder, static_lib->flags);
     StringBuilderAppend(mate_state.arena, &builder, S("\n"));
   }
 
   // Archive flags
-  if (staticLib->arFlags.length > 0) {
+  if (static_lib->arFlags.length > 0) {
     StringBuilderAppend(mate_state.arena, &builder, S("ar_flags = "));
-    StringBuilderAppend(mate_state.arena, &builder, staticLib->arFlags);
+    StringBuilderAppend(mate_state.arena, &builder, static_lib->arFlags);
     StringBuilderAppend(mate_state.arena, &builder, S("\n"));
   }
 
   // Include paths
-  if (staticLib->includes.length > 0) {
+  if (static_lib->includes.length > 0) {
     StringBuilderAppend(mate_state.arena, &builder, S("includes = "));
-    StringBuilderAppend(mate_state.arena, &builder, staticLib->includes);
+    StringBuilderAppend(mate_state.arena, &builder, static_lib->includes);
     StringBuilderAppend(mate_state.arena, &builder, S("\n"));
   }
 
@@ -6264,7 +6241,7 @@ static void mate_install_static_lib(StaticLib *staticLib) {
 
   // Target
   StringBuilderAppend(mate_state.arena, &builder, S("target = $builddir/"));
-  StringBuilderAppend(mate_state.arena, &builder, staticLib->output);
+  StringBuilderAppend(mate_state.arena, &builder, static_lib->output);
   StringBuilderAppend(mate_state.arena, &builder, S("\n\n"));
 
   // Archive command
@@ -6274,10 +6251,10 @@ static void mate_install_static_lib(StaticLib *staticLib) {
 
   // Compile command
   StringBuilderAppend(mate_state.arena, &builder, S("rule compile\n" "  command = $cc"));
-  if (staticLib->flags.length > 0) {
+  if (static_lib->flags.length > 0) {
     StringBuilderAppend(mate_state.arena, &builder, S(" $flags"));
   }
-  if (staticLib->includes.length > 0) {
+  if (static_lib->includes.length > 0) {
     StringBuilderAppend(mate_state.arena, &builder, S(" $includes"));
   }
 
@@ -6293,13 +6270,13 @@ static void mate_install_static_lib(StaticLib *staticLib) {
   StringBuilderAppend(mate_state.arena, &builder, S("\n"));
 
   // Build individual source files
-  StringVector outputFiles = mate_output_transformer(staticLib->sources);
+  StringVector output_files = mate_output_transformer(static_lib->sources);
   StringBuilder outputBuilder = StringBuilderCreate(mate_state.arena);
-  for (size_t i = 0; i < staticLib->sources.length; i++) {
-    String currSource = VecAt(staticLib->sources, i);
+  for (size_t i = 0; i < static_lib->sources.length; i++) {
+    String currSource = VecAt(static_lib->sources, i);
     if (StrIsNull(currSource)) continue;
 
-    String outputFile = VecAt(outputFiles, i);
+    String outputFile = VecAt(output_files, i);
     String sourceFile = NormalizePathStart(mate_state.arena, currSource);
 
     // Source build command
@@ -6326,6 +6303,7 @@ static void mate_install_static_lib(StaticLib *staticLib) {
       StringBuilderAppend(mate_state.arena, &outputBuilder, outputFile);
     }
   }
+  VecFree(output_files);
 
   // Build target
   StringBuilderAppend(mate_state.arena, &builder, S("build $target: archive "));
@@ -6335,7 +6313,7 @@ static void mate_install_static_lib(StaticLib *staticLib) {
   // Default target
   StringBuilderAppend(mate_state.arena, &builder, S("default $target\n"));
 
-  String ninjaBuildPath = staticLib->ninjaBuildPath;
+  String ninjaBuildPath = static_lib->ninjaBuildPath;
   errno_t errWrite = FileWrite(ninjaBuildPath, builder.buffer);
   Assert(errWrite == SUCCESS, "InstallStaticLib: failed to write build-static-library.ninja for %s, err: %d", ninjaBuildPath.data, errWrite);
 
@@ -6354,14 +6332,15 @@ static void mate_install_static_lib(StaticLib *staticLib) {
   mate_state.total_time = TimeNow() - mate_state.start_time;
 
 #if defined(PLATFORM_WIN)
-  staticLib->outputPath = F(mate_state.arena, "%s\\%s", mate_state.build_directory.data, staticLib->output.data);
+  static_lib->outputPath = F(mate_state.arena, "%s\\%s", mate_state.build_directory.data, staticLib->output.data);
 #else
-  staticLib->outputPath = F(mate_state.arena, "%s/%s", mate_state.build_directory.data, staticLib->output.data);
+  static_lib->outputPath = F(mate_state.arena, "%s/%s", mate_state.build_directory.data, static_lib->output.data);
 #endif
+
+  VecFree(static_lib->sources);
 }
 
-// TODO: use is_empty pattern from mate_flag_builder_add_string on all:
-static void mate_add_library_paths(String *targetLibs, StringVector *libs) {
+static void mate_add_library_paths(String *targetLibs, char **libs, size_t libs_size) {
   StringBuilder builder = StringBuilderCreate(mate_state.arena);
 
   if (isMSVC() && targetLibs->length == 0) {
@@ -6374,21 +6353,21 @@ static void mate_add_library_paths(String *targetLibs, StringVector *libs) {
 
   if (isMSVC()) {
     // MSVC format: /LIBPATH:"path"
-    for (size_t i = 0; i < libs->length; i++) {
-      String currLib = VecAt((*libs), i);
-      String buffer = F(mate_state.arena, " /LIBPATH:\"%s\"", currLib.data);
+    for (size_t i = 0; i < libs_size; i++) {
+      char *curr_lib = libs[i];
+      String buffer = F(mate_state.arena, " /LIBPATH:\"%s\"", curr_lib);
       StringBuilderAppend(mate_state.arena, &builder, buffer);
     }
   } else {
     // GCC/Clang format: -L"path"
-    for (size_t i = 0; i < libs->length; i++) {
-      String currLib = VecAt((*libs), i);
+    for (size_t i = 0; i < libs_size; i++) {
+      char *curr_lib = libs[i];
       if (i == 0 && builder.buffer.length == 0) {
-        String buffer = F(mate_state.arena, "-L\"%s\"", currLib.data);
+        String buffer = F(mate_state.arena, "-L\"%s\"", curr_lib);
         StringBuilderAppend(mate_state.arena, &builder, buffer);
         continue;
       }
-      String buffer = F(mate_state.arena, " -L\"%s\"", currLib.data);
+      String buffer = F(mate_state.arena, " -L\"%s\"", curr_lib);
       StringBuilderAppend(mate_state.arena, &builder, buffer);
     }
   }
@@ -6396,7 +6375,7 @@ static void mate_add_library_paths(String *targetLibs, StringVector *libs) {
   *targetLibs = builder.buffer;
 }
 
-static void mate_link_system_libraries(String *targetLibs, StringVector *libs) {
+static void mate_link_system_libraries(String *targetLibs, char **libs, size_t libs_size) {
   StringBuilder builder = StringBuilderCreate(mate_state.arena);
 
   if (isMSVC() && targetLibs->length == 0) {
@@ -6409,21 +6388,21 @@ static void mate_link_system_libraries(String *targetLibs, StringVector *libs) {
 
   if (isMSVC()) {
     // MSVC format: library.lib
-    for (size_t i = 0; i < libs->length; i++) {
-      String currLib = VecAt((*libs), i);
-      String buffer = F(mate_state.arena, " %s.lib", currLib.data);
+    for (size_t i = 0; i < libs_size; i++) {
+      char *currLib = libs[i];
+      String buffer = F(mate_state.arena, " %s.lib", currLib);
       StringBuilderAppend(mate_state.arena, &builder, buffer);
     }
   } else {
     // GCC/Clang format: -llib
-    for (size_t i = 0; i < libs->length; i++) {
-      String currLib = VecAt((*libs), i);
+    for (size_t i = 0; i < libs_size; i++) {
+      char *currLib = libs[i];
       if (i == 0 && builder.buffer.length == 0) {
-        String buffer = F(mate_state.arena, "-l%s", currLib.data);
+        String buffer = F(mate_state.arena, "-l%s", currLib);
         StringBuilderAppend(mate_state.arena, &builder, buffer);
         continue;
       }
-      String buffer = F(mate_state.arena, " -l%s", currLib.data);
+      String buffer = F(mate_state.arena, " -l%s", currLib);
       StringBuilderAppend(mate_state.arena, &builder, buffer);
     }
   }
@@ -6431,11 +6410,11 @@ static void mate_link_system_libraries(String *targetLibs, StringVector *libs) {
   *targetLibs = builder.buffer;
 }
 
-static void mate_link_frameworks(String *targetLibs, StringVector *frameworks) {
-  mate_link_frameworks_with_options(targetLibs, NONE, frameworks);
+static void mate_link_frameworks(String *targetLibs, char **frameworks, size_t frameworks_size) {
+  mate_link_frameworks_with_options(targetLibs, NONE, frameworks, frameworks_size);
 }
 
-static void mate_link_frameworks_with_options(String *targetLibs, LinkFrameworkOptions options, StringVector *frameworks) {
+static void mate_link_frameworks_with_options(String *targetLibs, LinkFrameworkOptions options, char **frameworks, size_t frameworks_size) {
   Assert(!isGCC(),
           "LinkFrameworks: Automatic framework linking is not supported by GCC. "
           "Use standard linking functions after adding a framework path instead.");
@@ -6462,21 +6441,21 @@ static void mate_link_frameworks_with_options(String *targetLibs, LinkFrameworkO
     StringBuilderAppend(mate_state.arena, &builder, *targetLibs);
   }
 
-  for (size_t i = 0; i < frameworks->length; i++) {
-    String currFW = VecAt((*frameworks), i);
+  for (size_t i = 0; i < frameworks_size; i++) {
+    char *curr_framework = frameworks[i];
     if (i == 0 && builder.buffer.length == 0) {
-      String buffer = F(mate_state.arena, "%s %s", frameworkFlag, currFW.data);
+      String buffer = F(mate_state.arena, "%s %s", frameworkFlag, curr_framework);
       StringBuilderAppend(mate_state.arena, &builder, buffer);
       continue;
     }
-    String buffer = F(mate_state.arena, " %s %s", frameworkFlag, currFW.data);
+    String buffer = F(mate_state.arena, " %s %s", frameworkFlag, curr_framework);
     StringBuilderAppend(mate_state.arena, &builder, buffer);
   }
 
   *targetLibs = builder.buffer;
 }
 
-static void mate_add_include_paths(String *targetIncludes, StringVector *includes) {
+static void mate_add_include_paths(String *targetIncludes, char **includes, size_t includes_size) {
   StringBuilder builder = StringBuilderCreate(mate_state.arena);
 
   if (targetIncludes->length) {
@@ -6486,26 +6465,26 @@ static void mate_add_include_paths(String *targetIncludes, StringVector *include
 
   if (isMSVC()) {
     // MSVC format: /I"path"
-    for (size_t i = 0; i < includes->length; i++) {
-      String currInclude = VecAt((*includes), i);
+    for (size_t i = 0; i < includes_size; i++) {
+      char *curr_include = includes[i];
       if (i == 0 && builder.buffer.length == 0) {
-        String buffer = F(mate_state.arena, "/I\"%s\"", currInclude.data);
+        String buffer = F(mate_state.arena, "/I\"%s\"", curr_include);
         StringBuilderAppend(mate_state.arena, &builder, buffer);
         continue;
       }
-      String buffer = F(mate_state.arena, " /I\"%s\"", currInclude.data);
+      String buffer = F(mate_state.arena, " /I\"%s\"", curr_include);
       StringBuilderAppend(mate_state.arena, &builder, buffer);
     }
   } else {
     // GCC/Clang format: -I"path"
-    for (size_t i = 0; i < includes->length; i++) {
-      String currInclude = VecAt((*includes), i);
+    for (size_t i = 0; i < includes_size; i++) {
+      char *curr_include = includes[i];
       if (i == 0 && builder.buffer.length == 0) {
-        String buffer = F(mate_state.arena, "-I\"%s\"", currInclude.data);
+        String buffer = F(mate_state.arena, "-I\"%s\"", curr_include);
         StringBuilderAppend(mate_state.arena, &builder, buffer);
         continue;
       }
-      String buffer = F(mate_state.arena, " -I\"%s\"", currInclude.data);
+      String buffer = F(mate_state.arena, " -I\"%s\"", curr_include);
       StringBuilderAppend(mate_state.arena, &builder, buffer);
     }
   }
@@ -6513,7 +6492,7 @@ static void mate_add_include_paths(String *targetIncludes, StringVector *include
   *targetIncludes = builder.buffer;
 }
 
-static void mate_add_framework_paths(String *targetIncludes, StringVector *includes) {
+static void mate_add_framework_paths(String *targetIncludes, char **frameworks, size_t frameworks_size) {
   Assert(isClang() || isGCC(), "AddFrameworkPaths: This function is only supported for GCC/Clang.");
 
   StringBuilder builder = StringBuilderCreate(mate_state.arena);
@@ -6524,14 +6503,14 @@ static void mate_add_framework_paths(String *targetIncludes, StringVector *inclu
   }
 
   // GCC/Clang format: -F"path"
-  for (size_t i = 0; i < includes->length; i++) {
-    String currInclude = VecAt((*includes), i);
+  for (size_t i = 0; i < frameworks_size; i++) {
+    char *curr_include = frameworks[i];
     if (i == 0 && builder.buffer.length == 0) {
-      String buffer = F(mate_state.arena, "-F\"%s\"", currInclude.data);
+      String buffer = F(mate_state.arena, "-F\"%s\"", curr_include);
       StringBuilderAppend(mate_state.arena, &builder, buffer);
       continue;
     }
-    String buffer = F(mate_state.arena, " -F\"%s\"", currInclude.data);
+    String buffer = F(mate_state.arena, " -F\"%s\"", curr_include);
     StringBuilderAppend(mate_state.arena, &builder, buffer);
   }
 

@@ -151,6 +151,8 @@ typedef enum { NONE = 0, NEEDED, WEAK } LinkFrameworkOptions;
 
 typedef StringBuilder FlagBuilder;
 
+#define ARR_LEN(arr) sizeof((arr)) / sizeof(*(arr))
+
 /* --- Build System --- */
 void CreateConfig(MateOptions options);
 
@@ -169,83 +171,54 @@ typedef enum { COMPILE_COMMANDS_SUCCESS = 0, COMPILE_COMMANDS_FAILED_OPEN_FILE =
 #define CreateCompileCommands(target) mate_create_compile_commands((target).ninjaBuildPath);
 static WARN_UNUSED CreateCompileCommandsError mate_create_compile_commands(String ninjaBuildPath);
 
-#define AddLibraryPaths(target, ...)             \
-  do {                                           \
-    StringVector _libs = {0};                    \
-    StringVectorPushMany(_libs, __VA_ARGS__);    \
-    mate_add_library_paths(&(target).libs, &_libs); \
-                                                 \
-    /* Cleanup */                                \
-    VecFree(_libs);                              \
+#define AddLibraryPaths(target, ...)                               \
+  do {                                                             \
+    char *_libs[] = {__VA_ARGS__};                                 \
+    mate_add_library_paths(&(target).libs, _libs, ARR_LEN(_libs)); \
   } while (0)
-static void mate_add_library_paths(String *targetLibs, StringVector *libs);
+static void mate_add_library_paths(String *targetLibs, char **libs, size_t libs_size);
 
-#define LinkSystemLibraries(target, ...)             \
-  do {                                               \
-    StringVector _libs = {0};                        \
-    StringVectorPushMany(_libs, __VA_ARGS__);        \
-    mate_link_system_libraries(&(target).libs, &_libs); \
-                                                     \
-    /* Cleanup */                                    \
-    VecFree(_libs);                                  \
+#define LinkSystemLibraries(target, ...)                               \
+  do {                                                                 \
+    char *_libs[] = {__VA_ARGS__};                                       \
+    mate_link_system_libraries(&(target).libs, _libs, ARR_LEN(_libs)); \
   } while (0)
-static void mate_link_system_libraries(String *targetLibs, StringVector *libs);
+static void mate_link_system_libraries(String *targetLibs, char **libs, size_t libs_size);
 
-#define LinkFrameworks(target, ...)                        \
-  do {                                                     \
-    StringVector _frameworks = {0};                        \
-    StringVectorPushMany(_frameworks, __VA_ARGS__);        \
-    /* Frameworks are just specialized library bundles. */ \
-    mate_link_frameworks(&(target).libs, &_frameworks);      \
-                                                           \
-    /* Cleanup */                                          \
-    VecFree(_frameworks);                                  \
+#define LinkFrameworks(target, ...)                                          \
+  do {                                                                       \
+    char *_frameworks[] = {__VA_ARGS__};                                     \
+    mate_link_frameworks(&(target).libs, _frameworks, ARR_LEN(_frameworks)); \
   } while (0)
-static void mate_link_frameworks(String *targetLibs, StringVector *frameworks);
+static void mate_link_frameworks(String *targetLibs, char **frameworks, size_t frameworks_size);
 
-#define LinkFrameworksWithOptions(target, options, ...)                              \
-  do {                                                                    \
-    StringVector _frameworks = {0};                                       \
-    StringVectorPushMany(_frameworks, __VA_ARGS__);                       \
-    /* Frameworks are just specialized library bundles. */                \
-    mate_link_frameworks_with_options(&(target).libs, options, &_frameworks); \
-                                                                          \
-    /* Cleanup */                                                         \
-    VecFree(_frameworks);                                                 \
+#define LinkFrameworksWithOptions(target, options, ...)                                            \
+  do {                                                                                             \
+    char *_frameworks[] = {__VA_ARGS__};                                                           \
+    mate_link_frameworks_with_options(&(target).libs, options, _frameworks, ARR_LEN(_frameworks)); \
   } while (0)
-static void mate_link_frameworks_with_options(String *targetLibs, LinkFrameworkOptions options, StringVector *frameworks);
+static void mate_link_frameworks_with_options(String *targetLibs, LinkFrameworkOptions options, char **frameworks, size_t frameworks_size);
 
-#define AddIncludePaths(target, ...)                     \
-  do {                                                   \
-    StringVector _includes = {0};                        \
-    StringVectorPushMany(_includes, __VA_ARGS__);        \
-    mate_add_include_paths(&(target).includes, &_includes); \
-                                                         \
-    /* Cleanup */                                        \
-    VecFree(_includes);                                  \
+#define AddIncludePaths(target, ...)                                           \
+  do {                                                                         \
+    char *_includes[] = {__VA_ARGS__};                                         \
+    mate_add_include_paths(&(target).includes, _includes, ARR_LEN(_includes)); \
   } while (0)
-static void mate_add_include_paths(String *targetIncludes, StringVector *vector);
+static void mate_add_include_paths(String *targetIncludes, char **includes, size_t includes_size);
 
-#define AddFrameworkPaths(target, ...)                       \
-  do {                                                       \
-    StringVector _frameworks = {0};                          \
-    StringVectorPushMany(_frameworks, __VA_ARGS__);          \
-    /* Frameworks are just specialized library bundles. */   \
-    mate_add_framework_paths(&(target).includes, &_frameworks); \
-                                                             \
-    /* Cleanup */                                            \
-    VecFree(_frameworks);                                    \
+#define AddFrameworkPaths(target, ...)                                               \
+  do {                                                                               \
+    char *_frameworks[] = {__VA_ARGS__};                                             \
+    mate_add_framework_paths(&(target).includes, _frameworks, ARR_LEN(_frameworks)); \
   } while (0)
-static void mate_add_framework_paths(String *targetIncludes, StringVector *includes);
+static void mate_add_framework_paths(String *targetIncludes, char **includes, size_t includes_size);
 
-#define AddFile(target, source) mate_add_file(&(target).sources, s(source));
-static void mate_add_file(StringVector *sources, String source);
-
-#define AddFiles(target, files)                                                                           \
-  do {                                                                                                    \
-    Assert(sizeof(files) != sizeof(*(files)), "AddFiles: failed, files must be an array, not a pointer"); \
-    mate_add_files(&(target).sources, files, sizeof(files) / sizeof(*(files)));                           \
+#define AddFile(target, ...)                                   \
+  do {                                                          \
+    char *_files[] = {__VA_ARGS__};                             \
+    mate_add_files(&(target).sources, _files, ARR_LEN(_files)); \
   } while (0);
+static void mate_add_file(StringVector *sources, String source);
 static void mate_add_files(StringVector *sources, char **source, size_t size);
 
 #define RemoveFile(target, source) mate_remove_file(&(target).sources, s(source));

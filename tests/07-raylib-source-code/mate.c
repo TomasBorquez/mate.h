@@ -43,10 +43,7 @@ i32 main(void) {
           .flags = GetCFlags(),
       });
 
-      AddFile(staticLib, "./src/rcore.c");
-      AddFile(staticLib, "./src/utils.c");
-      AddFile(staticLib, "./src/rglfw.c");
-
+      AddFile(staticLib, "./src/rcore.c", "./src/utils.c", "./src/rglfw.c");
       AddFile(staticLib, "./src/rshapes.c");
       AddFile(staticLib, "./src/rtextures.c");
       AddFile(staticLib, "./src/rtext.c");

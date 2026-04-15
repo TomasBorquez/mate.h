@@ -35,19 +35,21 @@
     - [x] StrNew
     - [x] StrNewSize
 - [x] Add cleaner build messages in ninja like CMake does
-- [ ] Avoid using StringVector for simple stuff instead use __VA_ARGS__
-    - [ ] AddLibraryPaths
-    - [ ] LinkSystemLibraries
-    - [ ] LinkFrameworks
-    - [ ] LinkFrameworksWithOptions
-    - [ ] AddIncludePaths
-    - [ ] AddFrameworkPaths
-    - [ ] AddFile/AddFiles should just be one
+- [x] Avoid using StringVector for simple stuff instead use __VA_ARGS__
+    - [x] AddLibraryPaths
+    - [x] LinkSystemLibraries
+    - [x] LinkFrameworks
+    - [x] LinkFrameworksWithOptions
+    - [x] AddIncludePaths
+    - [x] AddFrameworkPaths
+    - [x] AddFile/AddFiles should just be one
+- [x] Proper cleanup
 - [ ] Simplify StringBuilderAppend pattern
     - [ ] F() -> StringBuilderAppendF with custom fast formatting
     - [ ] Macro for less verbosity like in amalgam-script
+- [ ] Move ARR_LEN() to base.h
+- [ ] Fix UB error in IniGet/IniSet
 - [ ] Path handling is pretty ugly, improve it
-- [ ] Proper cleanup
 
 #### Examples
 - [ ] Show how to use FS functions `FileWrite`, `FileDelete`, etc.
