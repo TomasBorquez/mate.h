@@ -513,7 +513,8 @@ static void mate_install_executable(Executable *executable) {
   if (executable->libs.length > 0) {
     StringBuilderAppend(mate_state.arena, &builder, S(" $libs"));
   }
-  StringBuilderAppend(mate_state.arena, &builder, S("\n\n"));
+  StringBuilderAppend(mate_state.arena, &builder, S("\n"));
+  StringBuilderAppend(mate_state.arena, &builder, S("  description = Linking C executable $target\n\n"));
 
   // Compile command
   StringBuilderAppend(mate_state.arena, &builder, S("rule compile\n  command = $cc"));
@@ -529,14 +530,14 @@ static void mate_install_executable(Executable *executable) {
     StringBuilderAppend(mate_state.arena, &builder, S("  deps = msvc\n\n"));
   } else {
     if (mate_state.compiler == TCC) {
-      StringBuilderAppend(mate_state.arena, &builder, S(" -c $in -o $out\n"));
+      StringBuilderAppend(mate_state.arena, &builder, S(" -c $cwd/$in -o $out\n"));
     }
     if (mate_state.compiler == GCC || mate_state.compiler == CLANG) {
-      StringBuilderAppend(mate_state.arena, &builder, S(" -c $in -o $out -MMD -MF $depfile\n"));
+      StringBuilderAppend(mate_state.arena, &builder, S(" -c $cwd/$in -o $out -MMD -MF $depfile\n"));
       StringBuilderAppend(mate_state.arena, &builder, S("  depfile = $depfile\n"));
       StringBuilderAppend(mate_state.arena, &builder, S("  deps = gcc\n")); // INFO: since clang replicates this
     }
-    StringBuilderAppend(mate_state.arena, &builder, S("\n"));
+    StringBuilderAppend(mate_state.arena, &builder, S("  description = Building C object ./$in\n\n"));
   }
 
   // Build individual source files
@@ -552,7 +553,7 @@ static void mate_install_executable(Executable *executable) {
     // Source build command
     StringBuilderAppend(mate_state.arena, &builder, S("build $builddir/"));
     StringBuilderAppend(mate_state.arena, &builder, outputFile);
-    StringBuilderAppend(mate_state.arena, &builder, S(": compile $cwd/"));
+    StringBuilderAppend(mate_state.arena, &builder, S(": compile "));
     StringBuilderAppend(mate_state.arena, &builder, sourceFile);
     StringBuilderAppend(mate_state.arena, &builder, S("\n"));
 
@@ -660,10 +661,12 @@ static void mate_install_static_lib(StaticLib *staticLib) {
   StringBuilderAppend(mate_state.arena, &builder, S("\n\n"));
 
   // Archive command
-  StringBuilderAppend(mate_state.arena, &builder, S("rule archive\n  command = $ar $ar_flags $out $in\n\n"));
+  StringBuilderAppend(mate_state.arena, &builder, S("rule archive\n"
+                        "  command = $ar $ar_flags $out $in\n"
+                        "  description = Archiving $out\n\n"));
 
   // Compile command
-  StringBuilderAppend(mate_state.arena, &builder, S("rule compile\n  command = $cc"));
+  StringBuilderAppend(mate_state.arena, &builder, S("rule compile\n" "  command = $cc"));
   if (staticLib->flags.length > 0) {
     StringBuilderAppend(mate_state.arena, &builder, S(" $flags"));
   }
@@ -672,13 +675,14 @@ static void mate_install_static_lib(StaticLib *staticLib) {
   }
 
   if (mate_state.compiler == TCC) {
-    StringBuilderAppend(mate_state.arena, &builder, S(" -c $in -o $out\n"));
+    StringBuilderAppend(mate_state.arena, &builder, S(" -c $cwd/$in -o $out\n"));
   }
   if (mate_state.compiler == GCC || mate_state.compiler == CLANG) {
-    StringBuilderAppend(mate_state.arena, &builder, S(" -c $in -o $out -MMD -MF $depfile\n"));
+    StringBuilderAppend(mate_state.arena, &builder, S(" -c $cwd/$in -o $out -MMD -MF $depfile\n"));
     StringBuilderAppend(mate_state.arena, &builder, S("  depfile = $depfile\n"));
     StringBuilderAppend(mate_state.arena, &builder, S("  deps = gcc\n")); // INFO: since clang replicates this
   }
+  StringBuilderAppend(mate_state.arena, &builder, S("  description = Building C object ./$in\n"));
   StringBuilderAppend(mate_state.arena, &builder, S("\n"));
 
   // Build individual source files
@@ -694,7 +698,7 @@ static void mate_install_static_lib(StaticLib *staticLib) {
     // Source build command
     StringBuilderAppend(mate_state.arena, &builder, S("build $builddir/"));
     StringBuilderAppend(mate_state.arena, &builder, outputFile);
-    StringBuilderAppend(mate_state.arena, &builder, S(": compile $cwd/"));
+    StringBuilderAppend(mate_state.arena, &builder, S(": compile "));
     StringBuilderAppend(mate_state.arena, &builder, sourceFile);
     StringBuilderAppend(mate_state.arena, &builder, S("\n"));
 

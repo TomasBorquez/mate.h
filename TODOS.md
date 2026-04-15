@@ -33,6 +33,7 @@
 - [x] Look to not create new strings on heap when not necessary
     - [x] StrNew
     - [x] StrNewSize
+- [x] Add cleaner build messages in ninja like CMake does
 - [ ] Avoid using StringVector for simple stuff instead use __VA_ARGS__
     - [ ] AddLibraryPaths
     - [ ] LinkSystemLibraries
@@ -44,7 +45,6 @@
 - [ ] Simplify StringBuilderAppend pattern
     - [ ] F() -> StringBuilderAppendF with custom fast formatting
     - [ ] Macro for less verbosity like in amalgam-script
-- [ ] Add cleaner build messages in ninja like cmake does
 - [ ] Path handling is pretty ugly, improve it
 - [ ] Proper cleanup
 
