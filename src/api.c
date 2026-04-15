@@ -242,7 +242,7 @@ Executable CreateExecutable(ExecutableOptions opts) {
       "\n"
       "CreateExecutable((ExecutableOptions) { .output = \"main\"});");
 
-  String executable_output = NormalizeExePath(mate_state.arena, s(opts.output));
+  String executable_output = NormalizeExePath(mate_state.arena, s(opts.output)); // TODO: first validate then normalize
   Assert(mate_is_valid_output(executable_output),
          "CreateExecutable: ExecutableOptions.output shouldn't be a path, e.g: \n"
          "\n"
@@ -292,15 +292,18 @@ StaticLib CreateStaticLib(StaticLibOptions opts) {
       "CreateStaticLib: failed, StaticLibOptions.output should never be null, please define the output name like this: \n"
       "\n"
       "CreateStaticLib((StaticLibOptions) { .output = \"libexample\"});");
-  String staticLibOutput = NormalizeStaticLibPath(mate_state.arena, s(opts.output)); // necessary?
+
+  String staticLibOutput = NormalizeStaticLibPath(mate_state.arena, s(opts.output)); // TODO: first validate then normalize
   Assert(mate_is_valid_output(s(opts.output)),
-         "MateParseStaticLibOptions: failed, StaticLibOptions.output shouldn't be a path, e.g: \n"
+         "MateParseStaticLibOptions: failed, StaticLibOptions.output shouldn't "
+         "be a path, e.g: \n"
          "\n"
          "Correct:\n"
          "CreateStaticLib((StaticLibOptions) { .output = \"libexample\"});\n"
          "\n"
          "Incorrect:\n"
-         "CreateStaticLib((StaticLibOptions) { .output = \"./output/libexample.a\"});");
+         "CreateStaticLib((StaticLibOptions) { .output = "
+         "\"./output/libexample.a\"});");
 
   StaticLib result = {0};
   result.output = NormalizePath(mate_state.arena, staticLibOutput);
@@ -753,6 +756,7 @@ static void mate_install_static_lib(StaticLib *staticLib) {
 #endif
 }
 
+// TODO: use is_empty pattern from mate_flag_builder_add_string on all:
 static void mate_add_library_paths(String *targetLibs, StringVector *libs) {
   StringBuilder builder = StringBuilderCreate(mate_state.arena);
 
@@ -945,13 +949,13 @@ FlagBuilder FlagBuilderReserve(size_t count) {
 }
 
 static void mate_flag_builder_add_string(FlagBuilder *builder, char *flag) {
-  bool empty = builder->buffer.length == 0;
+  bool is_empty = builder->buffer.length == 0;
   if (mate_state.compiler == MSVC) {
     Assert(flag[0] != '/', "FlagBuilderAdd: flag should not contain '/'. Your flag:\n%s \n\ne.g usage FlagBuilderAdd(\"W4\")", flag);
-    StringBuilderAppend(mate_state.arena, builder, empty ? S("/") : S(" /"));
+    StringBuilderAppend(mate_state.arena, builder, is_empty ? S("/") : S(" /"));
   } else {
     Assert(flag[0] != '-', "FlagBuilderAdd: flag should not contain '-'. Your flag:\n%s \n\ne.g usage FlagBuilderAdd(\"Wall\")", flag);
-    StringBuilderAppend(mate_state.arena, builder, empty ? S("-") : S(" -"));
+    StringBuilderAppend(mate_state.arena, builder, is_empty ? S("-") : S(" -"));
   }
   StringBuilderAppend(mate_state.arena, builder, s(flag));
 }
@@ -964,9 +968,13 @@ static void mate_flag_builder_add_list(FlagBuilder *fb, char **flags) {
 
 /* --- Path Utils Implementation --- */
 static bool mate_is_valid_output(String output) {
+  if (output.data[0] == '.') {
+    return false;
+  }
+
   for (size_t i = 0; i < output.length; i++) {
     char curr_char = output.data[i];
-    if (curr_char == '/' || curr_char == '\\' || curr_char == '.') {
+    if (curr_char == '/' || curr_char == '\\') {
       return false;
     }
   }
