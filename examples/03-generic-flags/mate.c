@@ -1,7 +1,7 @@
 #define MATE_IMPLEMENTATION
 #include "../../mate.h"
 
-i32 main(void) {
+int main(void) {
   StartBuild();
   {
     // No matter the compiler (MSVC/GCC/CLANG), this would give "equivalent" flags

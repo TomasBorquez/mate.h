@@ -16,7 +16,7 @@ static char *GetCFlags(void) {
   return flagsBuilder.buffer.data;
 }
 
-i32 main(void) {
+int main(void) {
   StartBuild();
   {
     StaticLib staticLib = CreateStaticLib((StaticLibOptions){.output = "liblua", .std = FLAG_STD_C99, .warnings = FLAG_WARNINGS_NONE, .flags = GetCFlags()});

@@ -1,7 +1,7 @@
 #define MATE_IMPLEMENTATION
 #include "../../mate.h"
 
-i32 main(void) {
+int main(void) {
   // You can create a config that allows you to use different compilers as well as build directories
   CreateConfig((MateOptions){.compiler = CLANG, .buildDirectory = "./custom-dir"});
 

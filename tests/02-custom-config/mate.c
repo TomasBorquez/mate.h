@@ -1,7 +1,7 @@
 #define MATE_IMPLEMENTATION
 #include "../../mate.h"
 
-i32 main(void) {
+int main(void) {
   CreateConfig((MateOptions){.buildDirectory = "./custom-dir"});
 
   StartBuild();

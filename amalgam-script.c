@@ -11,19 +11,20 @@ String result_path = S("./mate.h");
 
 static FileResult read_source(String path) {
   FileResult result = {0};
-  errno_t err = FileStats(path, &result.stats);
-  if (err != SUCCESS) {
-    LogError("Error on FileStats: %d", err);
-    abort();
+  FileStatsResult stats_result = FileStats(path);
+  if (stats_result.error != SUCCESS) {
+    Unreachable("Error on FileStats: %d", stats_result.error);
   }
 
-  result.arena = ArenaCreate(result.stats.size);
-  err = FileRead(result.arena, path, &result.buffer);
-  if (err != SUCCESS) {
-    LogError("Error on FileRead: %d", err);
-    abort();
+  File stats = stats_result.data;
+  result.stats = stats;
+  result.arena = ArenaCreate(stats.size);
+  FileReadResult read_result = FileRead(result.arena, path, stats.size);
+  if (read_result.error != SUCCESS) {
+    Unreachable("Error on FileRead: %d", read_result.error);
   }
 
+  result.buffer = read_result.data;
   return result;
 }
 
@@ -78,20 +79,53 @@ static String escape_string(Arena *arena, String *str) {
   return result;
 }
 
-Arena *builder_arena;
+static StringVector str_split_new_line(Arena *arena, String str) {
+  Assert(!StrIsNull(str), "SplitNewLine: str should never be NULL");
+
+  char *start = str.data;
+  const char *end = str.data + str.length;
+  char *curr = start;
+  StringVector result = {0};
+
+  while (curr < end) {
+    char *pos = curr;
+
+    while (pos < end && *pos != '\n') {
+      pos++;
+    }
+
+    size_t len = pos - curr;
+
+    if (pos < end && pos > curr && *(pos - 1) == '\r') {
+      len--;
+    }
+
+    String currString = StrNewSize(arena, curr, len);
+    VecPush(result, currString);
+
+    if (pos < end) {
+      curr = pos + 1;
+    } else {
+      break;
+    }
+  }
+
+  return result;
+}
+
 StringBuilder builder;
 #define SB_STR(str)                                       \
   do {                                                     \
-    StringBuilderAppend(builder_arena, &builder, S(str));  \
-    StringBuilderAppend(builder_arena, &builder, S("\n")); \
+    SBAdd(&builder, S(str));  \
+    SBAdd(&builder, S("\n")); \
   } while (0)
 #define SB_VAR(var)                                       \
   do {                                                     \
-    StringBuilderAppend(builder_arena, &builder, var);     \
-    StringBuilderAppend(builder_arena, &builder, S("\n")); \
+    SBAdd(&builder, var);     \
+    SBAdd(&builder, S("\n")); \
   } while (0)
 
-i32 main(void) {
+int main(void) {
   reset_amalgam_file();
 
   FileResult api_header = read_source(S("./src/api.h"));
@@ -101,13 +135,13 @@ i32 main(void) {
 
   size_t total_size = (api_header.stats.size + api_impl.stats.size + vendor_base.stats.size + samurai_source.stats.size) * 2;
   Arena *arena = ArenaCreate(total_size);
-  builder_arena = ArenaCreate(total_size);
-  builder = StringBuilderReserve(builder_arena, total_size);
+  Arena *builder_arena = ArenaCreate(total_size);
+  builder = SBReserve(builder_arena, total_size);
 
-  StringVector api_header_split = StrSplitNewLine(arena, api_header.buffer);
-  StringVector api_impl_split = StrSplitNewLine(arena, api_impl.buffer);
-  StringVector vendor_base_split = StrSplitNewLine(arena, vendor_base.buffer);
-  StringVector samurai_source_split = StrSplitNewLine(arena, samurai_source.buffer);
+  StringVector api_header_split = str_split_new_line(arena, api_header.buffer);
+  StringVector api_impl_split = str_split_new_line(arena, api_impl.buffer);
+  StringVector vendor_base_split = str_split_new_line(arena, vendor_base.buffer);
+  StringVector samurai_source_split = str_split_new_line(arena, samurai_source.buffer);
 
   String delim_base = S("#include \"../vendor/base/base.h\"");
   String delim_mate = S("// --- MATE.H END ---");
@@ -189,10 +223,9 @@ i32 main(void) {
     SB_VAR(*api_header_curr_line);
   }
 
-  FileWriteError result = FileWrite(result_path, builder.buffer);
-  if (result != 0) {
-    LogError("FileWrite on path %s, failed with error %d", result_path.data, result);
-    return -result;
+  Error err = FileWrite(result_path, builder.buffer);
+  if (err != SUCCESS) {
+    Unreachable("FileWrite on path %s, failed with error %d", result_path.data, err);
   }
 
   LogSuccess("created amalgam %s", result_path.data);

@@ -3,7 +3,7 @@
 
 #define SAMU_VERSION_OUTPUT 2
 
-i32 main(void) {
+int main(void) {
   StartBuild();
   {
     Executable executable = CreateExecutable((ExecutableOptions){

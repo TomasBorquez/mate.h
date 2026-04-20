@@ -1,7 +1,7 @@
 #define MATE_IMPLEMENTATION
 #include "../../mate.h"
 
-i32 main(void) {
+int main(void) {
   StartBuild();
   {
     // NOTE: Add .exe to make sure it removes on linux builds

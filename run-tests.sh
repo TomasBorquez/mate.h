@@ -48,11 +48,18 @@ ROOT_DIR="$(pwd)"
 for test in "${TESTS[@]}"; do
   if "$IS_WINDOWS"; then
     for skip in "${WINDOWS_SKIP[@]}"; do
-      if [ "$test" = "$skip" ]; then
+      if [ "$test" == "$skip" ]; then
         echo "Skipping $test (not supported on Windows)"
         continue 2
       fi
     done
+  fi
+
+  if [[ "$COMPILER" == "tcc" ]]; then
+    if [[ "$test" == "07-raylib-source-code" ]]; then
+      echo "Skipping $test (not supported on TCC)"
+      continue 2
+    fi
   fi
 
   echo ""

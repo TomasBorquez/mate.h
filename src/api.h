@@ -22,7 +22,7 @@
 
 /* --- Type Definitions --- */
 typedef struct {
-  i64 last_build;
+  uint64_t last_build;
   bool samurai_build;
   bool first_build;
 } MateCache;
@@ -71,8 +71,8 @@ typedef struct {
   Arena *arena;
   bool init_config;
 
-  i64 start_time;
-  i64 total_time;
+  int64_t start_time;
+  int64_t total_time;
 } MateConfig;
 
 typedef enum {
@@ -150,8 +150,6 @@ typedef struct {
 typedef enum { NONE = 0, NEEDED, WEAK } LinkFrameworkOptions;
 
 typedef StringBuilder FlagBuilder;
-
-#define ARR_LEN(arr) sizeof((arr)) / sizeof(*(arr))
 
 /* --- Build System --- */
 void CreateConfig(MateOptions options);

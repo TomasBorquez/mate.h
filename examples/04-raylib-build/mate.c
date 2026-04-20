@@ -1,7 +1,7 @@
 #define MATE_IMPLEMENTATION
 #include "../../mate.h"
 
-i32 main(void) {
+int main(void) {
   StartBuild();
   {
     Executable executable = CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall -g"});

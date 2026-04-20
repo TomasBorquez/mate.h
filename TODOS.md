@@ -42,14 +42,16 @@
     - [x] LinkFrameworksWithOptions
     - [x] AddIncludePaths
     - [x] AddFrameworkPaths
-    - [x] AddFile/AddFiles should just be one
+- [x] AddFile/AddFiles should just be one
 - [x] Proper cleanup
-- [ ] Simplify StringBuilderAppend pattern
-    - [ ] F() -> StringBuilderAppendF with custom fast formatting
-    - [ ] Macro for less verbosity like in amalgam-script
-- [ ] Move ARR_LEN() to base.h
-- [ ] Fix UB error in IniGet/IniSet
-- [ ] Path handling is pretty ugly, improve it
+- [ ] Replace all instances of camelCase to snake_case in proper cases
+- [ ] base.h
+    - [x] Fix UB error in IniGet/IniSet
+    - [x] Move ARR_LEN() to base.h
+    - [x] Simplify StringBuilderAppend pattern
+    - [x] F() -> StringBuilderAppendF with custom fast formatting
+    - [ ] SBAddS for automatic String
+    - [ ] Path handling is pretty ugly, improve it
 
 #### Examples
 - [ ] Show how to use FS functions `FileWrite`, `FileDelete`, etc.

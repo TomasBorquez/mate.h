@@ -34,7 +34,7 @@ static char *GetCFlags(void) {
   return flagsBuilder.buffer.data;
 }
 
-i32 main(void) {
+int main(void) {
   StartBuild();
   {
     { // Compile static lib
