@@ -345,7 +345,15 @@ static CreateCompileCommandsError mate_create_compile_commands(String ninjaBuild
   }
 
   String compile_commands_path = NormalizePath(mate_state.arena, F(mate_state.arena, "%s/compile_commands.json", mate_state.build_directory.data));
-  FILE *output_file = fopen(compile_commands_path.data, "w");
+
+  FILE *output_file = NULL;
+#  if defined(PLATFORM_WIN)
+  errno_t err = fopen_s(&output_file, compile_commands_path.data, "w");
+  Assert(err == SUCCESS, "CreateCompileCommands: failed to fopen_s path %s", compile_commands_path.data);
+#  else
+  output_file = fopen(compile_commands_path.data, "w");
+  Assert(output_file != NULL, "CreateCompileCommands: failed to open_s path %s, error: %s", compile_commands_path.data, strerror(errno));
+#  endif
 
   ninja_pipe = popen(compdb_cmd.data, "r");
   if (ninja_pipe == NULL) {
@@ -462,37 +470,37 @@ static void mate_install_executable(Executable *executable) {
   }
 
   { // Link command
-    SBAdd(&builder, S("rule link\n"
-                      "  command = $cc"));
-    if (executable->flags.length > 0)       SBAdd(&builder, S(" $flags"));
-    if (executable->linkerFlags.length > 0) SBAdd(&builder, S(" $linker_flags"));
+    SBAddS(&builder, "rule link\n"
+                      "  command = $cc");
+    if (executable->flags.length > 0)       SBAddS(&builder, " $flags");
+    if (executable->linkerFlags.length > 0) SBAddS(&builder, " $linker_flags");
 
-    if (!isMSVC()) SBAdd(&builder, S(" -o $out $in"));
-    else           SBAdd(&builder, S(" /Fe:$out $in"));
+    if (!isMSVC()) SBAddS(&builder, " -o $out $in");
+    else           SBAddS(&builder, " /Fe:$out $in");
 
-    if (executable->libs.length > 0) SBAdd(&builder, S(" $libs"));
-    SBAdd(&builder, S("\n"));
-    SBAdd(&builder, S("  description = Linking C executable $target\n\n"));
+    if (executable->libs.length > 0) SBAddS(&builder, " $libs");
+    SBAddS(&builder, "\n");
+    SBAddS(&builder, "  description = Linking C executable $target\n\n");
   }
 
   { // Compile command
-    SBAdd(&builder, S("rule compile\n"
-                      "  command = $cc"));
-    if (executable->flags.length > 0)    SBAdd(&builder, S(" $flags"));
-    if (executable->includes.length > 0) SBAdd(&builder, S(" $includes"));
+    SBAddS(&builder, "rule compile\n"
+                      "  command = $cc");
+    if (executable->flags.length > 0)    SBAddS(&builder, " $flags");
+    if (executable->includes.length > 0) SBAddS(&builder, " $includes");
 
     if (isMSVC()) {
-      SBAdd(&builder, S(" /showIncludes /c $in /Fo:$out\n"));
-      SBAdd(&builder, S("  deps = msvc\n\n"));
+      SBAddS(&builder, " /showIncludes /c $in /Fo:$out\n");
+      SBAddS(&builder, "  deps = msvc\n\n");
     } else {
       if (mate_state.compiler != GCC && mate_state.compiler != CLANG)
-        SBAdd(&builder, S(" -c $cwd/$in -o $out\n"));
+        SBAddS(&builder, " -c $cwd/$in -o $out\n");
       else {
-        SBAdd(&builder, S(" -c $cwd/$in -o $out -MMD -MF $depfile\n"));
-        SBAdd(&builder, S("  depfile = $depfile\n"));
-        SBAdd(&builder, S("  deps = gcc\n")); // INFO: clang replicates this
+        SBAddS(&builder, " -c $cwd/$in -o $out -MMD -MF $depfile\n");
+        SBAddS(&builder, "  depfile = $depfile\n");
+        SBAddS(&builder, "  deps = gcc\n"); // INFO: clang replicates this
       }
-      SBAdd(&builder, S("  description = Building C object ./$in\n\n"));
+      SBAddS(&builder, "  description = Building C object ./$in\n\n");
     }
   }
 
@@ -521,7 +529,7 @@ static void mate_install_executable(Executable *executable) {
     SBAddF(&builder, "build $target: link %S\n\n", output_builder.buffer);
   }
 
-  SBAdd(&builder, S("default $target\n"));
+  SBAddS(&builder, "default $target\n");
 
   // Build
   String ninja_build_path = executable->ninjaBuildPath;
@@ -558,7 +566,7 @@ static void mate_install_static_lib(StaticLib *static_lib) {
 
   { // Variables
     SBAddF(&builder, "cc = %S\n", CompilerToStr(mate_state.compiler));
-    SBAdd(&builder, S("ar = ar\n")); // TODO: Add different ar for MSVC
+    SBAddS(&builder, "ar = ar\n"); // TODO: Add different ar for MSVC
 
     if (static_lib->flags.length > 0)    SBAddF(&builder, "flags = %S\n", static_lib->flags);
     if (static_lib->arFlags.length > 0)  SBAddF(&builder, "ar_flags = %S\n", static_lib->arFlags);
@@ -574,24 +582,25 @@ static void mate_install_static_lib(StaticLib *static_lib) {
   }
 
   { // Archive command
-    SBAdd(&builder, S("rule archive\n"
-                      "  command = $ar $ar_flags $out $in\n"
-                      "  description = Archiving $out\n\n"));
+    SBAddS(&builder, "rule archive\n"
+                     "  command = $ar $ar_flags $out $in\n"
+                     "  description = Archiving $out\n\n");
   }
 
   { // Compile command
-    SBAdd(&builder, S("rule compile\n" "  command = $cc"));
-    if (static_lib->flags.length > 0)    SBAdd(&builder, S(" $flags"));
-    if (static_lib->includes.length > 0) SBAdd(&builder, S(" $includes"));
+    SBAddS(&builder, "rule compile\n"
+                     "  command = $cc");
+    if (static_lib->flags.length > 0)    SBAddS(&builder, " $flags");
+    if (static_lib->includes.length > 0) SBAddS(&builder, " $includes");
 
     if (mate_state.compiler != GCC && mate_state.compiler != CLANG)
-      SBAdd(&builder, S(" -c $cwd/$in -o $out\n"));
+      SBAddS(&builder, " -c $cwd/$in -o $out\n");
     else {
-      SBAdd(&builder, S(" -c $cwd/$in -o $out -MMD -MF $depfile\n"));
-      SBAdd(&builder, S("  depfile = $depfile\n"));
-      SBAdd(&builder, S("  deps = gcc\n")); // INFO: clang replicates this
+      SBAddS(&builder, " -c $cwd/$in -o $out -MMD -MF $depfile\n");
+      SBAddS(&builder, "  depfile = $depfile\n");
+      SBAddS(&builder, "  deps = gcc\n"); // INFO: clang replicates this
     }
-    SBAdd(&builder, S("  description = Building C object ./$in\n\n"));
+    SBAddS(&builder, "  description = Building C object ./$in\n\n");
   }
 
   { // Build individual source files
@@ -622,7 +631,7 @@ static void mate_install_static_lib(StaticLib *static_lib) {
     SBAddF(&builder, "build $target: archive %S\n\n",output_builder.buffer);
   }
 
-  SBAdd(&builder, S("default $target\n"));
+  SBAddS(&builder, "default $target\n");
 
   String ninja_build_path = static_lib->ninjaBuildPath;
   Error write_error = FileWrite(ninja_build_path, builder.buffer);
@@ -655,7 +664,7 @@ static void mate_add_library_paths(String *targetLibs, char **libs, size_t libs_
   StringBuilder builder = SBCreate(mate_state.arena);
 
   if (isMSVC() && targetLibs->length == 0) {
-    SBAdd(&builder, S("/link"));
+    SBAddS(&builder, "/link");
   }
 
   if (targetLibs->length) {
@@ -690,7 +699,7 @@ static void mate_link_system_libraries(String *targetLibs, char **libs, size_t l
   StringBuilder builder = SBCreate(mate_state.arena);
 
   if (isMSVC() && targetLibs->length == 0) {
-    SBAdd(&builder, S("/link"));
+    SBAddS(&builder, "/link");
   }
 
   if (targetLibs->length) {
@@ -771,7 +780,7 @@ static void mate_add_include_paths(String *targetIncludes, char **includes, size
 
   if (targetIncludes->length) {
     SBAdd(&builder, *targetIncludes);
-    SBAdd(&builder, S(" "));
+    SBAddS(&builder, " ");
   }
 
   if (isMSVC()) {
@@ -810,7 +819,7 @@ static void mate_add_framework_paths(String *targetIncludes, char **frameworks, 
 
   if (targetIncludes->length) {
     SBAdd(&builder, *targetIncludes);
-    SBAdd(&builder, S(" "));
+    SBAddS(&builder, " ");
   }
 
   // GCC/Clang format: -F"path"

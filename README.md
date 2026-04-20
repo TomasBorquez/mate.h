@@ -22,7 +22,7 @@ Here is a simple example of a `mate.c`:
 #define MATE_IMPLEMENTATION // Adds function implementations
 #include "mate.h"
 
-i32 main() {
+int main() {
   StartBuild();
   {
     Executable executable = CreateExecutable((ExecutableOptions){
@@ -53,18 +53,18 @@ which is a tinier and faster C compiler. On medium sized projects, our builds go
 ## Operating Systems
 | OS | Status | Notes |
 |---|---|---|
-| **Linux** | ✅ Supported | Uses [Samurai](https://github.com/michaelforney/samurai) under the hood |
-| **Windows** | ✅ Supported | Requires Ninja build system (Samurai [in progress](https://github.com/TomasBorquez/mate.h/issues/2)) |
-| **[MacOS](https://github.com/TomasBorquez/mate.h/issues/17)** | ⚠️ Supported | Limited testing done |
-| **FreeBSD** | ✅ Supported | TCC is not stable on FreeBSD, use GCC or Clang(LLVM) |
+| **Linux** | Supported | Uses [Samurai](https://github.com/michaelforney/samurai) under the hood |
+| **Windows** | Supported | Requires Ninja build system (Samurai [in progress](https://github.com/TomasBorquez/mate.h/issues/2)) |
+| **MacOS** | Supported | Must use Frameworks for libraries |
+| **FreeBSD** | Supported | TCC is not stable on FreeBSD, use GCC or Clang(LLVM) |
 
 ## Compilers
 | Compiler | Status | Notes |
 |---|---|---|
-| [**GCC**](https://gcc.gnu.org/) | ✅ Supported | Primary development target with best support |
-| [**Clang**](https://releases.llvm.org/) | ✅ Supported | Works perfectly well too |
-| [**TinyC**](https://bellard.org/tcc/) | ✅ Supported | Recommended if you want fast compile times |
-| [**MSVC**](https://visualstudio.microsoft.com/vs/features/cplusplus/) | ⚠️ Supported | Limiting testing done, MinGW is recommended instead |
+| [**GCC**](https://gcc.gnu.org/) | Supported | Primary development target with best support |
+| [**Clang**](https://releases.llvm.org/) | Supported | Works perfectly well too |
+| [**TinyC**](https://bellard.org/tcc/) | Supported | Recommended if you want fast compile times |
+| [**MSVC**](https://visualstudio.microsoft.com/vs/features/cplusplus/) | Somewhat Supported | Works normally except for libraries, MinGW is recommended instead |
 
 ## Contributing
 You wanna help out contributing? Great, read our [contribution guidelines](./.github/CONTRIBUTING.md) for information about the project and look into our [TODOS](./TODOS.md) or 
