@@ -11,28 +11,29 @@ permissions:
 jobs:
   test-examples:
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         compiler: [gcc, clang, tcc]
-    
+
     steps:
     - name: Checkout code with submodules
       uses: actions/checkout@v3
       with:
         submodules: recursive
-        fetch-depth: 0  
+        fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
-    
+
     - name: Install dependencies
       run: |
         sudo apt-get update -qq
         sudo apt-get install -y --no-install-recommends libx11-dev libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev libxext-dev libxfixes-dev libxrender-dev libgl1-mesa-dev
+
     - name: Install TCC
       if: matrix.compiler == 'tcc'
       run: |
         sudo apt-get install -y tcc
-    
+
     - name: Run tests
       run: |
         tests=(
@@ -44,24 +45,24 @@ jobs:
           "06-lua-source-code"
           "07-raylib-source-code"
         )
-        
+
         for test in "${tests[@]}"; do
-          # Skip raylib source code test for TCC
+          # skip raylib source code test for TCC
           if [ "${{ matrix.compiler }}" == "tcc" ] && [ "$test" == "07-raylib-source-code" ]; then
             echo "Skipping $test for TCC compiler"
             continue
           fi
-          
+
           echo "Running test $test with ${{ matrix.compiler }}..."
           cd ./tests/$test
-          
+
           ${{ matrix.compiler }} mate.c -o mate
           ./mate
-          
+
           if [ $? -ne 0 ]; then
             echo "Test $test failed with ${{ matrix.compiler }}"
             exit 1
           fi
-          
+
           cd - > /dev/null
         done
