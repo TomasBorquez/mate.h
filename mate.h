@@ -164,6 +164,8 @@
 /* Process/Threading */
 #  define sleep(x) Sleep((x) * 1000)
 #  define usleep(x) Sleep((x) / 1000)
+#  define popen _popen
+#  define pclose _pclose
 
 /* Some functions need complete replacements */
 #  if defined(COMPILER_MSVC)
@@ -6059,9 +6061,6 @@ static void mate_link_frameworks(String *targetLibs, char **frameworks, size_t f
 }
 
 static void mate_link_frameworks_with_options(String *targetLibs, LinkFrameworkOptions options, char **frameworks, size_t frameworks_size) {
-  Assert(!isGCC(),
-          "LinkFrameworks: Automatic framework linking is not supported by GCC. "
-          "Use standard linking functions after adding a framework path instead.");
   Assert(isClang(), "LinkFrameworks: This function is only supported for Clang.");
 
   char *frameworkFlag = NULL;
