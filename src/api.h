@@ -65,6 +65,7 @@ typedef struct {
   String mate_source;
   String mate_exe;
 
+  String cwd;
   MateCache mate_cache;
   IniFile cache;
 
@@ -231,14 +232,23 @@ static void mate_flag_builder_add_string(FlagBuilder *builder, char *flag);
 static void mate_flag_builder_add_list(FlagBuilder *fb, char **flags);
 
 /* --- Path Utils --- */
-static bool mate_is_valid_output(String output);
+static String mate_path_with_platform_ext(Arena *arena, String path, String unix_ext, String win_ext);
 
-static String mate_fix_path(String str);
-static String mate_fix_path_exe(String str);
-static String mate_convert_ninja_path(String str);
+String PathJoin(String base, String tail);
+String PathStem(String path);
 
-static StringVector mate_output_transformer(StringVector vector);
-static bool mate_global_match(String pattern, String text);
+String NormPath(String path);
+String NormPathStart(String path);
+String NormPathEnd(String path) ;
+
+String NormPathExe(String str);
+String NormPathStaticLib(String str);
+String NormPathNinja(String str);
+String NormPathOutput(String str);
+
+String AbsoluteNormPath(String str);
+String AbsoluteNormPathExe(String str);
+String AbsoluteNormPathStaticLib(String str);
 
 /* --- Utils --- */
 WARN_UNUSED errno_t RunCommand(String command);

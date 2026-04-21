@@ -40,6 +40,7 @@
 #endif
 
 #if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
+#  define GCC_VERSION (__GNUC__ * 100 + __GNUC_MINOR__)
 #  define NORETURN __attribute__((noreturn))
 #  define RETURNS_NON_NULL __attribute__((returns_nonnull))
 #  define PARAM_NON_NULL __attribute__((nonnull))
@@ -50,6 +51,13 @@
 #  define UNLIKELY(x) __builtin_expect(!!(x), 0)
 #  define FORMAT_CHECK(fmt_pos, args_pos) __attribute__((format(printf, fmt_pos, args_pos)))
 #  define WARN_UNUSED __attribute__((warn_unused_result))
+
+#  if (GCC_VERSION >= 1100)
+#    define ATTR_MALLOC_DEALLOC(fn) __attribute__((malloc(fn, 1)))
+#  else
+#    define ATTR_MALLOC_DEALLOC(fn)
+#  endif
+
 #elif defined(COMPILER_MSVC)
 #  define NORETURN __declspec(noreturn)
 #  define RETURNS_NON_NULL
@@ -61,6 +69,8 @@
 #  define UNLIKELY(x) x
 #  define FORMAT_CHECK(fmt_pos, args_pos)
 #  define WARN_UNUSED _Check_return_
+
+#  define ATTR_MALLOC_DEALLOC(fn)
 #else
 #  define NORETURN __declspec(noreturn)
 #  define RETURNS_NON_NULL
@@ -72,6 +82,8 @@
 #  define UNLIKELY(x) x
 #  define FORMAT_CHECK(fmt_pos, args_pos)
 #  define WARN_UNUSED
+
+#  define ATTR_MALLOC_DEALLOC(fn)
 #endif
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
@@ -304,12 +316,10 @@ typedef struct {
   __ArenaChunk *current;
   size_t offset;
   __ArenaChunk *root;
-  size_t chunkSize;
+  size_t chunk_size;
 } Arena;
 
 #define DEFAULT_ALIGNMENT (2 * sizeof(void *))
-
-Arena *ArenaCreate(size_t chunkSize); // TODO: add allocation hint
 
 ALLOC_ATTR(2) void *ArenaAlloc(Arena *arena, size_t size);
 ALLOC_ATTR(2) char *ArenaAllocChars(Arena *arena, size_t count);
@@ -317,6 +327,8 @@ ALLOC_ATTR2(2, 3) void *ArenaAllocAligned(Arena *arena, size_t size, size_t alig
 
 void ArenaFree(Arena *arena) PARAM_NON_NULL;
 void ArenaReset(Arena *arena) PARAM_NON_NULL;
+
+Arena *ArenaCreate(size_t chunk_size) ATTR_MALLOC_DEALLOC(ArenaFree);
 
 /* --- Memory Allocations --- */
 void *Realloc(void *block, size_t size) RETURNS_NON_NULL;
@@ -352,13 +364,6 @@ void StrTrim(String *string);
 
 String StrSlice(Arena *arena, String str, size_t start, ssize_t end);
 bool StrIncludes(String source, String subStr);
-
-String NormalizePath(Arena *arena, String path);
-String NormalizeExePath(Arena *arena, String path);
-String NormalizeExtension(Arena *arena, String path);
-String NormalizeStaticLibPath(Arena *arena, String path);
-String NormalizePathStart(Arena *arena, String path);
-String NormalizePathEnd(Arena *arena, String path);
 
 typedef struct {
   size_t capacity;
@@ -724,14 +729,14 @@ int64_t TimeNow(void) {
   li.HighPart = ft.dwHighDateTime;
   // Convert Windows FILETIME (100-nanosecond intervals since January 1, 1601)
   // to UNIX timestamp in milliseconds
-  int64_t currentTime = (li.QuadPart - 116444736000000000LL) / 10000;
+  int64_t current_time = (li.QuadPart - 116444736000000000LL) / 10000;
 #  else
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
-  int64_t currentTime = (ts.tv_sec * 1000LL) + (ts.tv_nsec / 1000000LL);
+  int64_t current_time = (ts.tv_sec * 1000LL) + (ts.tv_nsec / 1000000LL);
 #  endif
-  Assert(currentTime != -1, "TimeNow: currentTime should never be -1");
-  return currentTime;
+  Assert(current_time != -1, "TimeNow: current_time should never be -1");
+  return current_time;
 }
 
 void WaitTime(int64_t ms) {
@@ -760,8 +765,8 @@ Error ErrnoMatch(errno_t err) {
     case ERROR_BUFFER_OVERFLOW:     return FILE_PATH_TOO_LONG;
     case ERROR_DIRECTORY:           return FILE_IS_DIRECTORY;
     case ERROR_WRITE_PROTECT:       return FILE_READ_ONLY_FS;
-    default:                        return FILE_ACCESS_DENIED;
   }
+  return FILE_ACCESS_DENIED;
 }
 #else
 Error ErrnoMatch(errno_t err) {
@@ -784,16 +789,16 @@ Error ErrnoMatch(errno_t err) {
 
 String ErrToStr(errno_t err) {
   switch (err) {
-    case FILE_ACCESS_DENIED: return S("File access denied");
-    case FILE_NOT_FOUND: return S("File not found");
-    case FILE_NO_MEMORY: return S("File no memory");
-    case FILE_DISK_FULL: return S("File disk full");
-    case FILE_READ_FAILED: return S("File read Failed");
-    case FILE_WRITE_FAILED: return S("File write failed");
-    case FILE_TOO_MANY_OPEN: return S("File too many open");
-    case FILE_PATH_TOO_LONG: return S("File path too long");
-    case FILE_IS_DIRECTORY: return S("File is directory");
-    case FILE_READ_ONLY_FS: return S("File read only FS");
+    case FILE_ACCESS_DENIED:  return S("File access denied");
+    case FILE_NOT_FOUND:      return S("File not found");
+    case FILE_NO_MEMORY:      return S("File no memory");
+    case FILE_DISK_FULL:      return S("File disk full");
+    case FILE_READ_FAILED:    return S("File read Failed");
+    case FILE_WRITE_FAILED:   return S("File write failed");
+    case FILE_TOO_MANY_OPEN:  return S("File too many open");
+    case FILE_PATH_TOO_LONG:  return S("File path too long");
+    case FILE_IS_DIRECTORY:   return S("File is directory");
+    case FILE_READ_ONLY_FS:   return S("File read only FS");
     case FILE_ALREADY_EXISTS: return S("File already exists");
   }
 
@@ -807,7 +812,7 @@ static void _custom_assert(const char *expr, const char *file, unsigned line, co
     va_list args;
     va_start(args, format);
     logErrorV(format, args);
-    va_start(args, format);
+    va_end(args);
   }
 
   abort();
@@ -820,7 +825,7 @@ static void _custom_unreachable(const char *file, unsigned line, const char *for
     va_list args;
     va_start(args, format);
     logErrorV(format, args);
-    va_start(args, format);
+    va_end(args);
   }
 
   abort();
@@ -862,7 +867,7 @@ void *ArenaAllocAligned(Arena *arena, size_t size, size_t al) {
 
   void *result;
   if (arena->offset + size > arena->current->cap) {
-    size_t bytes = size > arena->chunkSize ? size : arena->chunkSize;
+    size_t bytes = size > arena->chunk_size ? size : arena->chunk_size;
     __ArenaNextChunk(arena, bytes);
 
     current_pos = arena->current->buffer;
@@ -896,11 +901,11 @@ void ArenaReset(Arena *arena) {
   arena->offset = 0;
 }
 
-Arena *ArenaCreate(size_t chunkSize) {
+Arena *ArenaCreate(size_t chunk_size) {
   Arena *res = Malloc(sizeof(Arena));
   memset(res, 0, sizeof(*res));
-  res->chunkSize = chunkSize;
-  __ArenaNextChunk(res, chunkSize);
+  res->chunk_size = chunk_size;
+  __ArenaNextChunk(res, chunk_size);
   res->root = res->current;
   return res;
 }
@@ -908,7 +913,6 @@ Arena *ArenaCreate(size_t chunkSize) {
 /* --- Memory Allocations --- */
 void *Malloc(size_t size) {
   Assert(size != 0, "Malloc: size cant be zero");
-
   void *address = malloc(size);
   Assert(address != NULL, "Malloc: failed, returned address should never be NULL");
   return address;
@@ -916,7 +920,6 @@ void *Malloc(size_t size) {
 
 void *Realloc(void *block, size_t size) {
   Assert(size != 0, "Realloc: size cant be zero");
-
   void *address = realloc(block, size);
   Assert(address != NULL, "Realloc: failed, returned address should never be NULL");
   return address;
@@ -953,13 +956,13 @@ String F(Arena *arena, const char *format, ...) {
   return (String){.length = size - 1, .data = buffer};
 }
 
-static size_t str_len(char *str, size_t maxSize) {
+static size_t str_len(char *str, size_t max_size) {
   if (str == NULL) {
     return 0;
   }
 
   size_t len = 0;
-  while (len < maxSize && str[len] != '\0') {
+  while (len < max_size && str[len] != '\0') {
     len++;
   }
 
@@ -1024,40 +1027,40 @@ bool StrEq(String string1, String string2) {
 
 String StrConcat(Arena *arena, String string1, String string2) {
   if (StrIsNull(string1)) {
-    const size_t len = string2.length;
-    const size_t memorySize = sizeof(char) * len + 1;
-    char *allocatedString = ArenaAllocChars(arena, memorySize);
+    size_t len = string2.length;
+    size_t memory_size = sizeof(char) * len + 1;
+    char *allocated_string = ArenaAllocChars(arena, memory_size);
 
-    errno_t err = memcpy_s(allocatedString, memorySize, string2.data, string2.length);
+    errno_t err = memcpy_s(allocated_string, memory_size, string2.data, string2.length);
     Assert(err == SUCCESS, "StrConcat: memcpy_s failed, err: %d", err);
 
-    add_null_terminator(allocatedString, len);
-    return (String){len, allocatedString};
+    add_null_terminator(allocated_string, len);
+    return (String){len, allocated_string};
   }
 
   if (StrIsNull(string2)) {
-    const size_t len = string1.length;
-    const size_t memorySize = sizeof(char) * len + 1;
-    char *allocatedString = ArenaAllocChars(arena, memorySize);
-    errno_t err = memcpy_s(allocatedString, memorySize, string1.data, string1.length);
+    size_t len = string1.length;
+    size_t memory_size = sizeof(char) * len + 1;
+    char *allocated_string = ArenaAllocChars(arena, memory_size);
+    errno_t err = memcpy_s(allocated_string, memory_size, string1.data, string1.length);
     Assert(err == SUCCESS, "StrConcat: memcpy_s failed, err: %d", err);
 
-    add_null_terminator(allocatedString, len);
-    return (String){len, allocatedString};
+    add_null_terminator(allocated_string, len);
+    return (String){len, allocated_string};
   }
 
-  const size_t len = string1.length + string2.length;
-  const size_t memorySize = sizeof(char) * len + 1;
-  char *allocatedString = ArenaAllocChars(arena, memorySize);
+  size_t len = string1.length + string2.length;
+  size_t memory_size = sizeof(char) * len + 1;
+  char *allocated_string = ArenaAllocChars(arena, memory_size);
 
-  errno_t err = memcpy_s(allocatedString, memorySize, string1.data, string1.length);
+  errno_t err = memcpy_s(allocated_string, memory_size, string1.data, string1.length);
   Assert(err == SUCCESS, "StrConcat: memcpy_s failed, err: %d", err);
 
-  err = memcpy_s(allocatedString + string1.length, memorySize, string2.data, string2.length);
+  err = memcpy_s(allocated_string + string1.length, memory_size, string2.data, string2.length);
   Assert(err == SUCCESS, "StrConcat: memcpy_s failed, err: %d", err);
 
-  add_null_terminator(allocatedString, len);
-  return (String){len, allocatedString};
+  add_null_terminator(allocated_string, len);
+  return (String){len, allocated_string};
 }
 
 StringVector StrSplit(Arena *arena, String str, String delimiter) {
@@ -1070,8 +1073,8 @@ StringVector StrSplit(Arena *arena, String str, String delimiter) {
   StringVector result = {0};
   if (delimiter.length == 0) {
     for (size_t i = 0; i < str.length; i++) {
-      String currString = StrNewSize(arena, str.data + i, 1);
-      VecPush(result, currString);
+      String curr_str = StrNewSize(arena, str.data + i, 1);
+      VecPush(result, curr_str);
     }
     return result;
   }
@@ -1086,14 +1089,14 @@ StringVector StrSplit(Arena *arena, String str, String delimiter) {
     }
 
     if (!match) {
-      String currString = StrNewSize(arena, curr, end - curr);
-      VecPush(result, currString);
+      String curr_str = StrNewSize(arena, curr, end - curr);
+      VecPush(result, curr_str);
       break;
     }
 
     size_t len = match - curr;
-    String currString = StrNewSize(arena, curr, len);
-    VecPush(result, currString);
+    String curr_str = StrNewSize(arena, curr, len);
+    VecPush(result, curr_str);
 
     curr = match + delimiter.length;
   }
@@ -1169,196 +1172,25 @@ String StrSlice(Arena *arena, String str, size_t start, ssize_t end) {
   return StrNewSize(arena, str.data + start, len);
 }
 
-bool StrIncludes(String source, String subStr) {
+bool StrIncludes(String source, String sub_str) {
   Assert(!StrIsNull(source), "StrIncludes: source should never be NULL");
-  Assert(!StrIsNull(subStr), "StrIncludes: subStr should never be NULL");
+  Assert(!StrIsNull(sub_str), "StrIncludes: sub_str should never be NULL");
 
-  if (source.length == 0 || subStr.length == 0 || subStr.length > source.length) {
+  if (source.length == 0 || sub_str.length == 0 || sub_str.length > source.length) {
     return false;
   }
 
-  for (size_t i = 0; i <= source.length - subStr.length; i++) {
-    if (source.data[i] != subStr.data[0]) {
+  for (size_t i = 0; i <= source.length - sub_str.length; i++) {
+    if (source.data[i] != sub_str.data[0]) {
       continue;
     }
 
-    if (memcmp(&source.data[i], subStr.data, subStr.length) == 0) {
+    if (memcmp(&source.data[i], sub_str.data, sub_str.length) == 0) {
       return true;
     }
   }
 
   return false;
-}
-
-static String normSlashes(String path) {
-#  if defined(PLATFORM_WIN)
-  for (size_t i = 0; i < path.length; i++) {
-    if (path.data[i] == '/') {
-      path.data[i] = '\\';
-    }
-  }
-#  else
-  for (size_t i = 0; i < path.length; i++) {
-    if (path.data[i] == '\\') {
-      path.data[i] = '/';
-    }
-  }
-#  endif
-  return path;
-}
-
-String NormalizePath(Arena *arena, String path) {
-  String result;
-  if (path.length >= 2 && path.data[0] == '.' && (path.data[1] == '/' || path.data[1] == '\\')) {
-    result = StrNewSize(arena, path.data + 2, path.length - 2);
-  } else {
-    result = StrNewSize(arena, path.data, path.length);
-  }
-
-  return normSlashes(result);
-}
-
-String NormalizeExePath(Arena *arena, String path) {
-  Platform platform = GetPlatform();
-  String result;
-
-  if (path.length >= 2 && path.data[0] == '.' && (path.data[1] == '/' || path.data[1] == '\\')) {
-    result = StrNewSize(arena, path.data + 2, path.length - 2);
-  } else {
-    result = StrNewSize(arena, path.data, path.length);
-  }
-
-  bool hasExe = false;
-  String exeExtension = S(".exe");
-  if (result.length >= exeExtension.length) {
-    String resultEnd = StrSlice(arena, result, result.length - exeExtension.length, result.length);
-    if (StrEq(resultEnd, exeExtension)) {
-      hasExe = true;
-    }
-  }
-
-  if (platform == WINDOWS) {
-    if (!hasExe) {
-      result = StrConcat(arena, result, exeExtension);
-    }
-
-    return normSlashes(result);
-  }
-
-  if (hasExe) {
-    result = StrSlice(arena, result, 0, result.length - exeExtension.length);
-  }
-
-  return normSlashes(result);
-}
-
-String NormalizeExtension(Arena *arena, String path) {
-  String result;
-
-  if (path.length >= 2 && path.data[0] == '.' && (path.data[1] == '/' || path.data[1] == '\\')) {
-    result = StrNewSize(arena, path.data + 2, path.length - 2);
-  } else {
-    result = StrNewSize(arena, path.data, path.length);
-  }
-
-  size_t filenameStart = 0;
-  for (size_t i = 0; i < result.length; i++) {
-    if (result.data[i] == '/' || result.data[i] == '\\') {
-      filenameStart = i + 1;
-    }
-  }
-
-  size_t lastDotIndex = 0;
-  for (size_t i = 0; i < result.length; i++) {
-    if (result.data[i] == '.') {
-      lastDotIndex = i;
-    }
-  }
-
-  if (lastDotIndex <= filenameStart) {
-    return normSlashes(result);
-  }
-
-  result = StrSlice(arena, result, filenameStart, lastDotIndex);
-  return normSlashes(result);
-}
-
-String NormalizeStaticLibPath(Arena *arena, String path) {
-  Platform platform = GetPlatform();
-  String result;
-
-  if (path.length >= 2 && path.data[0] == '.' && (path.data[1] == '/' || path.data[1] == '\\')) {
-    result = StrNewSize(arena, path.data + 2, path.length - 2);
-  } else {
-    result = StrNewSize(arena, path.data, path.length);
-  }
-
-  bool hasLibExt = false;
-  String libExtension;
-  String aExtension = S(".a");
-  String libWinExtension = S(".lib");
-  if (result.length >= aExtension.length) {
-    String resultEnd = StrSlice(arena, result, result.length - aExtension.length, result.length);
-    if (StrEq(resultEnd, aExtension)) {
-      hasLibExt = true;
-      libExtension = aExtension;
-    }
-  }
-
-  if (!hasLibExt && result.length >= libWinExtension.length) {
-    String resultEnd = StrSlice(arena, result, result.length - libWinExtension.length, result.length);
-    if (StrEq(resultEnd, libWinExtension)) {
-      hasLibExt = true;
-      libExtension = libWinExtension;
-    }
-  }
-
-  if (platform == WINDOWS) {
-    if (hasLibExt && !StrEq(libExtension, libWinExtension)) {
-      result = StrSlice(arena, result, 0, result.length - libExtension.length);
-      hasLibExt = false;
-    }
-
-    if (!hasLibExt) {
-      result = StrConcat(arena, result, libWinExtension);
-    }
-
-    return normSlashes(result);
-  }
-
-  if (hasLibExt && !StrEq(libExtension, aExtension)) {
-    result = StrSlice(arena, result, 0, result.length - libExtension.length);
-    hasLibExt = false;
-  }
-
-  if (!hasLibExt) {
-    result = StrConcat(arena, result, aExtension);
-  }
-
-  return normSlashes(result);
-}
-
-String NormalizePathStart(Arena *arena, String path) {
-  String result;
-
-  if (path.length >= 2 && path.data[0] == '.' && (path.data[1] == '/' || path.data[1] == '\\')) {
-    result = StrNewSize(arena, path.data + 2, path.length - 2);
-  } else {
-    result = StrNewSize(arena, path.data, path.length);
-  }
-
-  return result;
-}
-
-String NormalizePathEnd(Arena *arena, String path) {
-  size_t lastSlashIndex = 0;
-  for (size_t i = 0; i < path.length; i++) {
-    if (path.data[i] == '/' || path.data[i] == '\\') {
-      lastSlashIndex = i + 1;
-    }
-  }
-
-  return StrNewSize(arena, path.data + lastSlashIndex, path.length - lastSlashIndex);
 }
 
 StringBuilder SBCreate(Arena *arena) {
@@ -1382,18 +1214,18 @@ StringBuilder SBReserve(Arena *arena, size_t capacity) {
 }
 
 void SBAdd(StringBuilder *builder, String string) {
-  size_t newLength = builder->buffer.length + string.length;
-  if (newLength + 1 >= builder->capacity) {
-    size_t newCapacity = (newLength + 1) * 2;
-    char *data = ArenaAllocChars(builder->arena_builder, newCapacity);
+  size_t new_len = builder->buffer.length + string.length;
+  if (new_len + 1 >= builder->capacity) {
+    size_t new_cap = (new_len + 1) * 2;
+    char *data = ArenaAllocChars(builder->arena_builder, new_cap);
 
     memcpy(data, builder->buffer.data, builder->buffer.length);
     builder->buffer.data = data;
-    builder->capacity = newCapacity;
+    builder->capacity = new_cap;
   }
 
   memcpy(builder->buffer.data + builder->buffer.length, string.data, string.length);
-  builder->buffer.length = newLength;
+  builder->buffer.length = new_len;
   builder->buffer.data[builder->buffer.length] = '\0';
 }
 
@@ -1524,8 +1356,8 @@ uint64_t RandomGetSeed(void) {
   return seed;
 }
 
-void RandomSetSeed(uint64_t newSeed) {
-  seed = newSeed;
+void RandomSetSeed(uint64_t new_seed) {
+  seed = new_seed;
   srand(seed);
 }
 
@@ -2130,9 +1962,9 @@ int64_t IniGetLong(IniFile *ini_file, String key) {
     return 0;
   }
 
-  char *endPtr;
-  int64_t result = strtoll(value.data, &endPtr, 10);
-  if (endPtr == value.data) {
+  char *end_ptr;
+  int64_t result = strtoll(value.data, &end_ptr, 10);
+  if (end_ptr == value.data) {
     LogWarn("IniGetLong: Failed to convert [key: %s, value: %s] to long", key.data, value.data);
     return 0;
   }
@@ -2146,9 +1978,9 @@ float64_t IniGetDouble(IniFile *ini_file, String key) {
     return 0.0;
   }
 
-  char *endPtr;
-  float64_t result = strtod(value.data, &endPtr);
-  if (endPtr == value.data) {
+  char *end_ptr;
+  float64_t result = strtod(value.data, &end_ptr);
+  if (end_ptr == value.data) {
     LogWarn("IniGetLong: Failed to convert [key: %s, value: %s] to double", key.data, value.data);
     return 0.0;
   }
@@ -2218,6 +2050,7 @@ typedef struct {
   String mate_source;
   String mate_exe;
 
+  String cwd;
   MateCache mate_cache;
   IniFile cache;
 
@@ -2384,14 +2217,23 @@ static void mate_flag_builder_add_string(FlagBuilder *builder, char *flag);
 static void mate_flag_builder_add_list(FlagBuilder *fb, char **flags);
 
 /* --- Path Utils --- */
-static bool mate_is_valid_output(String output);
+static String mate_path_with_platform_ext(Arena *arena, String path, String unix_ext, String win_ext);
 
-static String mate_fix_path(String str);
-static String mate_fix_path_exe(String str);
-static String mate_convert_ninja_path(String str);
+String PathJoin(String base, String tail);
+String PathStem(String path);
 
-static StringVector mate_output_transformer(StringVector vector);
-static bool mate_global_match(String pattern, String text);
+String NormPath(String path);
+String NormPathStart(String path);
+String NormPathEnd(String path) ;
+
+String NormPathExe(String str);
+String NormPathStaticLib(String str);
+String NormPathNinja(String str);
+String NormPathOutput(String str);
+
+String AbsoluteNormPath(String str);
+String AbsoluteNormPathExe(String str);
+String AbsoluteNormPathStaticLib(String str);
 
 /* --- Utils --- */
 WARN_UNUSED errno_t RunCommand(String command);
@@ -5330,12 +5172,18 @@ static MateConfig mate_state = {0};
 
 /* --- Build System Implementation --- */
 static void mate_set_default_state(void) {
-  mate_state.arena = ArenaCreate(20000 * sizeof(String));
-  mate_state.compiler = GetCompiler();
+  {
+    mate_state.arena = ArenaCreate(20000 * sizeof(String));
+    mate_state.compiler = GetCompiler();
 
-  mate_state.mate_exe = mate_fix_path_exe(S("./mate"));
-  mate_state.mate_source = mate_fix_path(S("./mate.c"));
-  mate_state.build_directory = mate_fix_path(S("./build"));
+    GetCwdResult cwd_result = GetCwd();
+    Assert(cwd_result.error == SUCCESS, "mate_set_default_state: failed at getting current working directory, with error %s", ErrToStr(cwd_result.error).data);
+    mate_state.cwd = cwd_result.data;
+
+    mate_state.mate_exe = AbsoluteNormPathExe(S("./mate"));
+    mate_state.mate_source = AbsoluteNormPath(S("./mate.c"));
+    mate_state.build_directory = AbsoluteNormPath(S("./build"));
+  }
 
   mate_state.init_config = true;
 }
@@ -5343,15 +5191,16 @@ static void mate_set_default_state(void) {
 void CreateConfig(MateOptions options) {
   mate_set_default_state();
   if (options.compiler != 0) mate_state.compiler = options.compiler;
-  if (options.mateExe != NULL) mate_state.mate_exe = mate_fix_path_exe(s(options.mateExe));
-  if (options.mateSource != NULL) mate_state.mate_source = mate_fix_path(s(options.mateSource));
-  if (options.buildDirectory != NULL) mate_state.build_directory = mate_fix_path(s(options.buildDirectory));
+  if (options.mateExe != NULL) mate_state.mate_exe = AbsoluteNormPathExe(s(options.mateExe));
+  if (options.mateSource != NULL) mate_state.mate_source = AbsoluteNormPath(s(options.mateSource));
+  if (options.buildDirectory != NULL) mate_state.build_directory = AbsoluteNormPath(s(options.buildDirectory));
 }
 
 static void mate_read_cache(void) {
-  String mateCachePath = F(mate_state.arena, "%s/mate-cache.ini", mate_state.build_directory.data);
-  IniParseResult parse_result = IniParse(mateCachePath);
-  Assert(parse_result.error == SUCCESS, "MateReadCache: failed reading MateCache at %s, err: %s", mateCachePath.data, ErrToStr(parse_result.error).data);
+  String mate_cache_path = PathJoin(mate_state.build_directory, S("mate-cache.ini"));
+
+  IniParseResult parse_result = IniParse(mate_cache_path);
+  Assert(parse_result.error == SUCCESS, "MateReadCache: failed reading MateCache at %s, err: %s", mate_cache_path.data, ErrToStr(parse_result.error).data);
   mate_state.cache = parse_result.data;
 
   mate_state.mate_cache.last_build = IniGetLong(&mate_state.cache, S("modify-time"));
@@ -5359,8 +5208,8 @@ static void mate_read_cache(void) {
     mate_state.mate_cache.first_build = true;
     mate_state.mate_cache.last_build = TimeNow() / 1000;
 
-    String modifyTime = F(mate_state.arena, FMT_I64, mate_state.mate_cache.last_build);
-    IniSet(&mate_state.cache, S("modify-time"), modifyTime);
+    String modify_time = F(mate_state.arena, FMT_I64, mate_state.mate_cache.last_build);
+    IniSet(&mate_state.cache, S("modify-time"), modify_time);
   }
 
 #if defined(PLATFORM_WIN)
@@ -5373,16 +5222,16 @@ static void mate_read_cache(void) {
   if (mate_state.mate_cache.samurai_build == false) {
     Assert(mate_state.mate_cache.first_build, "MateCache: This is not the first build and samurai is not compiled, could be a cache error, delete `./build` folder and rebuild `./mate.c`");
 
-    String samuraiAmalgam = s(SAMURAI_AMALGAM);
-    String sourcePath = F(mate_state.arena, "%s/samurai.c", mate_state.build_directory.data);
-    errno_t errFileWrite = FileWrite(sourcePath, samuraiAmalgam);
-    Assert(errFileWrite == SUCCESS, "MateReadCache: failed writing samurai source code to path %s", sourcePath.data);
+    String samurai_amalgam = s(SAMURAI_AMALGAM);
+    String source_path = PathJoin(mate_state.build_directory, S("samurai.c"));
+    Error err_file_write = FileWrite(source_path, samurai_amalgam);
+    Assert(err_file_write == SUCCESS, "MateReadCache: failed writing samurai source code to path %s", source_path.data);
 
-    String outputPath = F(mate_state.arena, "%s/samurai", mate_state.build_directory.data);
-    String compileCommand = F(mate_state.arena, "%s \"%s\" -o \"%s\" -std=c99", CompilerToStr(mate_state.compiler).data, sourcePath.data, outputPath.data);
+    String output_path = PathJoin(mate_state.build_directory, S("samurai"));
+    String compile_command = F(mate_state.arena, "%s \"%s\" -o \"%s\" -std=c99", CompilerToStr(mate_state.compiler).data, source_path.data, output_path.data);
 
-    errno_t run_error = RunCommand(compileCommand);
-    Assert(run_error == SUCCESS, "MateReadCache: Error meanwhile compiling samurai at %s, if you are seeing this please make an issue at github.com/TomasBorquez/mate.h", sourcePath.data);
+    errno_t run_error = RunCommand(compile_command);
+    Assert(run_error == SUCCESS, "MateReadCache: Error meanwhile compiling samurai at %s, if you are seeing this please make an issue at github.com/TomasBorquez/mate.h", source_path.data);
 
     LogSuccess("Successfully compiled samurai");
     mate_state.mate_cache.samurai_build = true;
@@ -5390,7 +5239,7 @@ static void mate_read_cache(void) {
   }
 #endif
 
-  errno_t write_error = IniWrite(mateCachePath, &mate_state.cache);
+  errno_t write_error = IniWrite(mate_cache_path, &mate_state.cache);
   Assert(write_error == SUCCESS, "MateReadCache: Failed writing cache, err: %d", write_error);
 }
 
@@ -5403,12 +5252,12 @@ static bool mate_need_rebuild(void) {
     return false;
   }
 
-  String mateCachePath = F(mate_state.arena, "%s/mate-cache.ini", mate_state.build_directory.data);
-  String modifyTime = F(mate_state.arena, FMT_I64, stats.modifyTime);
-  IniSet(&mate_state.cache, S("modify-time"), modifyTime);
+  String mate_cache_path = PathJoin(mate_state.build_directory, S("mate-cache.ini"));
+  String modify_time = F(mate_state.arena, FMT_I64, stats.modifyTime);
+  IniSet(&mate_state.cache, S("modify-time"), modify_time);
 
-  Error write_error = IniWrite(mateCachePath, &mate_state.cache);
-  Assert(write_error == SUCCESS, "could not write cache for path %s, error: %d", mateCachePath.data, write_error);
+  Error write_error = IniWrite(mate_cache_path, &mate_state.cache);
+  Assert(write_error == SUCCESS, "could not write cache for path %s, error: %d", mate_cache_path.data, write_error);
 
   return true;
 }
@@ -5418,29 +5267,29 @@ static void mate_rebuild(void) {
     return;
   }
 
-  String mateExeNew = NormalizeExePath(mate_state.arena, F(mate_state.arena, "%s/mate-new", mate_state.build_directory.data));
-  String mateExeOld = NormalizeExePath(mate_state.arena, F(mate_state.arena, "%s/mate-old", mate_state.build_directory.data));
-  String mateExe = NormalizeExePath(mate_state.arena, mate_state.mate_exe);
+  String mate_exe     = mate_state.mate_exe;
+  String mate_exe_new = NormPathExe(PathJoin(mate_state.build_directory, S("mate-new")));
+  String mate_exe_old = NormPathExe(PathJoin(mate_state.build_directory, S("mate-old")));
 
-  String compileCommand;
+  String compile_command;
   if (isMSVC()) {
-    compileCommand = F(mate_state.arena, "cl.exe \"%s\" /Fe:\"%s\"", mate_state.mate_source.data, mateExeNew.data);
+    compile_command = F(mate_state.arena, "cl.exe \"%s\" /Fe:\"%s\"", mate_state.mate_source.data, mate_exe_new.data);
   } else {
-    compileCommand = F(mate_state.arena, "%s \"%s\" -o \"%s\"", CompilerToStr(mate_state.compiler).data, mate_state.mate_source.data, mateExeNew.data);
+    compile_command = F(mate_state.arena, "%s \"%s\" -o \"%s\"", CompilerToStr(mate_state.compiler).data, mate_state.mate_source.data, mate_exe_new.data);
   }
 
   LogWarn("%s changed rebuilding...", mate_state.mate_source.data);
-  errno_t rebuild_error = RunCommand(compileCommand);
-  Assert(rebuild_error == SUCCESS, "MateRebuild: failed command %s, err: %d", compileCommand.data, rebuild_error);
+  errno_t rebuild_error = RunCommand(compile_command);
+  Assert(rebuild_error == SUCCESS, "MateRebuild: failed command %s, err: %d", compile_command.data, rebuild_error);
 
-  errno_t rename_error = FileRename(mateExe, mateExeOld);
+  errno_t rename_error = FileRename(mate_exe, mate_exe_old);
   Assert(rename_error == SUCCESS, "MateRebuild: failed renaming original executable failed, err: %d", rename_error);
 
-  rename_error = FileRename(mateExeNew, mateExe);
+  rename_error = FileRename(mate_exe_new, mate_exe);
   Assert(rename_error == SUCCESS, "MateRebuild: failed renaming new executable into old: %d", rename_error);
 
-  LogInfo("Rebuild finished, running %s", mateExe.data);
-  exit(RunCommand(mateExe));
+  LogInfo("Rebuild finished, running %s", mate_exe.data);
+  exit(RunCommand(mate_exe));
 }
 
 void StartBuild(void) {
@@ -5538,13 +5387,13 @@ static void mate_apply_sanitizer_flags(FlagBuilder *fb, Compiler c, FlagSanitize
 }
 
 static void mate_apply_error_flags(FlagBuilder *fb, Compiler c, FlagErrorFormat e) {
-  static char *general[][4] = {
+  static char *general[][5] = {
       [FLAG_ERROR] = {"fdiagnostics-color=always", NULL},
-      [FLAG_ERROR_MAX] = {"fdiagnostics-color=always", "fdiagnostics-show-caret", "fdiagnostics-show-option", "fdiagnostics-generate-patch"},
+      [FLAG_ERROR_MAX] = {"fdiagnostics-color=always", "fdiagnostics-show-caret", "fdiagnostics-show-option", "fdiagnostics-generate-patch", NULL},
   };
-  static char *clang[][4] = {
+  static char *clang[][5] = {
       [FLAG_ERROR] = {"fcolor-diagnostics", NULL},
-      [FLAG_ERROR_MAX] = {"fcolor-diagnostics", "fcaret-diagnostics", "fdiagnostics-fixit-info", "fdiagnostics-show-option"},
+      [FLAG_ERROR_MAX] = {"fcolor-diagnostics", "fcaret-diagnostics", "fdiagnostics-fixit-info", "fdiagnostics-show-option", NULL},
   };
   static char *msvc[][3] = {
       [FLAG_ERROR] = {"nologo", NULL},
@@ -5554,6 +5403,19 @@ static void mate_apply_error_flags(FlagBuilder *fb, Compiler c, FlagErrorFormat 
   mate_flag_builder_add_list(fb, row);
 }
 
+static bool mate_is_valid_output(String output) {
+  if (output.data[0] == '.') {
+    return false;
+  }
+
+  for (size_t i = 0; i < output.length; i++) {
+    char curr_char = output.data[i];
+    if (curr_char == '/' || curr_char == '\\') {
+      return false;
+    }
+  }
+  return true;
+}
 
 Executable CreateExecutable(ExecutableOptions opts) {
   Assert(mate_state.init_config,
@@ -5568,9 +5430,7 @@ Executable CreateExecutable(ExecutableOptions opts) {
       "CreateExecutable: failed, ExecutableOptions.output should never be null, please define the output name like this: \n"
       "\n"
       "CreateExecutable((ExecutableOptions) { .output = \"main\"});");
-
-  String executable_output = NormalizeExePath(mate_state.arena, s(opts.output)); // TODO: first validate then normalize
-  Assert(mate_is_valid_output(executable_output),
+  Assert(mate_is_valid_output(s(opts.output)),
          "CreateExecutable: ExecutableOptions.output shouldn't be a path, e.g: \n"
          "\n"
          "Correct:\n"
@@ -5583,7 +5443,7 @@ Executable CreateExecutable(ExecutableOptions opts) {
          "CreateConfig((MateOptions){.buildDirectory = \"./custom-dir\"});");
 
   Executable result = {0};
-  result.output = executable_output;
+  result.output = NormPathExe(s(opts.output));
 
   FlagBuilder fb = FlagBuilderCreate();
   if (opts.flags != NULL) SBAdd(&fb, s(opts.flags));
@@ -5600,7 +5460,8 @@ Executable CreateExecutable(ExecutableOptions opts) {
   if (opts.includes != NULL) result.includes = s(opts.includes);
   if (opts.linkerFlags != NULL) result.linkerFlags = s(opts.linkerFlags);
 
-  result.ninjaBuildPath = F(mate_state.arena, "%s/exe-%s.ninja", mate_state.build_directory.data, NormalizeExtension(mate_state.arena, result.output).data);
+  String build_file_name = F(mate_state.arena, "exe-%s.ninja", PathStem(result.output).data);
+  result.ninjaBuildPath = PathJoin(mate_state.build_directory, build_file_name);
   return result;
 }
 
@@ -5620,7 +5481,6 @@ StaticLib CreateStaticLib(StaticLibOptions opts) {
       "\n"
       "CreateStaticLib((StaticLibOptions) { .output = \"libexample\"});");
 
-  String staticLibOutput = NormalizeStaticLibPath(mate_state.arena, s(opts.output)); // TODO: first validate then normalize
   Assert(mate_is_valid_output(s(opts.output)),
          "MateParseStaticLibOptions: failed, StaticLibOptions.output shouldn't "
          "be a path, e.g: \n"
@@ -5629,11 +5489,10 @@ StaticLib CreateStaticLib(StaticLibOptions opts) {
          "CreateStaticLib((StaticLibOptions) { .output = \"libexample\"});\n"
          "\n"
          "Incorrect:\n"
-         "CreateStaticLib((StaticLibOptions) { .output = "
-         "\"./output/libexample.a\"});");
+         "CreateStaticLib((StaticLibOptions) { .output = \"./output/libexample.a\"});");
 
   StaticLib result = {0};
-  result.output = NormalizePath(mate_state.arena, staticLibOutput);
+  result.output = NormPathStaticLib(s(opts.output));
   result.arFlags = S("rcs");
 
   FlagBuilder fb = FlagBuilderCreate();
@@ -5651,7 +5510,8 @@ StaticLib CreateStaticLib(StaticLibOptions opts) {
   if (opts.includes != NULL) result.includes = s(opts.includes);
   if (opts.arFlags != NULL) result.arFlags = s(opts.arFlags);
 
-  result.ninjaBuildPath = F(mate_state.arena, "%s/static-%s.ninja", mate_state.build_directory.data, NormalizeExtension(mate_state.arena, result.output).data);
+  String build_file_name = F(mate_state.arena, "static-%s.ninja", PathStem(result.output).data);
+  result.ninjaBuildPath = PathJoin(mate_state.build_directory, build_file_name);
   return result;
 }
 
@@ -5660,17 +5520,17 @@ static CreateCompileCommandsError mate_create_compile_commands(String ninjaBuild
   char buffer[4096];
   size_t bytes_read;
 
-  String compdb_cmd;
+  String compdb_cmd = {0};
   if (mate_state.mate_cache.samurai_build == true) {
-    String samurai_output_path = F(mate_state.arena, "%s/samurai", mate_state.build_directory.data);
-    compdb_cmd = NormalizePath(mate_state.arena, F(mate_state.arena, "%s -f %s -t compdb compile", samurai_output_path.data, ninjaBuildPath.data));
+    String samurai_output_path = PathJoin(mate_state.build_directory, S("samurai"));
+    compdb_cmd = NormPath(F(mate_state.arena, "%s -f %s -t compdb compile", samurai_output_path.data, ninjaBuildPath.data));
   }
 
   if (mate_state.mate_cache.samurai_build == false) {
-    compdb_cmd = NormalizePath(mate_state.arena, F(mate_state.arena, "ninja -f %s -t compdb compile", ninjaBuildPath.data));
+    compdb_cmd = NormPath(F(mate_state.arena, "ninja -f %s -t compdb compile", ninjaBuildPath.data));
   }
 
-  String compile_commands_path = NormalizePath(mate_state.arena, F(mate_state.arena, "%s/compile_commands.json", mate_state.build_directory.data));
+  String compile_commands_path = NormPath(PathJoin(mate_state.build_directory, S("compile_commands.json")));
 
   FILE *output_file = NULL;
 #  if defined(PLATFORM_WIN)
@@ -5699,7 +5559,7 @@ static CreateCompileCommandsError mate_create_compile_commands(String ninjaBuild
     return COMPILE_COMMANDS_FAILED_COMPDB;
   }
 
-  LogSuccess("Successfully created %s", NormalizePathEnd(mate_state.arena, compile_commands_path).data);
+  LogSuccess("Successfully created %s", NormPathEnd(compile_commands_path).data);
   return COMPILE_COMMANDS_SUCCESS;
 }
 
@@ -5710,11 +5570,43 @@ static void mate_add_files(StringVector *sources, char **files, size_t size) {
   }
 }
 
+static bool mate_global_match(String pattern, String text) {
+  if (pattern.length == 1 && pattern.data[0] == '*') {
+    return true;
+  }
+
+  size_t p = 0;
+  size_t t = 0;
+  size_t star_p = -1;
+  size_t start_t = -1;
+  while (t < text.length) {
+    if (p < pattern.length && pattern.data[p] == text.data[t]) {
+      p++;
+      t++;
+    } else if (p < pattern.length && pattern.data[p] == '*') {
+      star_p = p;
+      start_t = t;
+      p++;
+    } else if (star_p != (size_t)-1) {
+      p = star_p + 1;
+      t = ++start_t;
+    } else {
+      return false;
+    }
+  }
+
+  while (p < pattern.length && pattern.data[p] == '*') {
+    p++;
+  }
+
+  return p == pattern.length;
+}
+
 static void mate_add_file(StringVector *sources, String source) {
-  bool isGlob = false;
+  bool is_glob = false;
   for (size_t i = 0; i < source.length; i++) {
     if (source.data[i] == '*') {
-      isGlob = true;
+      is_glob = true;
       break;
     }
   }
@@ -5727,21 +5619,21 @@ static void mate_add_file(StringVector *sources, String source) {
          "AddFile: failed to add a file, you can't add a slash at the end of a path.\n"
          "For example, valid: AddFile(\"./main.c\"), invalid: AddFile(\"./main.c/\")");
 
-  if (!isGlob) {
+  if (!is_glob) {
     VecPush((*sources), source);
     return;
   }
 
   String directory = {0};
-  int32_t lastSlash = -1;
+  int32_t last_slash = -1;
   for (size_t i = 0; i < source.length; i++) {
     if (source.data[i] == '/') {
-      lastSlash = i;
+      last_slash = i;
     }
   }
 
-  directory = StrSlice(mate_state.arena, source, 0, lastSlash);
-  String pattern = StrSlice(mate_state.arena, source, lastSlash + 1, source.length);
+  directory = StrSlice(mate_state.arena, source, 0, last_slash);
+  String pattern = StrSlice(mate_state.arena, source, last_slash + 1, source.length);
 
   ListDirResult list_dir_result = ListDir(mate_state.arena, directory);
   Error error = list_dir_result.error;
@@ -5752,8 +5644,8 @@ static void mate_add_file(StringVector *sources, String source) {
     String file = VecAt(files, i);
 
     if (mate_global_match(pattern, file)) {
-      String finalSource = F(mate_state.arena, "%s/%s", directory.data, file.data);
-      VecPush((*sources), finalSource);
+      String final_source = PathJoin(directory, file);
+      VecPush((*sources), final_source);
     }
   }
   VecFree(files);
@@ -5763,10 +5655,10 @@ static bool mate_remove_file(StringVector *sources, String source) {
   Assert(sources->length > 0, "RemoveFile: Before removing a file you must first add a file, use: AddFile()");
 
   for (size_t i = 0; i < sources->length; i++) {
-    String *currValue = VecAtPtr((*sources), i);
-    if (StrEq(source, *currValue)) {
-      currValue->data = NULL;
-      currValue->length = 0;
+    String *curr_val = VecAtPtr((*sources), i);
+    if (StrEq(source, *curr_val)) {
+      curr_val->data = NULL;
+      curr_val->length = 0;
       return true;
     }
   }
@@ -5786,18 +5678,14 @@ static void mate_install_executable(Executable *executable) {
     if (executable->includes.length > 0)    SBAddF(&builder, "includes = %S\n", executable->includes);
     if (executable->libs.length > 0)        SBAddF(&builder, "libs = %S\n", executable->libs);
 
-    GetCwdResult cwd_result = GetCwd();
-    Assert(cwd_result.error == SUCCESS, "InstallExecutable: failed at getting current working directory, with error %d", cwd_result.error);
-    String cwd_path = mate_convert_ninja_path(cwd_result.data);
-
-    SBAddF(&builder, "cwd = %S\n", cwd_path);
-    SBAddF(&builder, "builddir = %S\n", mate_convert_ninja_path(mate_state.build_directory));
+    SBAddF(&builder, "cwd = %S\n", NormPathNinja(mate_state.cwd));
+    SBAddF(&builder, "builddir = %S\n", NormPathNinja(mate_state.build_directory));
     SBAddF(&builder, "target = $builddir/%S\n\n", executable->output);
   }
 
   { // Link command
     SBAddS(&builder, "rule link\n"
-                      "  command = $cc");
+                     "  command = $cc");
     if (executable->flags.length > 0)       SBAddS(&builder, " $flags");
     if (executable->linkerFlags.length > 0) SBAddS(&builder, " $linker_flags");
 
@@ -5811,7 +5699,7 @@ static void mate_install_executable(Executable *executable) {
 
   { // Compile command
     SBAddS(&builder, "rule compile\n"
-                      "  command = $cc");
+                     "  command = $cc");
     if (executable->flags.length > 0)    SBAddS(&builder, " $flags");
     if (executable->includes.length > 0) SBAddS(&builder, " $includes");
 
@@ -5832,13 +5720,12 @@ static void mate_install_executable(Executable *executable) {
 
   { // Build individual source files
     StringBuilder output_builder = SBCreate(mate_state.arena);
-    StringVector output_files = mate_output_transformer(executable->sources);
     for (size_t i = 0; i < executable->sources.length; i++) {
       String curr_source = VecAt(executable->sources, i);
       if (StrIsNull(curr_source)) continue;
 
-      String output_file = VecAt(output_files, i);
-      String source_file = NormalizePathStart(mate_state.arena, curr_source);
+      String output_file = NormPathOutput(curr_source);
+      String source_file = NormPathStart(curr_source);
       SBAddF(&builder, "build $builddir/%S: compile %S\n", output_file, source_file);
 
       if (mate_state.compiler == GCC || mate_state.compiler == CLANG) {
@@ -5851,7 +5738,6 @@ static void mate_install_executable(Executable *executable) {
       if (is_empty) SBAddF(&output_builder, "$builddir/%S", output_file);
       else          SBAddF(&output_builder, " $builddir/%S", output_file);
     }
-    VecFree(output_files);
     SBAddF(&builder, "build $target: link %S\n\n", output_builder.buffer);
   }
 
@@ -5864,7 +5750,7 @@ static void mate_install_executable(Executable *executable) {
 
   String build_command;
   if (mate_state.mate_cache.samurai_build) {
-    String samurai_output_path = F(mate_state.arena, "%s/samurai", mate_state.build_directory.data);
+    String samurai_output_path = PathJoin(mate_state.build_directory, S("samurai"));
     build_command = F(mate_state.arena, "%s -f %s", samurai_output_path.data, ninja_build_path.data);
   } else {
     build_command = F(mate_state.arena, "ninja -f %s", ninja_build_path.data);
@@ -5874,12 +5760,7 @@ static void mate_install_executable(Executable *executable) {
   Assert(run_error == SUCCESS, "InstallExecutable: Ninja file compilation failed with code: " FMT_I32, run_error);
 
   mate_state.total_time = TimeNow() - mate_state.start_time;
-
-#if defined(PLATFORM_WIN)
-  executable->outputPath = F(mate_state.arena, "%s\\%s", mate_state.build_directory.data, executable->output.data);
-#else
-  executable->outputPath = F(mate_state.arena, "%s/%s", mate_state.build_directory.data, executable->output.data);
-#endif
+  executable->outputPath = PathJoin(mate_state.build_directory, executable->output);
 
   VecFree(executable->sources);
 }
@@ -5898,12 +5779,8 @@ static void mate_install_static_lib(StaticLib *static_lib) {
     if (static_lib->arFlags.length > 0)  SBAddF(&builder, "ar_flags = %S\n", static_lib->arFlags);
     if (static_lib->includes.length > 0) SBAddF(&builder, "includes = %S\n", static_lib->includes);
 
-    GetCwdResult cwd_result = GetCwd();
-    Assert(cwd_result.error == SUCCESS, "InstallStaticLib: failed at getting current working directory, with error %s", ErrToStr(cwd_result.error).data);
-    String cwd_path = mate_convert_ninja_path(cwd_result.data);
-
-    SBAddF(&builder, "cwd = %S\n", cwd_path);
-    SBAddF(&builder, "builddir = %S\n", mate_convert_ninja_path(mate_state.build_directory));
+    SBAddF(&builder, "cwd = %S\n", NormPathNinja(mate_state.cwd));
+    SBAddF(&builder, "builddir = %S\n", NormPathNinja(mate_state.build_directory));
     SBAddF(&builder, "target = $builddir/%S\n\n", static_lib->output);
   }
 
@@ -5930,14 +5807,13 @@ static void mate_install_static_lib(StaticLib *static_lib) {
   }
 
   { // Build individual source files
-    StringVector output_files = mate_output_transformer(static_lib->sources);
     StringBuilder output_builder = SBCreate(mate_state.arena);
     for (size_t i = 0; i < static_lib->sources.length; i++) {
       String curr_source_file = VecAt(static_lib->sources, i);
       if (StrIsNull(curr_source_file)) continue;
 
-      String output_file = VecAt(output_files, i);
-      String source_file = NormalizePathStart(mate_state.arena, curr_source_file);
+      String output_file = NormPathOutput(curr_source_file);
+      String source_file = NormPathStart(curr_source_file);
 
       SBAddF(&builder, "build $builddir/%S: compile %S\n", output_file, source_file);
 
@@ -5947,12 +5823,13 @@ static void mate_install_static_lib(StaticLib *static_lib) {
         SBAddF(&builder, "  depfile = $builddir/%S\n", depFile);
       }
 
-      if (output_builder.buffer.length == 0) 
+      if (output_builder.buffer.length == 0) {
         SBAddF(&output_builder, "$builddir/%S", output_file);
-      else
-        SBAddF(&output_builder, " $builddir/%S", output_file);
+        continue;
+      }
+
+      SBAddF(&output_builder, " $builddir/%S", output_file);
     }
-    VecFree(output_files);
 
     SBAddF(&builder, "build $target: archive %S\n\n",output_builder.buffer);
   }
@@ -5965,8 +5842,8 @@ static void mate_install_static_lib(StaticLib *static_lib) {
 
   String build_command;
   if (mate_state.mate_cache.samurai_build) {
-    String samuraiOutputPath = F(mate_state.arena, "%s/samurai", mate_state.build_directory.data);
-    build_command = F(mate_state.arena, "%s -f %s", samuraiOutputPath.data, ninja_build_path.data);
+    String samurai_output_path = PathJoin(mate_state.build_directory, S("samurai"));
+    build_command = F(mate_state.arena, "%s -f %s", samurai_output_path.data, ninja_build_path.data);
   } else {
     build_command = F(mate_state.arena, "ninja -f %s", ninja_build_path.data);
   }
@@ -5974,14 +5851,8 @@ static void mate_install_static_lib(StaticLib *static_lib) {
   errno_t run_error = RunCommand(build_command);
   Assert(run_error == SUCCESS, "InstallStaticLib: Ninja file compilation failed with code: " FMT_I32, run_error);
 
-  LogSuccess("Ninja file compilation done for %s", NormalizePathEnd(mate_state.arena, ninja_build_path).data);
   mate_state.total_time = TimeNow() - mate_state.start_time;
-
-#if defined(PLATFORM_WIN)
-  static_lib->outputPath = F(mate_state.arena, "%s\\%s", mate_state.build_directory.data, static_lib->output.data);
-#else
-  static_lib->outputPath = F(mate_state.arena, "%s/%s", mate_state.build_directory.data, static_lib->output.data);
-#endif
+  static_lib->outputPath = PathJoin(mate_state.build_directory, static_lib->output);
 
   VecFree(static_lib->sources);
 }
@@ -6001,20 +5872,17 @@ static void mate_add_library_paths(String *targetLibs, char **libs, size_t libs_
     // MSVC format: /LIBPATH:"path"
     for (size_t i = 0; i < libs_size; i++) {
       char *curr_lib = libs[i];
-      String buffer = F(mate_state.arena, " /LIBPATH:\"%s\"", curr_lib);
-      SBAdd(&builder, buffer);
+      SBAddF(&builder, " /LIBPATH:\"%s\"", curr_lib);
     }
   } else {
     // GCC/Clang format: -L"path"
     for (size_t i = 0; i < libs_size; i++) {
       char *curr_lib = libs[i];
-      if (i == 0 && builder.buffer.length == 0) {
-        String buffer = F(mate_state.arena, "-L\"%s\"", curr_lib);
-        SBAdd(&builder, buffer);
+      if (builder.buffer.length == 0) {
+        SBAddF(&builder, "-L\"%s\"", curr_lib);
         continue;
       }
-      String buffer = F(mate_state.arena, " -L\"%s\"", curr_lib);
-      SBAdd(&builder, buffer);
+      SBAddF(&builder, " -L\"%s\"", curr_lib);
     }
   }
 
@@ -6035,44 +5903,37 @@ static void mate_link_system_libraries(String *targetLibs, char **libs, size_t l
   if (isMSVC()) {
     // MSVC format: library.lib
     for (size_t i = 0; i < libs_size; i++) {
-      char *currLib = libs[i];
-      String buffer = F(mate_state.arena, " %s.lib", currLib);
-      SBAdd(&builder, buffer);
+      char *curr_lib = libs[i];
+      SBAddF(&builder, " %s.lib", curr_lib);
     }
   } else {
     // GCC/Clang format: -llib
     for (size_t i = 0; i < libs_size; i++) {
-      char *currLib = libs[i];
-      if (i == 0 && builder.buffer.length == 0) {
-        String buffer = F(mate_state.arena, "-l%s", currLib);
-        SBAdd(&builder, buffer);
+      char *curr_lib = libs[i];
+      if (builder.buffer.length == 0) {
+        SBAddF(&builder, "-l%s", curr_lib);
         continue;
       }
-      String buffer = F(mate_state.arena, " -l%s", currLib);
-      SBAdd(&builder, buffer);
+      SBAddF(&builder, " -l%s", curr_lib);
     }
   }
 
   *targetLibs = builder.buffer;
 }
 
-static void mate_link_frameworks(String *targetLibs, char **frameworks, size_t frameworks_size) {
-  mate_link_frameworks_with_options(targetLibs, NONE, frameworks, frameworks_size);
-}
-
 static void mate_link_frameworks_with_options(String *targetLibs, LinkFrameworkOptions options, char **frameworks, size_t frameworks_size) {
   Assert(isClang(), "LinkFrameworks: This function is only supported for Clang.");
 
-  char *frameworkFlag = NULL;
+  char *framework_flag = NULL;
   switch (options) {
     case NONE:
-      frameworkFlag = "-framework";
+      framework_flag = "-framework";
       break;
     case NEEDED:
-      frameworkFlag = "-needed_framework";
+      framework_flag = "-needed_framework";
       break;
     case WEAK:
-      frameworkFlag = "-weak_framework";
+      framework_flag = "-weak_framework";
       break;
     default:
       Unreachable("LinkFrameworks: Invalid framework linking option provided.");
@@ -6086,78 +5947,72 @@ static void mate_link_frameworks_with_options(String *targetLibs, LinkFrameworkO
 
   for (size_t i = 0; i < frameworks_size; i++) {
     char *curr_framework = frameworks[i];
-    if (i == 0 && builder.buffer.length == 0) {
-      String buffer = F(mate_state.arena, "%s %s", frameworkFlag, curr_framework);
-      SBAdd(&builder, buffer);
+    if (builder.buffer.length == 0) {
+      SBAddF(&builder, "%s %s", framework_flag, curr_framework);
       continue;
     }
-    String buffer = F(mate_state.arena, " %s %s", frameworkFlag, curr_framework);
-    SBAdd(&builder, buffer);
+    SBAddF(&builder, " %s %s", framework_flag, curr_framework);
   }
 
   *targetLibs = builder.buffer;
 }
 
-static void mate_add_include_paths(String *targetIncludes, char **includes, size_t includes_size) {
+static void mate_link_frameworks(String *targetLibs, char **frameworks, size_t frameworks_size) {
+  mate_link_frameworks_with_options(targetLibs, NONE, frameworks, frameworks_size);
+}
+
+static void mate_add_include_paths(String *target_includes, char **includes, size_t includes_size) {
   StringBuilder builder = SBCreate(mate_state.arena);
 
-  if (targetIncludes->length) {
-    SBAdd(&builder, *targetIncludes);
-    SBAddS(&builder, " ");
+  if (target_includes->length) {
+    SBAdd(&builder, *target_includes);
   }
 
   if (isMSVC()) {
     // MSVC format: /I"path"
     for (size_t i = 0; i < includes_size; i++) {
       char *curr_include = includes[i];
-      if (i == 0 && builder.buffer.length == 0) {
-        String buffer = F(mate_state.arena, "/I\"%s\"", curr_include);
-        SBAdd(&builder, buffer);
+      if (builder.buffer.length == 0) {
+        SBAddF(&builder, "/I\"%s\"", curr_include);
         continue;
       }
-      String buffer = F(mate_state.arena, " /I\"%s\"", curr_include);
-      SBAdd(&builder, buffer);
+      SBAddF(&builder, " /I\"%s\"", curr_include);
     }
   } else {
     // GCC/Clang format: -I"path"
     for (size_t i = 0; i < includes_size; i++) {
       char *curr_include = includes[i];
-      if (i == 0 && builder.buffer.length == 0) {
-        String buffer = F(mate_state.arena, "-I\"%s\"", curr_include);
-        SBAdd(&builder, buffer);
+      if (builder.buffer.length == 0) {
+        SBAddF(&builder, "-I\"%s\"", curr_include);
         continue;
       }
-      String buffer = F(mate_state.arena, " -I\"%s\"", curr_include);
-      SBAdd(&builder, buffer);
+      SBAddF(&builder, " -I\"%s\"", curr_include);
     }
   }
 
-  *targetIncludes = builder.buffer;
+  *target_includes = builder.buffer;
 }
 
-static void mate_add_framework_paths(String *targetIncludes, char **frameworks, size_t frameworks_size) {
+static void mate_add_framework_paths(String *target_includes, char **frameworks, size_t frameworks_size) {
   Assert(isClang() || isGCC(), "AddFrameworkPaths: This function is only supported for GCC/Clang.");
 
   StringBuilder builder = SBCreate(mate_state.arena);
 
-  if (targetIncludes->length) {
-    SBAdd(&builder, *targetIncludes);
-    SBAddS(&builder, " ");
+  if (target_includes->length) {
+    SBAdd(&builder, *target_includes);
   }
 
   // GCC/Clang format: -F"path"
   for (size_t i = 0; i < frameworks_size; i++) {
     char *curr_include = frameworks[i];
-    if (i == 0 && builder.buffer.length == 0) {
-      String buffer = F(mate_state.arena, "-F\"%s\"", curr_include);
-      SBAdd(&builder, buffer);
+    if (builder.buffer.length == 0) {
+      SBAddF(&builder, "-F\"%s\"", curr_include);
       continue;
     }
-    String buffer = F(mate_state.arena, " -F\"%s\"", curr_include);
-    SBAdd(&builder, buffer);
+    SBAddF(&builder, " -F\"%s\"", curr_include);
   }
 
-  *targetIncludes = builder.buffer;
+  *target_includes = builder.buffer;
 }
 
 void EndBuild(void) {
@@ -6193,47 +6048,111 @@ static void mate_flag_builder_add_list(FlagBuilder *fb, char **flags) {
 }
 
 /* --- Path Utils Implementation --- */
-static bool mate_is_valid_output(String output) {
-  if (output.data[0] == '.') {
-    return false;
+static String mate_path_strip_dot_slash(String path) {
+  if (path.length >= 2 && path.data[0] == '.' && (path.data[1] == '/' || path.data[1] == '\\')) {
+    return (String){ .data = path.data + 2, .length = path.length - 2 };
   }
+  return path;
+}
 
-  for (size_t i = 0; i < output.length; i++) {
-    char curr_char = output.data[i];
-    if (curr_char == '/' || curr_char == '\\') {
-      return false;
+static String mate_path_get_ext(String path) {
+  size_t last_dot = 0, filename_start = 0;
+  for (size_t i = 0; i < path.length; i++) {
+    if (path.data[i] == '/' || path.data[i] == '\\') filename_start = i + 1;
+    if (path.data[i] == '.') last_dot = i;
+  }
+  if (last_dot <= filename_start) return S("");
+  return (String){ .data = path.data + last_dot, .length = path.length - last_dot };
+}
+
+static String mate_path_strip_ext(String path) {
+  String ext = mate_path_get_ext(path);
+  return (String){ .data = path.data, .length = path.length - ext.length };
+}
+
+static String mate_path_fix_slashes(String path) {
+#  if defined(PLATFORM_WIN)
+  for (size_t i = 0; i < path.length; i++) {
+    if (path.data[i] == '/') {
+      path.data[i] = '\\';
     }
   }
-  return true;
+#  else
+  for (size_t i = 0; i < path.length; i++) {
+    if (path.data[i] == '\\') {
+      path.data[i] = '/';
+    }
+  }
+#  endif
+  return path;
 }
 
-static String mate_fix_path_exe(String str) {
-  String path = NormalizeExePath(mate_state.arena, str);
+static String mate_path_with_platform_ext(Arena *arena, String path, String unix_ext, String win_ext) {
+  String result = mate_path_strip_dot_slash(path);
+  String current_ext = mate_path_get_ext(result);
+  String target_ext = (GetPlatform() == WINDOWS) ? win_ext : unix_ext;
 
-  GetCwdResult cwd_result = GetCwd();
-  Assert(cwd_result.error == SUCCESS, "mate_fix_path_exe: failed at getting current working directory, with error %s", ErrToStr(cwd_result.error).data);
-  String cwd_path = cwd_result.data;
+  if (StrEq(current_ext, unix_ext) || StrEq(current_ext, win_ext)) {
+    result = mate_path_strip_ext(result);
+  }
+
+  result = target_ext.length > 0
+    ? StrConcat(arena, StrNewSize(arena, result.data, result.length), target_ext)
+    : StrNewSize(arena, result.data, result.length);
+
+  return mate_path_fix_slashes(result);
+}
+
+String PathJoin(String base, String tail) {
 #if defined(PLATFORM_WIN)
-  return F(mate_state.arena, "%s\\%s", cwd_path.data, path.data);
+  return F(mate_state.arena, "%s\\%s", base.data, tail.data);
 #else
-  return F(mate_state.arena, "%s/%s", cwd_path.data, path.data);
+  return F(mate_state.arena, "%s/%s", base.data, tail.data);
 #endif
 }
 
-static String mate_fix_path(String str) {
-  String path = NormalizePath(mate_state.arena, str);
+String PathStem(String path) {
+  String stripped = mate_path_strip_dot_slash(path);
+  String no_ext = mate_path_strip_ext(stripped);
+  size_t filename_start = 0;
+  for (size_t i = 0; i < no_ext.length; i++) {
+    if (no_ext.data[i] == '/' || no_ext.data[i] == '\\') filename_start = i + 1;
+  }
 
-  GetCwdResult cwd_result = GetCwd();
-  Assert(cwd_result.error == SUCCESS, "mate_fix_path: failed at getting current working directory, with error %s", ErrToStr(cwd_result.error).data);
-  String cwd_path = cwd_result.data;
-#if defined(PLATFORM_WIN)
-  return F(mate_state.arena, "%s\\%s", cwd_path.data, path.data);
-#else
-  return F(mate_state.arena, "%s/%s", cwd_path.data, path.data);
-#endif
+  String result = StrNewSize(mate_state.arena, no_ext.data + filename_start, no_ext.length - filename_start);
+  return mate_path_fix_slashes(result);
 }
 
-static String mate_convert_ninja_path(String str) {
+String NormPath(String path) {
+  String stripped = mate_path_strip_dot_slash(path);
+  return mate_path_fix_slashes(StrNewSize(mate_state.arena, stripped.data, stripped.length));
+}
+
+String NormPathStart(String path) {
+  String stripped = mate_path_strip_dot_slash(path);
+  return StrNewSize(mate_state.arena, stripped.data, stripped.length);
+}
+
+String NormPathEnd(String path) {
+  size_t last_slash = 0;
+  for (size_t i = 0; i < path.length; i++) {
+    if (path.data[i] == '/' || path.data[i] == '\\') {
+      last_slash = i + 1;
+    }
+  }
+
+  return StrNewSize(mate_state.arena, path.data + last_slash, path.length - last_slash);
+}
+
+String NormPathExe(String str) {
+  return mate_path_with_platform_ext(mate_state.arena, str, S(""), S(".exe"));
+}
+
+String NormPathStaticLib(String str) {
+  return mate_path_with_platform_ext(mate_state.arena, str, S(".a"), S(".lib"));
+}
+
+String NormPathNinja(String str) {
 #if defined(PLATFORM_WIN)
   String copy = StrNewSize(mate_state.arena, str.data, str.length + 1);
   memmove(&copy.data[2], &copy.data[1], str.length - 1);
@@ -6245,94 +6164,23 @@ static String mate_convert_ninja_path(String str) {
 #endif
 }
 
-// TODO: Create something like NormalizeOutput
-static StringVector mate_output_transformer(StringVector vector) {
-  StringVector result = {0};
-
-  if (isMSVC()) {
-    for (size_t i = 0; i < vector.length; i++) {
-      String currentExecutable = VecAt(vector, i);
-      if (StrIsNull(currentExecutable)) {
-        VecPush(result, S(""));
-        continue;
-      }
-
-      size_t lastCharIndex = 0;
-      for (size_t j = currentExecutable.length - 1; j > 0; j--) {
-        char currentChar = currentExecutable.data[j];
-        if (currentChar == '/') {
-          lastCharIndex = j;
-          break;
-        }
-      }
-
-      Assert(lastCharIndex != 0, "MateOutputTransformer: failed to transform %s, to an object file", currentExecutable.data);
-      char *filenameStart = currentExecutable.data + lastCharIndex + 1;
-      size_t filenameLength = currentExecutable.length - (lastCharIndex + 1);
-
-      String objOutput = StrNewSize(mate_state.arena, filenameStart, filenameLength + 2);
-      objOutput.data[objOutput.length - 3] = 'o';
-      objOutput.data[objOutput.length - 2] = 'b';
-      objOutput.data[objOutput.length - 1] = 'j';
-
-      VecPush(result, objOutput);
-    }
-    return result;
-  }
-
-  for (size_t i = 0; i < vector.length; i++) {
-    String currentExecutable = VecAt(vector, i);
-    if (StrIsNull(currentExecutable)) {
-      VecPush(result, S(""));
-      continue;
-    }
-
-    size_t lastCharIndex = 0;
-    for (size_t j = currentExecutable.length - 1; j > 0; j--) {
-      char currentChar = currentExecutable.data[j];
-      if (currentChar == '/') {
-        lastCharIndex = j;
-        break;
-      }
-    }
-    Assert(lastCharIndex != 0, "MateOutputTransformer: failed to transform %s, to an object file", currentExecutable.data);
-    String output = StrSlice(mate_state.arena, currentExecutable, lastCharIndex + 1, currentExecutable.length);
-    output.data[output.length - 1] = 'o';
-    VecPush(result, output);
-  }
-  return result;
+String NormPathOutput(String str) {
+  String ext = isMSVC() ? S(".obj") : S(".o");
+  String stem = PathStem(str);
+  Assert(stem.length > 0, "NormPathOutput: failed to get stem from %s", str.data);
+  return StrConcat(mate_state.arena, stem, ext);
 }
 
-static bool mate_global_match(String pattern, String text) {
-  if (pattern.length == 1 && pattern.data[0] == '*') {
-    return true;
-  }
+String AbsoluteNormPath(String str) {
+  return PathJoin(mate_state.cwd, NormPath(str));
+}
 
-  size_t p = 0;
-  size_t t = 0;
-  size_t starP = -1;
-  size_t starT = -1;
-  while (t < text.length) {
-    if (p < pattern.length && pattern.data[p] == text.data[t]) {
-      p++;
-      t++;
-    } else if (p < pattern.length && pattern.data[p] == '*') {
-      starP = p;
-      starT = t;
-      p++;
-    } else if (starP != (size_t)-1) {
-      p = starP + 1;
-      t = ++starT;
-    } else {
-      return false;
-    }
-  }
+String AbsoluteNormPathExe(String str) {
+  return PathJoin(mate_state.cwd, NormPathExe(str));
+}
 
-  while (p < pattern.length && pattern.data[p] == '*') {
-    p++;
-  }
-
-  return p == pattern.length;
+String AbsoluteNormPathStaticLib(String str) {
+  return PathJoin(mate_state.cwd, NormPathStaticLib(str));
 }
 
 /* --- Utils Implementation --- */
