@@ -81,8 +81,8 @@ You can contribute based on our existing [TODOS](../TODOS.md) or from our [issue
    - Vendor packages are automatically managed in `./vendor/` (base.h, samurai)
 3. **Generate the amalgamated header:**
    ```bash
-	cc amalgam-script.c -o amalgam-script -w # compile amalgam-script.c
-	./amalgam-script
+   cc amalgam-script.c -o amalgam-script -w # compile amalgam-script.c
+   ./amalgam-script
    ```
    This script combines all source files into the single `mate.h` header.
 4. **Test your changes:**
