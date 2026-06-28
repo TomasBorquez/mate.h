@@ -123,13 +123,17 @@ static void mate_rebuild(int argc, char *argv[argc]) {
   StringBuilder sb = SBCreate(mate_state.arena);
   SBAdd(&sb, mate_exe);
 
-  for (int i=1; i < argc; i += 1) {
+  for (size_t i = 1; i < (size_t)argc; i++) {
     const char *s = argv[i];
     SBAddF(&sb, " %s", s);
   }
 
   LogInfo("Rebuild finished, running %s", sb.buffer.data);
   exit(RunCommand(sb.buffer));
+}
+
+void StartBuild(void) {
+  StartBuildEx(0, NULL);
 }
 
 void StartBuildEx(int argc, char *argv[argc]) {
