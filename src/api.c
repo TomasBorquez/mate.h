@@ -94,7 +94,7 @@ static bool mate_need_rebuild(void) {
   return true;
 }
 
-static void mate_rebuild(void) {
+static void mate_rebuild(int argc, char *argv[argc]) {
   if (mate_state.mate_cache.first_build || !mate_need_rebuild()) {
     return;
   }
@@ -120,11 +120,19 @@ static void mate_rebuild(void) {
   rename_error = FileRename(mate_exe_new, mate_exe);
   Assert(rename_error == SUCCESS, "MateRebuild: failed renaming new executable into old: %d", rename_error);
 
-  LogInfo("Rebuild finished, running %s", mate_exe.data);
-  exit(RunCommand(mate_exe));
+  StringBuilder sb = SBCreate(mate_state.arena);
+  SBAdd(&sb, mate_exe);
+
+  for (int i=1; i < argc; i += 1) {
+    const char *s = argv[i];
+    SBAddF(&sb, " %s", s);
+  }
+
+  LogInfo("Rebuild finished, running %s", sb.buffer.data);
+  exit(RunCommand(sb.buffer));
 }
 
-void StartBuild(void) {
+void StartBuildEx(int argc, char *argv[argc]) {
   LogInit();
   if (!mate_state.init_config) {
     mate_set_default_state();
@@ -134,7 +142,7 @@ void StartBuild(void) {
 
   Assert(Mkdir(mate_state.build_directory) == SUCCESS, "StartBuild: mkdir failed on making path %s", mate_state.build_directory.data);
   mate_read_cache();
-  mate_rebuild();
+  mate_rebuild(argc, argv);
 }
 
 static void mate_apply_warning_flags(FlagBuilder *fb, Compiler c, FlagWarnings w) {
