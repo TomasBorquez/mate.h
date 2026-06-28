@@ -31,7 +31,8 @@ mate.h is a build system for C written in C. It aims to provide a simple, fast, 
    - `./vendor/samurai/` - This is the mentioned rewrite of ninja in C
 4. **Amalgam:** Once you made your edits run the script:
     ```bash
-   ./scripts/run-amalgam.sh
+	cc amalgam-script.c -o amalgam-script -w # compile amalgam-script.c
+	./amalgam-script
     ```
     This will add all your changes to the main `mate.h`, which is necessary if you want to run your changes on tests
 5. **Run tests** for your platform:
@@ -80,7 +81,8 @@ You can contribute based on our existing [TODOS](../TODOS.md) or from our [issue
    - Vendor packages are automatically managed in `./vendor/` (base.h, samurai)
 3. **Generate the amalgamated header:**
    ```bash
-   ./scripts/run-amalgam.sh
+	cc amalgam-script.c -o amalgam-script -w # compile amalgam-script.c
+	./amalgam-script
    ```
    This script combines all source files into the single `mate.h` header.
 4. **Test your changes:**

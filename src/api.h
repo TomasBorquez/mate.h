@@ -155,7 +155,8 @@ typedef StringBuilder FlagBuilder;
 /* --- Build System --- */
 void CreateConfig(MateOptions options);
 
-void StartBuild(void);
+#define StartBuild() StartBuildEx(0, NULL)
+void StartBuildEx(int argc, char *argv[argc]);
 void EndBuild(void);
 
 Executable CreateExecutable(ExecutableOptions executableOptions);

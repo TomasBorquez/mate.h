@@ -152,3 +152,7 @@ orleans.codegen.cs
 MigrationBackup/
 FodyWeavers.xsd
 *.code-workspace
+
+.direnv/
+.envrc
+shell.nix
