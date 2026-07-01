@@ -2141,7 +2141,7 @@ typedef StringBuilder FlagBuilder;
 void CreateConfig(MateOptions options);
 
 void StartBuild(void);
-void StartBuildEx(int argc, char *argv[argc]);
+void StartBuildEx(int argc, char **argv);
 void EndBuild(void);
 
 Executable CreateExecutable(ExecutableOptions executableOptions);
@@ -5263,7 +5263,7 @@ static bool mate_need_rebuild(void) {
   return true;
 }
 
-static void mate_rebuild(int argc, char *argv[argc]) {
+static void mate_rebuild(int argc, char **argv) {
   if (mate_state.mate_cache.first_build || !mate_need_rebuild()) {
     return;
   }
@@ -5292,7 +5292,7 @@ static void mate_rebuild(int argc, char *argv[argc]) {
   StringBuilder sb = SBCreate(mate_state.arena);
   SBAdd(&sb, mate_exe);
 
-  for (size_t i=1; i < (size_t)argc; i++) {
+  for (size_t i = 1; i < (size_t)argc; i++) {
     const char *s = argv[i];
     SBAddF(&sb, " %s", s);
   }
@@ -5305,7 +5305,7 @@ void StartBuild(void) {
   StartBuildEx(0, NULL);
 }
 
-void StartBuildEx(int argc, char *argv[argc]) {
+void StartBuildEx(int argc, char **argv) {
   LogInit();
   if (!mate_state.init_config) {
     mate_set_default_state();

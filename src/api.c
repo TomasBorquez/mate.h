@@ -94,7 +94,7 @@ static bool mate_need_rebuild(void) {
   return true;
 }
 
-static void mate_rebuild(int argc, char *argv[argc]) {
+static void mate_rebuild(int argc, char **argv) {
   if (mate_state.mate_cache.first_build || !mate_need_rebuild()) {
     return;
   }
@@ -136,7 +136,7 @@ void StartBuild(void) {
   StartBuildEx(0, NULL);
 }
 
-void StartBuildEx(int argc, char *argv[argc]) {
+void StartBuildEx(int argc, char **argv) {
   LogInit();
   if (!mate_state.init_config) {
     mate_set_default_state();

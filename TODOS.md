@@ -3,11 +3,16 @@
 ## v0.3
 - [ ] Make flags OR values
 - [ ] Move to `exec` && `CreateProcess` for executables
+- [ ] Minify samurai output file
 - [ ] `LinkStaticLib()` for linking another `StaticLib`
 - [ ] Add better error messages with different colors for examples
 - [ ] Add ability to compile with g++ and other c/cpp compilers
-- [ ] Minify samurai output file
 - [ ] Add `args` parser
+- [ ] base.h
+    - [ ] StringView
+    - [ ] DynamicString
+    - [ ] StringBuilder
+    - [ ] Move all params and values to this pattern
 - [ ] Shared libs
 - [ ] Make `samurai` windows compatible
 - [ ] Full `MSVC` support on static/shared libs
