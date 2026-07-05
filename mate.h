@@ -2017,6 +2017,7 @@ typedef struct {
   char *buildDirectory;
   char *mateSource;
   char *mateExe;
+  char *rebuild_flags;
 } MateOptions;
 
 typedef struct {
@@ -2049,6 +2050,7 @@ typedef struct {
   String build_directory;
   String mate_source;
   String mate_exe;
+  String rebuild_flags;
 
   String cwd;
   MateCache mate_cache;
@@ -2064,7 +2066,7 @@ typedef struct {
 typedef enum {
   FLAG_WARNINGS_NONE = 1, // -w
   FLAG_WARNINGS_MINIMAL,  // -Wall
-  FLAG_WARNINGS,          // -Wall -Wextra
+  FLAG_WARNINGS,         // -Wall -Wextra
   FLAG_WARNINGS_VERBOSE,  // -Wall -Wextra -Wpedantic
 } FlagWarnings;
 
@@ -5191,10 +5193,11 @@ static void mate_set_default_state(void) {
 
 void CreateConfig(MateOptions options) {
   mate_set_default_state();
-  if (options.compiler != 0) mate_state.compiler = options.compiler;
-  if (options.mateExe != NULL) mate_state.mate_exe = AbsoluteNormPathExe(s(options.mateExe));
-  if (options.mateSource != NULL) mate_state.mate_source = AbsoluteNormPath(s(options.mateSource));
+  if (options.compiler != 0)          mate_state.compiler = options.compiler;
+  if (options.mateExe != NULL)        mate_state.mate_exe = AbsoluteNormPathExe(s(options.mateExe));
+  if (options.mateSource != NULL)     mate_state.mate_source = AbsoluteNormPath(s(options.mateSource));
   if (options.buildDirectory != NULL) mate_state.build_directory = AbsoluteNormPath(s(options.buildDirectory));
+  if (options.rebuild_flags != NULL)  mate_state.rebuild_flags = s(options.rebuild_flags);
 }
 
 static void mate_read_cache(void) {
@@ -5274,9 +5277,9 @@ static void mate_rebuild(int argc, char **argv) {
 
   String compile_command;
   if (isMSVC()) {
-    compile_command = F(mate_state.arena, "cl.exe \"%s\" /Fe:\"%s\"", mate_state.mate_source.data, mate_exe_new.data);
+    compile_command = F(mate_state.arena, "cl.exe \"%s\" /Fe:\"%s\" %s", mate_state.mate_source.data, mate_exe_new.data, mate_state.rebuild_flags.data);
   } else {
-    compile_command = F(mate_state.arena, "%s \"%s\" -o \"%s\"", CompilerToStr(mate_state.compiler).data, mate_state.mate_source.data, mate_exe_new.data);
+    compile_command = F(mate_state.arena, "%s \"%s\" -o \"%s\" %s", CompilerToStr(mate_state.compiler).data, mate_state.mate_source.data, mate_exe_new.data, mate_state.rebuild_flags.data);
   }
 
   LogWarn("%s changed rebuilding...", mate_state.mate_source.data);
