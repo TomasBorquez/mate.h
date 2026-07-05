@@ -3,7 +3,11 @@
 
 int main(void) {
   // You can create a config that allows you to use different compilers as well as build directories
-  CreateConfig((MateOptions){.compiler = CLANG, .buildDirectory = "./custom-dir"});
+  CreateConfig((MateOptions){
+    .compiler = CLANG,
+    .buildDirectory = "./custom-dir",
+    .rebuild_flags = "-w", // custom rebuild flags (used when mate rebuilds itself). useful when you want to ignore all warnings from the build script
+  });
 
   StartBuild();
   {

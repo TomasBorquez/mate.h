@@ -32,6 +32,7 @@ typedef struct {
   char *buildDirectory;
   char *mateSource;
   char *mateExe;
+  char *rebuild_flags;
 } MateOptions;
 
 typedef struct {
@@ -64,6 +65,7 @@ typedef struct {
   String build_directory;
   String mate_source;
   String mate_exe;
+  String rebuild_flags;
 
   String cwd;
   MateCache mate_cache;
@@ -79,7 +81,7 @@ typedef struct {
 typedef enum {
   FLAG_WARNINGS_NONE = 1, // -w
   FLAG_WARNINGS_MINIMAL,  // -Wall
-  FLAG_WARNINGS,          // -Wall -Wextra
+  FLAG_WARNINGS,         // -Wall -Wextra
   FLAG_WARNINGS_VERBOSE,  // -Wall -Wextra -Wpedantic
 } FlagWarnings;
 
