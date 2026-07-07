@@ -6,7 +6,7 @@ int main(void) {
   CreateConfig((MateOptions){
     .compiler = CLANG,
     .buildDirectory = "./custom-dir",
-    .rebuild_flags = "-w", // custom rebuild flags (used when mate rebuilds itself). useful when you want to ignore all warnings from the build script
+    .rebuildFlags = "-w", // custom rebuild flags (used when mate rebuilds itself). useful when you want to ignore all warnings from the build script
   });
 
   StartBuild();
