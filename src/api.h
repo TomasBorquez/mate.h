@@ -32,7 +32,7 @@ typedef struct {
   char *buildDirectory;
   char *mateSource;
   char *mateExe;
-  char *rebuild_flags;
+  char *rebuildFlags;
 } MateOptions;
 
 typedef struct {

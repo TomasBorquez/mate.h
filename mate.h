@@ -2017,7 +2017,7 @@ typedef struct {
   char *buildDirectory;
   char *mateSource;
   char *mateExe;
-  char *rebuild_flags;
+  char *rebuildFlags;
 } MateOptions;
 
 typedef struct {
@@ -5197,7 +5197,11 @@ void CreateConfig(MateOptions options) {
   if (options.mateExe != NULL)        mate_state.mate_exe = AbsoluteNormPathExe(s(options.mateExe));
   if (options.mateSource != NULL)     mate_state.mate_source = AbsoluteNormPath(s(options.mateSource));
   if (options.buildDirectory != NULL) mate_state.build_directory = AbsoluteNormPath(s(options.buildDirectory));
-  if (options.rebuild_flags != NULL)  mate_state.rebuild_flags = s(options.rebuild_flags);
+  if (options.rebuildFlags != NULL) {
+    mate_state.rebuild_flags = s(options.rebuildFlags);
+  } else {
+    mate_state.rebuild_flags = S("");
+  }
 }
 
 static void mate_read_cache(void) {

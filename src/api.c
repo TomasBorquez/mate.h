@@ -15,6 +15,7 @@ static void mate_set_default_state(void) {
     mate_state.mate_exe = AbsoluteNormPathExe(S("./mate"));
     mate_state.mate_source = AbsoluteNormPath(S("./mate.c"));
     mate_state.build_directory = AbsoluteNormPath(S("./build"));
+		mate_state.rebuild_flags = S("");
   }
 
   mate_state.init_config = true;
@@ -26,7 +27,7 @@ void CreateConfig(MateOptions options) {
   if (options.mateExe != NULL)        mate_state.mate_exe = AbsoluteNormPathExe(s(options.mateExe));
   if (options.mateSource != NULL)     mate_state.mate_source = AbsoluteNormPath(s(options.mateSource));
   if (options.buildDirectory != NULL) mate_state.build_directory = AbsoluteNormPath(s(options.buildDirectory));
-  if (options.rebuild_flags != NULL)  mate_state.rebuild_flags = s(options.rebuild_flags);
+  if (options.rebuildFlags != NULL)   mate_state.rebuild_flags = s(options.rebuildFlags);
 }
 
 static void mate_read_cache(void) {
