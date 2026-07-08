@@ -65,11 +65,14 @@ jobs:
           cd - > /dev/null
         done
 
+    - name: Setup MSVC
+      if: matrix.compiler == 'msvc'
+      uses: ilammy/msvc-dev-cmd@v1
+
     - name: Run tests with MSVC
       if: matrix.compiler == 'msvc'
       shell: cmd
       run: |
-        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
         @echo off
         setlocal enabledelayedexpansion
 
