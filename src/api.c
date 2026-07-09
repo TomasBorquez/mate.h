@@ -153,7 +153,9 @@ void StartBuildEx(int argc, char **argv) {
   mate_rebuild(argc, argv);
 }
 
-static void mate_apply_warning_flags(FlagBuilder *fb, Compiler c, FlagWarnings w) {
+static void mate_apply_warning_flags(FlagBuilder *fb, FlagWarnings w) {
+  Compiler c = mate_state.compiler_family;
+
   static char *general[][4] = {
       [FLAG_WARNINGS_NONE] = {"w", NULL},
       [FLAG_WARNINGS_MINIMAL] = {"Wall", NULL},
@@ -169,7 +171,9 @@ static void mate_apply_warning_flags(FlagBuilder *fb, Compiler c, FlagWarnings w
   mate_flag_builder_add_list(fb, c == MSVC ? msvc[w] : general[w]);
 }
 
-static void mate_apply_debug_flags(FlagBuilder *fb, Compiler c, FlagDebug d) {
+static void mate_apply_debug_flags(FlagBuilder *fb, FlagDebug d) {
+  Compiler c = mate_state.compiler_family;
+
   static char *general[][2] = {
       [FLAG_DEBUG_MINIMAL] = {"g1", NULL},
       [FLAG_DEBUG_MEDIUM] = {"g2", NULL},
@@ -183,7 +187,9 @@ static void mate_apply_debug_flags(FlagBuilder *fb, Compiler c, FlagDebug d) {
   mate_flag_builder_add_list(fb, c == MSVC ? msvc[d] : general[d]);
 }
 
-static void mate_apply_optimization_flags(FlagBuilder *fb, Compiler c, FlagOptimization o) {
+static void mate_apply_optimization_flags(FlagBuilder *fb, FlagOptimization o) {
+  Compiler c = mate_state.compiler_family;
+
   static char *general[][2] = {
       [FLAG_OPTIMIZATION_NONE] = {"O0", NULL},
       [FLAG_OPTIMIZATION_BASIC] = {"O1", NULL},
@@ -201,7 +207,9 @@ static void mate_apply_optimization_flags(FlagBuilder *fb, Compiler c, FlagOptim
   mate_flag_builder_add_list(fb, c == MSVC ? msvc[o] : general[o]);
 }
 
-static void mate_apply_std_flags(FlagBuilder *fb, Compiler c, FlagSTD std) {
+static void mate_apply_std_flags(FlagBuilder *fb, FlagSTD std) {
+  Compiler c = mate_state.compiler_family;
+
   static char *general[][2] = {
       [FLAG_STD_C99] = {"std=c99", NULL},
       [FLAG_STD_C11] = {"std=c11", NULL},
@@ -219,7 +227,9 @@ static void mate_apply_std_flags(FlagBuilder *fb, Compiler c, FlagSTD std) {
   mate_flag_builder_add_list(fb, c == MSVC ? msvc[std] : general[std]);
 }
 
-static void mate_apply_sanitizer_flags(FlagBuilder *fb, Compiler c, FlagSanitizer s) {
+static void mate_apply_sanitizer_flags(FlagBuilder *fb, FlagSanitizer s) {
+  Compiler c = mate_state.compiler_family;
+
   static char *general[][4] = {
       [FLAG_SANITIZER_ADDRESS] = {"fsanitize=address", "fno-omit-frame-pointer", NULL},
       [FLAG_SANITIZER_UB] = {"fsanitize=undefined", NULL},
@@ -234,7 +244,9 @@ static void mate_apply_sanitizer_flags(FlagBuilder *fb, Compiler c, FlagSanitize
   mate_flag_builder_add_list(fb, c == MSVC ? msvc[s] : general[s]);
 }
 
-static void mate_apply_error_flags(FlagBuilder *fb, Compiler c, FlagErrorFormat e) {
+static void mate_apply_error_flags(FlagBuilder *fb, FlagErrorFormat e) {
+  Compiler c = mate_state.compiler_family;
+
   static char *general[][5] = {
       [FLAG_ERROR] = {"fdiagnostics-color=always", NULL},
       [FLAG_ERROR_MAX] = {"fdiagnostics-color=always", "fdiagnostics-show-caret", "fdiagnostics-show-option", "fdiagnostics-generate-patch", NULL},
@@ -294,14 +306,14 @@ Executable CreateExecutable(ExecutableOptions opts) {
   result.output = NormPathExe(s(opts.output));
 
   FlagBuilder fb = FlagBuilderCreate();
-  if (opts.flags != NULL) SBAdd(&fb, s(opts.flags));
-  if (opts.warnings != 0) mate_apply_warning_flags(&fb, mate_state.compiler_family, opts.warnings);
-  if (opts.debug != 0) mate_apply_debug_flags(&fb, mate_state.compiler_family, opts.debug);
-  if (opts.optimization != 0) mate_apply_optimization_flags(&fb, mate_state.compiler_family, opts.optimization);
-  if (opts.std != 0) mate_apply_std_flags(&fb, mate_state.compiler_family, opts.std);
-  if (opts.sanitizer != 0) mate_apply_sanitizer_flags(&fb, mate_state.compiler_family, opts.sanitizer);
+  if (opts.flags != NULL)     SBAdd(&fb, s(opts.flags));
+  if (opts.warnings != 0)     mate_apply_warning_flags(&fb, opts.warnings);
+  if (opts.debug != 0)        mate_apply_debug_flags(&fb, opts.debug);
+  if (opts.optimization != 0) mate_apply_optimization_flags(&fb, opts.optimization);
+  if (opts.std != 0)          mate_apply_std_flags(&fb, opts.std);
+  if (opts.sanitizer != 0)    mate_apply_sanitizer_flags(&fb, opts.sanitizer);
 
-  mate_apply_error_flags(&fb, mate_state.compiler_family, opts.error);
+  mate_apply_error_flags(&fb, opts.error);
   if (!StrIsNull(fb.buffer)) result.flags = fb.buffer;
 
   if (opts.libs != NULL) result.libs = s(opts.libs);
@@ -344,14 +356,14 @@ StaticLib CreateStaticLib(StaticLibOptions opts) {
   result.arFlags = S("rcs");
 
   FlagBuilder fb = FlagBuilderCreate();
-  if (opts.flags != NULL) SBAdd(&fb, s(opts.flags));
-  if (opts.warnings != 0) mate_apply_warning_flags(&fb, mate_state.compiler_family, opts.warnings);
-  if (opts.debug != 0) mate_apply_debug_flags(&fb, mate_state.compiler_family, opts.debug);
-  if (opts.optimization != 0) mate_apply_optimization_flags(&fb, mate_state.compiler_family, opts.optimization);
-  if (opts.std != 0) mate_apply_std_flags(&fb, mate_state.compiler_family, opts.std);
-  if (opts.sanitizer != 0) mate_apply_sanitizer_flags(&fb, mate_state.compiler_family, opts.sanitizer);
+  if (opts.flags != NULL)     SBAdd(&fb, s(opts.flags));
+  if (opts.warnings != 0)     mate_apply_warning_flags(&fb, opts.warnings);
+  if (opts.debug != 0)        mate_apply_debug_flags(&fb, opts.debug);
+  if (opts.optimization != 0) mate_apply_optimization_flags(&fb, opts.optimization);
+  if (opts.std != 0)          mate_apply_std_flags(&fb, opts.std);
+  if (opts.sanitizer != 0)    mate_apply_sanitizer_flags(&fb, opts.sanitizer);
 
-  mate_apply_error_flags(&fb, mate_state.compiler_family, opts.error);
+  mate_apply_error_flags(&fb, opts.error);
   if (!StrIsNull(fb.buffer)) result.flags = fb.buffer;
 
   if (opts.libs != NULL) result.libs = s(opts.libs);
