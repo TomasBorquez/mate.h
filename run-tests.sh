@@ -9,6 +9,7 @@ TESTS=(
   "05-samurai-source-code"
   "06-lua-source-code"
   "07-raylib-source-code"
+  "08-custom-compiler"
 )
 
 WINDOWS_SKIP=("05-samurai-source-code")

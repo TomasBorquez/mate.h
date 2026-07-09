@@ -6,7 +6,8 @@ static MateConfig mate_state = {0};
 static void mate_set_default_state(void) {
   {
     mate_state.arena = ArenaCreate(20000 * sizeof(String));
-    mate_state.compiler = GetCompiler();
+    mate_state.compiler = S("");
+    mate_state.compiler_family = GetCompiler();
 
     GetCwdResult cwd_result = GetCwd();
     Assert(cwd_result.error == SUCCESS, "mate_set_default_state: failed at getting current working directory, with error %s", ErrToStr(cwd_result.error).data);
@@ -23,7 +24,8 @@ static void mate_set_default_state(void) {
 
 void CreateConfig(MateOptions options) {
   mate_set_default_state();
-  if (options.compiler != 0)          mate_state.compiler = options.compiler;
+  if (options.compiler != NULL)       mate_state.compiler = s(options.compiler);
+  if (options.compilerFamily != 0)    mate_state.compiler_family = options.compilerFamily;
   if (options.mateExe != NULL)        mate_state.mate_exe = AbsoluteNormPathExe(s(options.mateExe));
   if (options.mateSource != NULL)     mate_state.mate_source = AbsoluteNormPath(s(options.mateSource));
   if (options.buildDirectory != NULL) mate_state.build_directory = AbsoluteNormPath(s(options.buildDirectory));
@@ -62,7 +64,7 @@ static void mate_read_cache(void) {
     Assert(err_file_write == SUCCESS, "MateReadCache: failed writing samurai source code to path %s", source_path.data);
 
     String output_path = PathJoin(mate_state.build_directory, S("samurai"));
-    String compile_command = F(mate_state.arena, "%s \"%s\" -o \"%s\" -std=c99", CompilerToStr(mate_state.compiler).data, source_path.data, output_path.data);
+    String compile_command = F(mate_state.arena, "%s \"%s\" -o \"%s\" -std=c99", CompilerStr().data, source_path.data, output_path.data);
 
     errno_t run_error = RunCommand(compile_command);
     Assert(run_error == SUCCESS, "MateReadCache: Error meanwhile compiling samurai at %s, if you are seeing this please make an issue at github.com/TomasBorquez/mate.h", source_path.data);
@@ -109,7 +111,7 @@ static void mate_rebuild(int argc, char **argv) {
   if (isMSVC()) {
     compile_command = F(mate_state.arena, "cl.exe \"%s\" /Fe:\"%s\" %s", mate_state.mate_source.data, mate_exe_new.data, mate_state.rebuild_flags.data);
   } else {
-    compile_command = F(mate_state.arena, "%s \"%s\" -o \"%s\" %s", CompilerToStr(mate_state.compiler).data, mate_state.mate_source.data, mate_exe_new.data, mate_state.rebuild_flags.data);
+    compile_command = F(mate_state.arena, "%s \"%s\" -o \"%s\" %s", CompilerStr().data, mate_state.mate_source.data, mate_exe_new.data, mate_state.rebuild_flags.data);
   }
 
   LogWarn("%s changed rebuilding...", mate_state.mate_source.data);
@@ -293,13 +295,13 @@ Executable CreateExecutable(ExecutableOptions opts) {
 
   FlagBuilder fb = FlagBuilderCreate();
   if (opts.flags != NULL) SBAdd(&fb, s(opts.flags));
-  if (opts.warnings != 0) mate_apply_warning_flags(&fb, mate_state.compiler, opts.warnings);
-  if (opts.debug != 0) mate_apply_debug_flags(&fb, mate_state.compiler, opts.debug);
-  if (opts.optimization != 0) mate_apply_optimization_flags(&fb, mate_state.compiler, opts.optimization);
-  if (opts.std != 0) mate_apply_std_flags(&fb, mate_state.compiler, opts.std);
-  if (opts.sanitizer != 0) mate_apply_sanitizer_flags(&fb, mate_state.compiler, opts.sanitizer);
+  if (opts.warnings != 0) mate_apply_warning_flags(&fb, mate_state.compiler_family, opts.warnings);
+  if (opts.debug != 0) mate_apply_debug_flags(&fb, mate_state.compiler_family, opts.debug);
+  if (opts.optimization != 0) mate_apply_optimization_flags(&fb, mate_state.compiler_family, opts.optimization);
+  if (opts.std != 0) mate_apply_std_flags(&fb, mate_state.compiler_family, opts.std);
+  if (opts.sanitizer != 0) mate_apply_sanitizer_flags(&fb, mate_state.compiler_family, opts.sanitizer);
 
-  mate_apply_error_flags(&fb, mate_state.compiler, opts.error);
+  mate_apply_error_flags(&fb, mate_state.compiler_family, opts.error);
   if (!StrIsNull(fb.buffer)) result.flags = fb.buffer;
 
   if (opts.libs != NULL) result.libs = s(opts.libs);
@@ -343,13 +345,13 @@ StaticLib CreateStaticLib(StaticLibOptions opts) {
 
   FlagBuilder fb = FlagBuilderCreate();
   if (opts.flags != NULL) SBAdd(&fb, s(opts.flags));
-  if (opts.warnings != 0) mate_apply_warning_flags(&fb, mate_state.compiler, opts.warnings);
-  if (opts.debug != 0) mate_apply_debug_flags(&fb, mate_state.compiler, opts.debug);
-  if (opts.optimization != 0) mate_apply_optimization_flags(&fb, mate_state.compiler, opts.optimization);
-  if (opts.std != 0) mate_apply_std_flags(&fb, mate_state.compiler, opts.std);
-  if (opts.sanitizer != 0) mate_apply_sanitizer_flags(&fb, mate_state.compiler, opts.sanitizer);
+  if (opts.warnings != 0) mate_apply_warning_flags(&fb, mate_state.compiler_family, opts.warnings);
+  if (opts.debug != 0) mate_apply_debug_flags(&fb, mate_state.compiler_family, opts.debug);
+  if (opts.optimization != 0) mate_apply_optimization_flags(&fb, mate_state.compiler_family, opts.optimization);
+  if (opts.std != 0) mate_apply_std_flags(&fb, mate_state.compiler_family, opts.std);
+  if (opts.sanitizer != 0) mate_apply_sanitizer_flags(&fb, mate_state.compiler_family, opts.sanitizer);
 
-  mate_apply_error_flags(&fb, mate_state.compiler, opts.error);
+  mate_apply_error_flags(&fb, mate_state.compiler_family, opts.error);
   if (!StrIsNull(fb.buffer)) result.flags = fb.buffer;
 
   if (opts.libs != NULL) result.libs = s(opts.libs);
@@ -518,7 +520,7 @@ static void mate_install_executable(Executable *executable) {
   StringBuilder builder = SBReserve(mate_state.arena, 1024);
 
   { // Variables
-    SBAddF(&builder, "cc = %S\n", CompilerToStr(mate_state.compiler));
+    SBAddF(&builder, "cc = %S\n", MetaCompilerStr());
     if (executable->linkerFlags.length > 0) SBAddF(&builder, "linker_flags = %S\n", executable->linkerFlags);
     if (executable->flags.length > 0)       SBAddF(&builder, "flags = %S\n", executable->flags);
     if (executable->includes.length > 0)    SBAddF(&builder, "includes = %S\n", executable->includes);
@@ -553,7 +555,7 @@ static void mate_install_executable(Executable *executable) {
       SBAddS(&builder, " /showIncludes /c $in /Fo:$out\n");
       SBAddS(&builder, "  deps = msvc\n\n");
     } else {
-      if (mate_state.compiler != GCC && mate_state.compiler != CLANG)
+      if (mate_state.compiler_family != GCC && mate_state.compiler_family != CLANG)
         SBAddS(&builder, " -c $cwd/$in -o $out\n");
       else {
         SBAddS(&builder, " -c $cwd/$in -o $out -MMD -MF $depfile\n");
@@ -574,7 +576,7 @@ static void mate_install_executable(Executable *executable) {
       String source_file = NormPathStart(curr_source);
       SBAddF(&builder, "build $builddir/%S: compile %S\n", output_file, source_file);
 
-      if (mate_state.compiler == GCC || mate_state.compiler == CLANG) {
+      if (mate_state.compiler_family == GCC || mate_state.compiler_family == CLANG) {
         String dep_file = StrNew(mate_state.arena, output_file.data);
         dep_file.data[dep_file.length - 1] = 'd';
         SBAddF(&builder, "  depfile = $builddir/%S\n", dep_file);
@@ -618,7 +620,7 @@ static void mate_install_static_lib(StaticLib *static_lib) {
   StringBuilder builder = SBReserve(mate_state.arena, 1024);
 
   { // Variables
-    SBAddF(&builder, "cc = %S\n", CompilerToStr(mate_state.compiler));
+    SBAddF(&builder, "cc = %S\n", MetaCompilerStr());
     SBAddS(&builder, "ar = ar\n"); // TODO: Add different ar for MSVC
 
     if (static_lib->flags.length > 0)    SBAddF(&builder, "flags = %S\n", static_lib->flags);
@@ -642,7 +644,7 @@ static void mate_install_static_lib(StaticLib *static_lib) {
     if (static_lib->flags.length > 0)    SBAddS(&builder, " $flags");
     if (static_lib->includes.length > 0) SBAddS(&builder, " $includes");
 
-    if (mate_state.compiler != GCC && mate_state.compiler != CLANG)
+    if (mate_state.compiler_family != GCC && mate_state.compiler_family != CLANG)
       SBAddS(&builder, " -c $cwd/$in -o $out\n");
     else {
       SBAddS(&builder, " -c $cwd/$in -o $out -MMD -MF $depfile\n");
@@ -663,7 +665,7 @@ static void mate_install_static_lib(StaticLib *static_lib) {
 
       SBAddF(&builder, "build $builddir/%S: compile %S\n", output_file, source_file);
 
-      if (mate_state.compiler == GCC || mate_state.compiler == CLANG) {
+      if (mate_state.compiler_family == GCC || mate_state.compiler_family == CLANG) {
         String depFile = StrNewSize(mate_state.arena, output_file.data, output_file.length);
         depFile.data[depFile.length - 1] = 'd';
         SBAddF(&builder, "  depfile = $builddir/%S\n", depFile);
@@ -877,7 +879,7 @@ FlagBuilder FlagBuilderReserve(size_t count) {
 
 static void mate_flag_builder_add_string(FlagBuilder *builder, char *flag) {
   bool is_empty = builder->buffer.length == 0;
-  if (mate_state.compiler == MSVC) {
+  if (mate_state.compiler_family == MSVC) {
     Assert(flag[0] != '/', "FlagBuilderAdd: flag should not contain '/'. Your flag:\n%s \n\ne.g usage FlagBuilderAdd(\"W4\")", flag);
     SBAdd(builder, is_empty ? S("/") : S(" /"));
   } else {
@@ -1039,8 +1041,8 @@ errno_t RunCommand(String command) {
 #endif
 }
 
-String CompilerToStr(Compiler compiler) {
-  switch (compiler) {
+String CompilerStr(void) {
+  switch (GetCompiler()) {
   case GCC:
     return S("gcc");
   case CLANG:
@@ -1050,23 +1052,43 @@ String CompilerToStr(Compiler compiler) {
   case MSVC:
     return S("cl.exe");
   default:
-    Unreachable("CompilerToStr: failed, should never get here, compiler given does not exist: %d", compiler);
+    Unreachable("CompilerToStr: failed, should never get here, compiler family given does not exist: %d", mate_state.compiler_family);
+    return S("");
+  }
+}
+
+String MetaCompilerStr(void) {
+  if (!StrEq(mate_state.compiler, S(""))) {
+    return mate_state.compiler;
+  }
+
+  switch (mate_state.compiler_family) {
+  case GCC:
+    return S("gcc");
+  case CLANG:
+    return S("clang");
+  case TCC:
+    return S("tcc");
+  case MSVC:
+    return S("cl.exe");
+  default:
+    Unreachable("CompilerToStr: failed, should never get here, compiler family given does not exist: %d", mate_state.compiler_family);
     return S("");
   }
 }
 
 bool isMSVC(void) {
-  return mate_state.compiler == MSVC;
+  return mate_state.compiler_family == MSVC;
 }
 
 bool isGCC(void) {
-  return mate_state.compiler == GCC;
+  return mate_state.compiler_family == GCC;
 }
 
 bool isClang(void) {
-  return mate_state.compiler == CLANG;
+  return mate_state.compiler_family == CLANG;
 }
 
 bool isTCC(void) {
-  return mate_state.compiler == TCC;
+  return mate_state.compiler_family == TCC;
 }

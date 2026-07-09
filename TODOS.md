@@ -1,22 +1,17 @@
-# [TODOS](https://github.com/TomasBorquez/mate.h/issues/9)
-
 ## v0.3
 - [ ] Make flags OR values
-- [ ] Move to `exec` && `CreateProcess` for executables
 - [ ] Minify samurai output file
 - [ ] `LinkStaticLib()` for linking another `StaticLib`
-- [ ] Add better error messages with different colors for examples
-- [ ] Add ability to compile with g++ and other c/cpp compilers
+- [ ] Shared libraries support
+- [ ] Move to `exec` && `CreateProcess` for executables
 - [ ] Add `args` parser
 - [ ] base.h
     - [ ] StringView
     - [ ] DynamicString
     - [ ] StringBuilder
     - [ ] Move all params and values to this pattern
-- [ ] Shared libs
 - [ ] Make `samurai` windows compatible
 - [ ] Full `MSVC` support on static/shared libs
-- [ ] `InstallHeader()`
 
 ## v0.2
 - [x] Samurai does not generate `compile_commands.json`?
@@ -57,6 +52,7 @@
     - [x] Simplify StringBuilderAppend pattern
     - [x] F() -> StringBuilderAppendF with custom fast formatting
     - [x] SBAddS for automatic String
+- [x] Support other compilers like c++
 
 #### Examples
 - [ ] Show how to use FS functions `FileWrite`, `FileDelete`, etc.

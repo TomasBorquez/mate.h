@@ -4,13 +4,9 @@ available for both linux and windows (MinGW). And only if you are on **windows**
 win release by clicking on `ninja-win.zip`), for **linux** we use [samurai](https://github.com/michaelforney/samurai) a ninja rewrite in C, this is bootstrapped and compiled
 on the first run of your mate build after that it's cached.
 
-You can run all examples it with:
+You can run all examples with:
 ```bash
-# Linux / FreeBSD
 "gcc mate.c -o mate && ./mate"
-
-# Windows
-"gcc mate.c -o mate.exe && ./mate.exe"
 ```
 
 Mate rebuilds itself if there were any changes on `mate.c`, so after compiling once you can just run it with `./mate`.
