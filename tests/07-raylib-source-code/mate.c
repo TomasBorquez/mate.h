@@ -27,6 +27,7 @@ static char *GetCFlags(void) {
     // Required due to raylib's use of Objective-C types on macOS.
     FlagBuilderAdd(&flagsBuilder, "x objective-c");
   }
+
   if (isWindows()) {
     FlagBuilderAdd(&flagsBuilder, "DPLATFORM_DESKTOP_GLFW");
   }
@@ -37,78 +38,76 @@ static char *GetCFlags(void) {
 int main(void) {
   StartBuild();
   {
-    { // Compile static lib
-      StaticLib staticLib = CreateStaticLib((StaticLibOptions){
-          .output = "libraylib",
-          .flags = GetCFlags(),
-      });
+    // Compile static lib
+    StaticLib staticLib = CreateStaticLib((StaticLibOptions){
+        .output = "libraylib",
+        .flags = GetCFlags(),
+    });
 
-      AddFile(staticLib, "./src/rcore.c", "./src/utils.c", "./src/rglfw.c");
-      AddFile(staticLib, "./src/rshapes.c");
-      AddFile(staticLib, "./src/rtextures.c");
-      AddFile(staticLib, "./src/rtext.c");
-      AddFile(staticLib, "./src/rmodels.c");
-      AddFile(staticLib, "./src/raudio.c");
+    AddFile(staticLib, "./src/rcore.c", "./src/utils.c", "./src/rglfw.c");
+    AddFile(staticLib, "./src/rshapes.c");
+    AddFile(staticLib, "./src/rtextures.c");
+    AddFile(staticLib, "./src/rtext.c");
+    AddFile(staticLib, "./src/rmodels.c");
+    AddFile(staticLib, "./src/raudio.c");
 
-      AddIncludePaths(staticLib, "./src/platforms");
-      AddIncludePaths(staticLib, "./src/external/glfw/include");
+    AddIncludePaths(staticLib, "./src/platforms");
+    AddIncludePaths(staticLib, "./src/external/glfw/include");
 
-      if (isLinux()) {
-        LinkSystemLibraries(staticLib, "GL", "rt", "dl", "m", "X11", "Xcursor", "Xext", "Xfixes", "Xi", "Xinerama", "Xrandr", "Xrender");
-      }
-      if (isFreeBSD()) {
-        // Link regular system libraries.
-        AddLibraryPaths(staticLib, "/usr/local/lib");
-        LinkSystemLibraries(staticLib, "GL", "rt", "dl", "m", "X11", "Xcursor", "Xext", "Xfixes", "Xi", "Xinerama", "Xrandr", "Xrender");
-      }
-      if (isMacOs()) {
-        // Link regular system libraries.
-        LinkSystemLibraries(staticLib, "m");
-        // Link macOS system frameworks.
-        LinkFrameworks(staticLib, "Foundation", "AppKit", "IOKit", "OpenGL", "CoreVideo");
-      }
-      if (isWindows()) {
-        LinkSystemLibraries(staticLib, "winmm", "gdi32", "opengl32");
-      }
-
-      InstallStaticLib(staticLib);
+    if (isLinux()) {
+      LinkSystemLibraries(staticLib, "GL", "rt", "dl", "m", "X11", "Xcursor", "Xext", "Xfixes", "Xi", "Xinerama", "Xrandr", "Xrender");
+    }
+    if (isFreeBSD()) {
+      // Link regular system libraries.
+      AddLibraryPaths(staticLib, "/usr/local/lib");
+      LinkSystemLibraries(staticLib, "GL", "rt", "dl", "m", "X11", "Xcursor", "Xext", "Xfixes", "Xi", "Xinerama", "Xrandr", "Xrender");
+    }
+    if (isMacOs()) {
+      // Link regular system libraries.
+      LinkSystemLibraries(staticLib, "m");
+      // Link macOS system frameworks.
+      LinkFrameworks(staticLib, "Foundation", "AppKit", "IOKit", "OpenGL", "CoreVideo");
+    }
+    if (isWindows()) {
+      LinkSystemLibraries(staticLib, "winmm", "gdi32", "opengl32");
     }
 
-    { // Run simple example
-      Executable executable = CreateExecutable((ExecutableOptions){
+    InstallStaticLib(staticLib);
+
+    // Run simple example
+    Executable executable = CreateExecutable((ExecutableOptions){
         .output = "basic-example",
         .std = FLAG_STD_C99,
         .warnings = FLAG_WARNINGS_NONE,
-      });
+    });
 
-      AddFile(executable, "./src/basic-example.c");
+    AddFile(executable, "./src/basic-example.c");
 
-      AddIncludePaths(executable, "./src");
-      AddLibraryPaths(executable, "./build"); // TODO: LinkStaticLib()
+    AddIncludePaths(executable, "./src");
 
-      if (isLinux()) {
-        LinkSystemLibraries(executable, "raylib", "GL", "rt", "dl", "m", "X11");
-      }
-      if (isFreeBSD()) {
-        // Link regular system libraries.
-        AddLibraryPaths(executable, "/usr/local/lib");
-        LinkSystemLibraries(executable, "raylib", "GL", "rt", "dl", "m", "X11");
-      }
-      if (isMacOs()) {
-        // Link regular system libraries.
-        LinkSystemLibraries(executable, "raylib", "m");
-        // Link macOS system frameworks.
-        LinkFrameworks(executable, "CoreVideo", "IOKit", "Cocoa", "GLUT", "OpenGL");
-      }
-      if (isWindows()) {
-        LinkSystemLibraries(executable, "raylib", "winmm", "gdi32", "opengl32");
-      }
+    LinkStaticLib(executable, staticLib);
+    if (isLinux()) {
+      LinkSystemLibraries(executable, "GL", "rt", "dl", "m", "X11");
+    }
+    if (isFreeBSD()) {
+      // Link regular system libraries.
+      AddLibraryPaths(executable, "/usr/local/lib");
+      LinkSystemLibraries(executable, "GL", "rt", "dl", "m", "X11");
+    }
+    if (isMacOs()) {
+      // Link regular system libraries.
+      LinkSystemLibraries(executable, "m");
+      // Link macOS system frameworks.
+      LinkFrameworks(executable, "CoreVideo", "IOKit", "Cocoa", "GLUT", "OpenGL");
+    }
+    if (isWindows()) {
+      LinkSystemLibraries(executable, "winmm", "gdi32", "opengl32");
+    }
 
-      InstallExecutable(executable);
-      errno_t errExe = RunCommand(executable.outputPath);
-      if (errExe != SUCCESS) {
-        LogError("Running the executable failed with err: %d", errExe);
-      }
+    InstallExecutable(executable);
+    errno_t errExe = RunCommand(executable.outputPath);
+    if (errExe != SUCCESS) {
+      LogError("Running the executable failed with err: %d", errExe);
     }
   }
   EndBuild();

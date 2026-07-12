@@ -2031,6 +2031,7 @@ typedef struct {
   String libs;
   String includes;
   String arFlags;
+
   StringVector sources;
 } StaticLib;
 
@@ -2043,7 +2044,9 @@ typedef struct {
   String libs;
   String includes;
   String linkerFlags;
+
   StringVector sources;
+  StringVector outputs;
 } Executable;
 
 typedef struct {
@@ -2156,6 +2159,9 @@ static void mate_install_executable(Executable *executable);
 StaticLib CreateStaticLib(StaticLibOptions staticLibOptions);
 #define InstallStaticLib(target) mate_install_static_lib(&(target))
 static void mate_install_static_lib(StaticLib *staticLib);
+
+#define LinkStaticLib(target, staticLib) mate_link_static_lib(&(target).outputs, &(staticLib));
+static void mate_link_static_lib(StringVector *outputs, StaticLib *staticLib);
 
 typedef enum { COMPILE_COMMANDS_SUCCESS = 0, COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMPILE_COMMANDS_FAILED_COMPDB } CreateCompileCommandsError;
 #define CreateCompileCommands(target) mate_create_compile_commands((target).ninjaBuildPath);
@@ -5773,7 +5779,12 @@ static void mate_install_executable(Executable *executable) {
       if (is_empty) SBAddF(&output_builder, "$builddir/%S", output_file);
       else          SBAddF(&output_builder, " $builddir/%S", output_file);
     }
-    SBAddF(&builder, "build $target: link %S\n\n", output_builder.buffer);
+
+    SBAddF(&builder, "build $target: link %S", output_builder.buffer);
+    for (size_t i = 0; i < executable->outputs.length; i++) {
+      SBAddF(&builder, " $builddir/%S", executable->outputs.data[i]);
+    }
+    SBAddS(&builder, "\n\n");
   }
 
   SBAddS(&builder, "default $target\n");
@@ -5890,6 +5901,10 @@ static void mate_install_static_lib(StaticLib *static_lib) {
   static_lib->outputPath = PathJoin(mate_state.build_directory, static_lib->output);
 
   VecFree(static_lib->sources);
+}
+
+static void mate_link_static_lib(StringVector *outputs, StaticLib *staticLib) {
+  VecPush(*outputs, staticLib->output);
 }
 
 static void mate_add_library_paths(String *targetLibs, char **libs, size_t libs_size) {

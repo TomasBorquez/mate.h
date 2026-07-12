@@ -46,6 +46,7 @@ typedef struct {
   String libs;
   String includes;
   String arFlags;
+
   StringVector sources;
 } StaticLib;
 
@@ -58,7 +59,9 @@ typedef struct {
   String libs;
   String includes;
   String linkerFlags;
+
   StringVector sources;
+  StringVector outputs;
 } Executable;
 
 typedef struct {
@@ -171,6 +174,9 @@ static void mate_install_executable(Executable *executable);
 StaticLib CreateStaticLib(StaticLibOptions staticLibOptions);
 #define InstallStaticLib(target) mate_install_static_lib(&(target))
 static void mate_install_static_lib(StaticLib *staticLib);
+
+#define LinkStaticLib(target, staticLib) mate_link_static_lib(&(target).outputs, &(staticLib));
+static void mate_link_static_lib(StringVector *outputs, StaticLib *staticLib);
 
 typedef enum { COMPILE_COMMANDS_SUCCESS = 0, COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMPILE_COMMANDS_FAILED_COMPDB } CreateCompileCommandsError;
 #define CreateCompileCommands(target) mate_create_compile_commands((target).ninjaBuildPath);

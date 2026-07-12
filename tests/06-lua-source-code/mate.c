@@ -29,9 +29,9 @@ int main(void) {
 
     Executable executable = CreateExecutable((ExecutableOptions){.output = "lua", .std = FLAG_STD_C99, .warnings = FLAG_WARNINGS_NONE, .flags = GetCFlags()});
     AddFile(executable, "./src/lua.c");
-    AddLibraryPaths(executable, "./build/"); // TODO: LinkStaticLib()
 
-    LinkSystemLibraries(executable, "lua", "m");
+    LinkStaticLib(executable, staticLib);
+    LinkSystemLibraries(executable, "m");
     if (isLinux()) {
       LinkSystemLibraries(executable, "dl");
     }

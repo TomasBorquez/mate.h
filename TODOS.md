@@ -1,17 +1,17 @@
 ## v0.3
-- [ ] Make flags OR values
-- [ ] Minify samurai output file
-- [ ] `LinkStaticLib()` for linking another `StaticLib`
+- [x] `LinkStaticLib()` for linking another `StaticLib`
 - [ ] Shared libraries support
+- [ ] Minify samurai output file
 - [ ] Move to `exec` && `CreateProcess` for executables
 - [ ] Add `args` parser
+- [ ] Full `MSVC` support on static/shared libs
 - [ ] base.h
+    - [ ] Generic HashMap
     - [ ] StringView
     - [ ] DynamicString
     - [ ] StringBuilder
     - [ ] Move all params and values to this pattern
 - [ ] Make `samurai` windows compatible
-- [ ] Full `MSVC` support on static/shared libs
 
 ## v0.2
 - [x] Samurai does not generate `compile_commands.json`?
