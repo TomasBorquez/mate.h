@@ -1,7 +1,7 @@
 /* MIT License
 
   mate.h - A single-header library for compiling your C code in C
-  Version - 2026-07-09 (0.2.5):
+  Version - 2026-07-13 (0.2.6):
   https://github.com/TomasBorquez/mate.h
 
   Guide on the `README.md`
@@ -28,14 +28,49 @@ typedef struct {
 } MateCache;
 
 typedef struct {
-  char *compiler;
-  Compiler compilerFamily;
+  char *compiler;          // TODO: remove
+  Compiler compilerFamily; //       remove
+  char *mateSource;        //       remove
+  char *mateExe;           //       remove
 
   char *buildDirectory;
-  char *mateSource;
-  char *mateExe;
   char *rebuildFlags;
 } MateOptions;
+
+typedef struct {
+  String compiler;          // TODO: compiler -> script_compiler
+  Compiler compiler_family; // remove
+
+  String build_directory;
+  String mate_source;
+  String mate_exe;
+  String rebuild_flags;
+
+  String cwd;
+  MateCache mate_cache;
+  IniFile cache;
+
+  Arena *arena;
+  bool init_config;
+
+  int64_t start_time;
+  int64_t total_time;
+} MateConfig;
+
+typedef struct {
+  String output;
+  String outputPath;
+  String ninjaBuildPath;
+
+  String flags;
+  String libs;
+  String includes;
+  String linkerFlags;
+
+  StringVector sources;
+  StringVector staticLibOutputs;
+  StringVector sharedLibOutputs;
+} Executable;
 
 typedef struct {
   String output;
@@ -61,33 +96,14 @@ typedef struct {
   String linkerFlags;
 
   StringVector sources;
-  StringVector outputs;
-} Executable;
-
-typedef struct {
-  String compiler;
-  Compiler compiler_family;
-
-  String build_directory;
-  String mate_source;
-  String mate_exe;
-  String rebuild_flags;
-
-  String cwd;
-  MateCache mate_cache;
-  IniFile cache;
-
-  Arena *arena;
-  bool init_config;
-
-  int64_t start_time;
-  int64_t total_time;
-} MateConfig;
+  StringVector staticLibOutputs;
+  StringVector sharedLibOutputs;
+} SharedLib;
 
 typedef enum {
   FLAG_WARNINGS_NONE = 1, // -w
   FLAG_WARNINGS_MINIMAL,  // -Wall
-  FLAG_WARNINGS,         // -Wall -Wextra
+  FLAG_WARNINGS,          // -Wall -Wextra
   FLAG_WARNINGS_VERBOSE,  // -Wall -Wextra -Wpedantic
 } FlagWarnings;
 
@@ -125,9 +141,11 @@ typedef enum {
 } FlagErrorFormat;
 
 typedef struct {
-  char *output; // WARNING: Required
-  char *flags;
+/* required: */
+  char *output;
 
+/* optional: */
+  char *flags;
   char *libs;
   char *includes;
   char *linkerFlags;
@@ -141,9 +159,11 @@ typedef struct {
 } ExecutableOptions;
 
 typedef struct {
-  char *output; // WARNING: Required
-  char *flags;
+/* required: */
+  char *output;
 
+/* optional: */
+  char *flags;
   char *libs;
   char *includes;
   char *arFlags;
@@ -156,6 +176,24 @@ typedef struct {
   FlagErrorFormat error;
 } StaticLibOptions;
 
+typedef struct {
+/* required: */
+  char *output;
+
+/* optional: */
+  char *flags;
+  char *libs;
+  char *includes;
+  char *linkerFlags;
+
+  FlagWarnings warnings;
+  FlagDebug debug;
+  FlagOptimization optimization;
+  FlagSTD std;
+  FlagSanitizer sanitizer;
+  FlagErrorFormat error;
+} SharedLibOptions;
+
 typedef enum { NONE = 0, NEEDED, WEAK } LinkFrameworkOptions;
 
 typedef StringBuilder FlagBuilder;
@@ -167,20 +205,26 @@ void StartBuild(void);
 void StartBuildEx(int argc, char **argv);
 void EndBuild(void);
 
-Executable CreateExecutable(ExecutableOptions executableOptions);
+Executable CreateExecutable(ExecutableOptions opts);
 #define InstallExecutable(target) mate_install_executable(&(target))
 static void mate_install_executable(Executable *executable);
 
-StaticLib CreateStaticLib(StaticLibOptions staticLibOptions);
+StaticLib CreateStaticLib(StaticLibOptions opts);
 #define InstallStaticLib(target) mate_install_static_lib(&(target))
-static void mate_install_static_lib(StaticLib *staticLib);
+static void mate_install_static_lib(StaticLib *static_lib);
 
-#define LinkStaticLib(target, staticLib) mate_link_static_lib(&(target).outputs, &(staticLib));
-static void mate_link_static_lib(StringVector *outputs, StaticLib *staticLib);
+SharedLib CreateSharedLib(SharedLibOptions opts);
+#define InstallSharedLib(target) mate_install_shared_lib(&(target))
+static void mate_install_shared_lib(SharedLib *shared_lib);
+
+#define LinkStaticLib(target, static_lib) mate_link_static_lib(&(target).staticLibOutputs, &(static_lib));
+#define LinkSharedLib(target, shared_lib) mate_link_shared_lib(&(target).sharedLibOutputs, &(shared_lib));
+static void mate_link_static_lib(StringVector *static_lib_outputs, StaticLib *static_lib);
+static void mate_link_shared_lib(StringVector *shared_lib_outputs, SharedLib *shared_lib);
 
 typedef enum { COMPILE_COMMANDS_SUCCESS = 0, COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMPILE_COMMANDS_FAILED_COMPDB } CreateCompileCommandsError;
 #define CreateCompileCommands(target) mate_create_compile_commands((target).ninjaBuildPath);
-static WARN_UNUSED CreateCompileCommandsError mate_create_compile_commands(String ninjaBuildPath);
+static WARN_UNUSED CreateCompileCommandsError mate_create_compile_commands(String ninja_build_path);
 
 #define AddLibraryPaths(target, ...)                               \
   do {                                                             \
@@ -244,7 +288,7 @@ static void mate_flag_builder_add_string(FlagBuilder *builder, char *flag);
 static void mate_flag_builder_add_list(FlagBuilder *fb, char **flags);
 
 /* --- Path Utils --- */
-static String mate_path_with_platform_ext(Arena *arena, String path, String unix_ext, String win_ext);
+static String mate_path_with_platform_ext(Arena *arena, String path, String unix_ext, String win_ext, String macos_ext);
 
 String PathJoin(String base, String tail);
 String PathStem(String path);
@@ -255,6 +299,7 @@ String NormPathEnd(String path) ;
 
 String NormPathExe(String str);
 String NormPathStaticLib(String str);
+String NormPathSharedLib(String str);
 String NormPathNinja(String str);
 String NormPathOutput(String str);
 
@@ -266,8 +311,8 @@ String AbsoluteNormPathStaticLib(String str);
 WARN_UNUSED errno_t RunCommand(String command);
 #define RunCommandF(format, ...) RunCommand(F(mate_state.arena, format, __VA_ARGS__))
 
-String CompilerStr(void);     // for internal rebuilding or building samurai
-String MetaCompilerStr(void); // used for compiling your files
+String CompilerStr(void);     // TODO: CompilerStr() -> GetScriptCompiler()
+String MetaCompilerStr(void); // remove
 
 bool isMSVC(void);
 bool isGCC(void);

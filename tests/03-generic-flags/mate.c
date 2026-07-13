@@ -14,7 +14,7 @@ int main(void) {
 
     AddFile(executable, "./src/main.c");
 
-    if (isLinux()||isFreeBSD()) {
+    if (isLinux() || isFreeBSD()) {
       LinkSystemLibraries(executable, "m");
     }
 

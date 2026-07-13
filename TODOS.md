@@ -1,17 +1,42 @@
-## v0.3
-- [x] `LinkStaticLib()` for linking another `StaticLib`
-- [ ] Shared libraries support
+#### Tests/Examples
+- [x] Show how to use `FlagBuilder`, `AddFiles`, `CreateStaticLib`.
+- [ ] Test rebuilding scripts (just a second run)
+- [ ] Show how to use FS functions `FileWrite`, `FileDelete`, etc.
+- [ ] Show how to use String functions from base.h like `F()`, `StrConcat`, `StrEq` and `StringBuilder`.
+- [ ] raylib-source-code
+    - [ ] option shared (`-fPIC`, `-DBUILD_LIBTYPE_SHARED`)
+    - [ ] option linux_backend (`wayland/x11`)
+    - [ ] option optional modules such as `rshapes`, `rtextures`, etc
+    - [ ] option platform such as `glfw`, `SDL`, etc
+    - [ ] option opengl version
+    - [ ] default config from `src/config.h` else `-DEXTERNAL_CONFIG_FLAGS`
+    - [ ] ^ for all use as inspiration `build.zig` from raylib
+
+## v0.4
 - [ ] Minify samurai output file
 - [ ] Move to `exec` && `CreateProcess` for executables
-- [ ] Add `args` parser
+- [ ] `FindSystemPackage(exe, "sdl3")`
+- [ ] `FetchDependency(url, hash)`
 - [ ] Full `MSVC` support on static/shared libs
+- [ ] Make `samurai` windows compatible
 - [ ] base.h
-    - [ ] Generic HashMap
     - [ ] StringView
     - [ ] DynamicString
     - [ ] StringBuilder
     - [ ] Move all params and values to this pattern
-- [ ] Make `samurai` windows compatible
+
+## v0.3
+- [x] `LinkStaticLib()` for linking another `StaticLib`
+- [x] Shared libraries support
+- [ ] `LinkStaticLib/LinkSharedLib` should assert that both were installed before
+- [ ] Target field instead of global compiler
+- [ ] `AddSubproject("./shared/raylib")`
+- [ ] Custom build step
+- [ ] Add `args` parser
+- [ ] `NormPathExe/StaticLib/SharedLib` should assert no extension added
+- [ ] `lib` prefix on output in `CreateStaticLib/CreateSharedLib` if not windows target
+- [ ] base.h
+    - [ ] Generic HashMap
 
 ## v0.2
 - [x] Samurai does not generate `compile_commands.json`?
@@ -53,19 +78,6 @@
     - [x] F() -> StringBuilderAppendF with custom fast formatting
     - [x] SBAddS for automatic String
 - [x] Support other compilers like c++
-
-#### Examples
-- [ ] Show how to use FS functions `FileWrite`, `FileDelete`, etc.
-- [ ] Show how to use String functions from base.h like `F()`, `StrConcat`, `StrEq`, etc.
-- [ ] Show how to use `FlagBuilder`, `AddFiles`, `CreateStaticLib`.
-- [ ] raylib-source-code
-    - [ ] option shared (`-fPIC`, `-DBUILD_LIBTYPE_SHARED`)
-    - [ ] option linux_backend (`wayland/x11`)
-    - [ ] option optional modules such as `rshapes`, `rtextures`, etc
-    - [ ] option platform such as `glfw`, `SDL`, etc
-    - [ ] option opengl version
-    - [ ] default config from `src/config.h` else `-DEXTERNAL_CONFIG_FLAGS`
-    - [ ] ^ for all use as inspiration `build.zig` from raylib
 
 ## v0.1
 - [x] Create `amalgam-script.c` as well as `pre-commit hook`

@@ -48,6 +48,8 @@ jobs:
           "03-generic-flags"
           "04-raylib-build"
           "07-raylib-source-code"
+          "08-custom-compiler"
+          "09-shared-lib"
         )
 
         for test in "${tests[@]}"; do
