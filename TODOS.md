@@ -22,6 +22,7 @@
 - [x] `NormPathExe/StaticLib/SharedLib` should assert no extension added
 - [x] `LinkStaticLib/LinkSharedLib` should assert that both were installed before
 - [x] `lib` prefix on output in `CreateStaticLib/CreateSharedLib` if not windows target
+- [ ] `RunExec` for running executable
 - [ ] Target field instead of global compiler
 - [ ] Custom build step
 - [ ] `AddSubproject("./shared/raylib")`
