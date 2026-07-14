@@ -286,7 +286,7 @@ Executable CreateExecutable(ExecutableOptions opts) {
          "  CreateExecutable(...);\n"
          "  // ...\n"
          "}\n"
-         "EndBuild();");
+         "EndBuild();\n");
   Assert(opts.output != NULL,
       "CreateExecutable: failed, ExecutableOptions.output should never be null, please define the output name like this: \n"
       "\n"
@@ -341,20 +341,25 @@ StaticLib CreateStaticLib(StaticLibOptions opts) {
   Assert(opts.output != NULL,
       "CreateStaticLib: failed, StaticLibOptions.output should never be null, please define the output name like this: \n"
       "\n"
-      "CreateStaticLib((StaticLibOptions) { .output = \"libexample\"});");
+      "CreateStaticLib((StaticLibOptions) {.output = \"example\"});");
 
   Assert(mate_is_valid_output(s(opts.output)),
          "MateParseStaticLibOptions: failed, StaticLibOptions.output shouldn't "
          "be a path, e.g: \n"
          "\n"
          "Correct:\n"
-         "CreateStaticLib((StaticLibOptions) { .output = \"libexample\"});\n"
+         "CreateStaticLib((StaticLibOptions) {.output = \"example\"});\n"
          "\n"
          "Incorrect:\n"
-         "CreateStaticLib((StaticLibOptions) { .output = \"./output/libexample.a\"});");
+         "CreateStaticLib((StaticLibOptions) {.output = \"./output/libexample.a\"});");
 
   StaticLib result = {0};
   result.output = NormPathStaticLib(s(opts.output));
+  // TODO: should depend on target
+  if (!isMSVC()) {
+    result.output = StrConcat(mate_state.arena, S("lib"), result.output);
+  }
+
   result.arFlags = S("rcs");
 
   FlagBuilder fb = FlagBuilderCreate();
@@ -397,16 +402,20 @@ SharedLib CreateSharedLib(SharedLibOptions opts) {
          "CreateSharedLib: SharedLibOptions.output shouldn't be a path, e.g: \n"
          "\n"
          "Correct:\n"
-         "CreateSharedLib((SharedLibOptions){.output = \"main\"});\n"
+         "CreateSharedLib((SharedLibOptions){.output = \"example\"});\n"
          "\n"
          "Incorrect:\n"
-         "CreateSharedLib((SharedLibOptions){.output = \"./output/main\"});\n"
+         "CreateSharedLib((SharedLibOptions){.output = \"./output/libexample\"});\n"
          "\n"
          "TIP: For custom build folder look into `CreateConfig, e.g:\n"
          "CreateConfig((MateOptions){.buildDirectory = \"./custom-dir\"});");
 
   SharedLib result = {0};
   result.output = NormPathSharedLib(s(opts.output));
+  // TODO: should depend on target
+  if (!isMSVC()) {
+    result.output = StrConcat(mate_state.arena, S("lib"), result.output);
+  }
 
   FlagBuilder fb = FlagBuilderCreate();
   if (opts.flags != NULL)     SBAdd(&fb, s(opts.flags));
@@ -693,6 +702,7 @@ static void mate_install_executable(Executable *executable) {
   VecFree(executable->sources);
   VecFree(executable->staticLibOutputs);
   VecFree(executable->sharedLibOutputs);
+  executable->installed = true;
 }
 
 static void mate_install_static_lib(StaticLib *static_lib) {
@@ -787,6 +797,7 @@ static void mate_install_static_lib(StaticLib *static_lib) {
   static_lib->outputPath = PathJoin(mate_state.build_directory, static_lib->output);
 
   VecFree(static_lib->sources);
+  static_lib->installed = true;
 }
 
 static void mate_install_shared_lib(SharedLib *shared_lib) {
@@ -899,13 +910,42 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
   VecFree(shared_lib->sources);
   VecFree(shared_lib->staticLibOutputs);
   VecFree(shared_lib->sharedLibOutputs);
+  shared_lib->installed = true;
 }
 
 static void mate_link_static_lib(StringVector *static_lib_outputs, StaticLib *static_lib) {
+  Assert(static_lib->installed,
+         "LinkStaticLib: static lib '%s' must be installed before linking, e.g:\n"
+         "\n"
+         "StartBuild();\n"
+         "{\n"
+         "  StaticLib mylib = CreateStaticLib(...);\n"
+         "  AddFile(mylib, \"./src/mylib.c\");\n"
+         "  InstallStaticLib(mylib); // <- before LinkStaticLib\n"
+         "  \n"
+         "  Executable exe = CreateExecutable(...);\n"
+         "  LinkStaticLib(exe, mylib);\n"
+         "}\n"
+         "EndBuild();\n",
+         static_lib->output.data);
   VecPush(*static_lib_outputs, static_lib->output);
 }
 
 static void mate_link_shared_lib(StringVector *shared_lib_outputs, SharedLib *shared_lib) {
+  Assert(shared_lib->installed,
+         "LinkSharedLib: shared lib '%s' must be installed before linking, e.g:\n"
+         "\n"
+         "StartBuild();\n"
+         "{\n"
+         "  SharedLib mylib = CreateSharedLib(...);\n"
+         "  AddFile(mylib, \"./src/mylib.c\");\n"
+         "  InstallSharedLib(mylib); // <- before LinkSharedLib\n"
+         "  \n"
+         "  Executable exe = CreateExecutable(...);\n"
+         "  LinkSharedLib(exe, mylib);\n"
+         "}\n"
+         "EndBuild();\n",
+         shared_lib->output.data);
   VecPush(*shared_lib_outputs, shared_lib->output);
 }
 
@@ -1146,9 +1186,25 @@ static String mate_path_fix_slashes(String path) {
   return path;
 }
 
+static bool mate_is_platform_ext(String ext) {
+  if (ext.length == 0) return false;
+  return StrEq(ext, S(".exe")) || StrEq(ext, S(".a")) || StrEq(ext, S(".lib")) ||
+         StrEq(ext, S(".so"))  || StrEq(ext, S(".dll")) || StrEq(ext, S(".dylib"));
+}
+
 static String mate_path_with_platform_ext(Arena *arena, String path, String unix_ext, String win_ext, String macos_ext) {
   String result = mate_path_strip_dot_slash(path);
   String current_ext = mate_path_get_ext(result);
+  Assert(!mate_is_platform_ext(current_ext),
+         "Expected \"%s\" to not contain \"%s\" in output, e.g:\n"
+         "\n"
+         "Correct:\n"
+         "CreateExecutable((ExecutableOptions){.output = \"main\"});\n"
+         "\n"
+         "Incorrect:\n"
+         "CreateExecutable((ExecutableOptions){.output = \"main.exe\"});\n",
+         path.data,
+         current_ext.data);
 
   // TODO: should depend on target
   String target_ext;
@@ -1158,14 +1214,7 @@ static String mate_path_with_platform_ext(Arena *arena, String path, String unix
     default:      target_ext = unix_ext;  break;
   }
 
-  if (StrEq(current_ext, unix_ext) || StrEq(current_ext, win_ext) || StrEq(current_ext, macos_ext)) {
-    result = mate_path_strip_ext(result);
-  }
-
-  result = target_ext.length > 0
-    ? StrConcat(arena, StrNewSize(arena, result.data, result.length), target_ext)
-    : StrNewSize(arena, result.data, result.length);
-
+  result = StrConcat(arena, StrNewSize(arena, result.data, result.length), target_ext);
   return mate_path_fix_slashes(result);
 }
 

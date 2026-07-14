@@ -35,7 +35,7 @@ int main() {
     // Compiles all files parallely with samurai
     InstallExecutable(executable);
 
-    // Runs `./build/main` or `./build/main.exe` depending on the platform
+    // Runs the `./build/main` executable
     RunCommand(executable.outputPath);
   }
   EndBuild();

@@ -38,9 +38,9 @@ static char *GetCFlags(void) {
 int main(void) {
   StartBuild();
   {
-    // Compile static lib
+    // static lib:
     StaticLib staticLib = CreateStaticLib((StaticLibOptions){
-        .output = "libraylib",
+        .output = "raylib",
         .flags = GetCFlags(),
     });
 
@@ -74,7 +74,7 @@ int main(void) {
 
     InstallStaticLib(staticLib);
 
-    // Run simple example
+    // executable:
     Executable executable = CreateExecutable((ExecutableOptions){
         .output = "basic-example",
         .std = FLAG_STD_C99,

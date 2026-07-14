@@ -1,7 +1,7 @@
 /* MIT License
 
   mate.h - A single-header library for compiling your C code in C
-  Version - 2026-07-13 (0.2.6):
+  Version - 2026-07-14 (0.3.0):
   https://github.com/TomasBorquez/mate.h
 
   Guide on the `README.md`
@@ -67,6 +67,8 @@ typedef struct {
   String includes;
   String linkerFlags;
 
+  bool installed;
+
   StringVector sources;
   StringVector staticLibOutputs;
   StringVector sharedLibOutputs;
@@ -82,6 +84,8 @@ typedef struct {
   String includes;
   String arFlags;
 
+  bool installed;
+
   StringVector sources;
 } StaticLib;
 
@@ -94,6 +98,8 @@ typedef struct {
   String libs;
   String includes;
   String linkerFlags;
+
+  bool installed;
 
   StringVector sources;
   StringVector staticLibOutputs;
@@ -142,7 +148,7 @@ typedef enum {
 
 typedef struct {
 /* required: */
-  char *output;
+  char *output; // NOTE: adds extension automatically
 
 /* optional: */
   char *flags;
@@ -160,7 +166,7 @@ typedef struct {
 
 typedef struct {
 /* required: */
-  char *output;
+  char *output; // NOTE: adds "lib" prefix and extension automatically
 
 /* optional: */
   char *flags;
@@ -178,7 +184,7 @@ typedef struct {
 
 typedef struct {
 /* required: */
-  char *output;
+  char *output; // NOTE: adds "lib" prefix and extension automatically
 
 /* optional: */
   char *flags;

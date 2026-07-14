@@ -1,22 +1,13 @@
 #### Tests/Examples
 - [x] Show how to use `FlagBuilder`, `AddFiles`, `CreateStaticLib`.
-- [ ] Test rebuilding scripts (just a second run)
-- [ ] Show how to use FS functions `FileWrite`, `FileDelete`, etc.
-- [ ] Show how to use String functions from base.h like `F()`, `StrConcat`, `StrEq` and `StringBuilder`.
-- [ ] raylib-source-code
-    - [ ] option shared (`-fPIC`, `-DBUILD_LIBTYPE_SHARED`)
-    - [ ] option linux_backend (`wayland/x11`)
-    - [ ] option optional modules such as `rshapes`, `rtextures`, etc
-    - [ ] option platform such as `glfw`, `SDL`, etc
-    - [ ] option opengl version
-    - [ ] default config from `src/config.h` else `-DEXTERNAL_CONFIG_FLAGS`
-    - [ ] ^ for all use as inspiration `build.zig` from raylib
+- [ ] Test rebuilding scripts (just a second run).
+- [ ] Remove all examples and create a blog post and guide page.
 
 ## v0.4
-- [ ] Minify samurai output file
 - [ ] Move to `exec` && `CreateProcess` for executables
 - [ ] `FindSystemPackage(exe, "sdl3")`
 - [ ] `FetchDependency(url, hash)`
+- [ ] Fetch samurai automatically
 - [ ] Full `MSVC` support on static/shared libs
 - [ ] Make `samurai` windows compatible
 - [ ] base.h
@@ -28,13 +19,13 @@
 ## v0.3
 - [x] `LinkStaticLib()` for linking another `StaticLib`
 - [x] Shared libraries support
-- [ ] `LinkStaticLib/LinkSharedLib` should assert that both were installed before
+- [x] `NormPathExe/StaticLib/SharedLib` should assert no extension added
+- [x] `LinkStaticLib/LinkSharedLib` should assert that both were installed before
+- [x] `lib` prefix on output in `CreateStaticLib/CreateSharedLib` if not windows target
 - [ ] Target field instead of global compiler
-- [ ] `AddSubproject("./shared/raylib")`
 - [ ] Custom build step
+- [ ] `AddSubproject("./shared/raylib")`
 - [ ] Add `args` parser
-- [ ] `NormPathExe/StaticLib/SharedLib` should assert no extension added
-- [ ] `lib` prefix on output in `CreateStaticLib/CreateSharedLib` if not windows target
 - [ ] base.h
     - [ ] Generic HashMap
 

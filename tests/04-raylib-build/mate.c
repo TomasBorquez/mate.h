@@ -4,12 +4,11 @@
 int main(void) {
   StartBuild();
   {
-    // NOTE: Add .exe to make sure it removes on linux builds
     Executable executable;
     if (isMSVC()) {
-      executable = CreateExecutable((ExecutableOptions){.output = "main.exe", .warnings = FLAG_WARNINGS_NONE, .flags = "/MD"});
+      executable = CreateExecutable((ExecutableOptions){.output = "main", .warnings = FLAG_WARNINGS_NONE, .flags = "/MD"});
     } else {
-      executable = CreateExecutable((ExecutableOptions){.output = "main.exe", .warnings = FLAG_WARNINGS_NONE, .flags = "-Wall -g"});
+      executable = CreateExecutable((ExecutableOptions){.output = "main", .warnings = FLAG_WARNINGS_NONE, .flags = "-Wall -g"});
     }
 
     AddFile(executable, "./src/main.c");
