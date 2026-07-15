@@ -2,6 +2,8 @@
 #include "../../mate.h"
 
 int main(void) {
+  Target t = HostTarget();
+
   StartBuild();
   {
     // No matter the compiler (MSVC/GCC/CLANG), this would give "equivalent" flags
@@ -15,7 +17,7 @@ int main(void) {
 
     AddFile(executable, "./src/main.c");
 
-    if (isLinux()) {
+    if (isLinux(t)) {
       LinkSystemLibraries(executable, "m"); // Add math only if on linux since MSVC includes this on STD
     }
 

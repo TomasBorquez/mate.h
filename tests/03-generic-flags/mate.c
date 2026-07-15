@@ -2,6 +2,8 @@
 #include "../../mate.h"
 
 int main(void) {
+  Target t = HostTarget();
+
   StartBuild();
   {
     Executable executable = CreateExecutable((ExecutableOptions){
@@ -14,7 +16,7 @@ int main(void) {
 
     AddFile(executable, "./src/main.c");
 
-    if (isLinux() || isFreeBSD()) {
+    if (isLinux(t) || isFreeBSD(t)) {
       LinkSystemLibraries(executable, "m");
     }
 

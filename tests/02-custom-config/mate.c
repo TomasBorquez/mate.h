@@ -2,21 +2,20 @@
 #include "../../mate.h"
 
 int main(void) {
+  Target t = HostTarget();
   CreateConfig((MateOptions){.buildDirectory = "./custom-dir"});
 
   StartBuild();
   {
-    Executable executable;
-    if (isMSVC()) {
-      executable = CreateExecutable((ExecutableOptions){.output = "main", .flags = "/W4"});
-    } else {
-      executable = CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall"});
-    }
+    Executable executable = CreateExecutable((ExecutableOptions){
+        .output = "main",
+        .flags = !isMSVC(t) ? "-Wall" : "/W4"
+    });
 
     AddFile(executable, "./src/main.c");
     AddFile(executable, "./src/t_math.c");
 
-    if (isLinux() || isFreeBSD()) {
+    if (isLinux(t) || isFreeBSD(t)) {
       LinkSystemLibraries(executable, "m");
     }
 

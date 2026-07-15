@@ -2,16 +2,23 @@
 #include "../../mate.h"
 
 int main(void) {
-  CreateConfig((MateOptions){.compiler = "g++", .compilerFamily = GCC});
+  Target t = HostTarget();
 
   StartBuild();
   {
-    Executable executable = CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall"});
+    Executable executable = CreateExecutable((ExecutableOptions){
+        .output = "main",
+        .flags = "-Wall",
+        .target = {
+          .compiler = "g++",
+          .compilerFamily = GCC
+        }
+    });
 
     AddFile(executable, "./src/main.cpp");
     AddFile(executable, "./src/t_math.cpp");
 
-    if (isLinux() || isFreeBSD()) {
+    if (isLinux(t) || isFreeBSD(t)) {
       LinkSystemLibraries(executable, "m");
     }
 

@@ -3,19 +3,23 @@
 
 // You cannot compile mate.c or samurai.c with C++ compilers but you can use them!
 int main(void) {
-  CreateConfig((MateOptions){
-      .compiler = "g++",    // select whichever compiler or cross-compiler you want
-      .compilerFamily = GCC // select the family, in this case g++ is GCC
-  });
+  Target t = HostTarget();
 
   StartBuild();
   {
-    Executable executable = CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall"});
+    Executable executable = CreateExecutable((ExecutableOptions){
+        .output = "main",
+        .flags = "-Wall",
+        .target = {
+          .compiler = "g++",    // set target
+          .compilerFamily = GCC // set compiler family
+        }
+    });
 
     AddFile(executable, "./src/main.cpp");   // add the files with the corresponding extension
     AddFile(executable, "./src/t_math.cpp"); // add the files with the corresponding extension
 
-    if (isLinux() || isFreeBSD()) {
+    if (isLinux(t) || isFreeBSD(t)) {
       LinkSystemLibraries(executable, "m");
     }
 

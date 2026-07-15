@@ -4,6 +4,8 @@
 #define SAMU_VERSION_OUTPUT 2
 
 int main(void) {
+  Target t = HostTarget();
+
   StartBuild();
   {
     Executable executable = CreateExecutable((ExecutableOptions){
@@ -17,7 +19,7 @@ int main(void) {
     RemoveFile(executable, "./src/exclude-me.c");
     RemoveFile(executable, "./src/random.c");
 
-    if (!isMacOs()) {
+    if (!isMacOS(t)) {
       LinkSystemLibraries(executable, "rt");
     }
 

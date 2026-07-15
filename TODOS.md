@@ -1,7 +1,9 @@
 #### Tests/Examples
 - [x] Show how to use `FlagBuilder`, `AddFiles`, `CreateStaticLib`.
-- [ ] Test rebuilding scripts (just a second run).
-- [ ] Remove all examples and create a blog post and guide page.
+- [x] Add a cross-compile test - check its a windows binary too.
+- [x] Remove all examples and create a blog post and guide page.
+- [x] Test rebuilding scripts (just a second run).
+- [ ] Test that asserts fail
 
 ## v0.4
 - [ ] Move to `exec` && `CreateProcess` for executables
@@ -10,6 +12,7 @@
 - [ ] Fetch samurai automatically
 - [ ] Full `MSVC` support on static/shared libs
 - [ ] Make `samurai` windows compatible
+- [ ] We should own all `char *` or pointers user gives
 - [ ] base.h
     - [ ] StringView
     - [ ] DynamicString
@@ -22,8 +25,10 @@
 - [x] `NormPathExe/StaticLib/SharedLib` should assert no extension added
 - [x] `LinkStaticLib/LinkSharedLib` should assert that both were installed before
 - [x] `lib` prefix on output in `CreateStaticLib/CreateSharedLib` if not windows target
+- [x] Target field instead of global compiler
+- [ ] `ar` for cross-compiler
+- [ ] Add cross-compile target for clang with `--target=<triple>`
 - [ ] `RunExec` for running executable
-- [ ] Target field instead of global compiler
 - [ ] Custom build step
 - [ ] `AddSubproject("./shared/raylib")`
 - [ ] Add `args` parser

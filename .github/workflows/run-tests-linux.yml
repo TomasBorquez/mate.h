@@ -27,7 +27,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update -qq
-        sudo apt-get install -y --no-install-recommends g++ libx11-dev libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev libxext-dev libxfixes-dev libxrender-dev libgl1-mesa-dev
+        sudo apt-get install -y --no-install-recommends g++ gcc-mingw-w64-x86-64 libx11-dev libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev libxext-dev libxfixes-dev libxrender-dev libgl1-mesa-dev
 
     - name: Install TCC
       if: matrix.compiler == 'tcc'
@@ -46,6 +46,7 @@ jobs:
           "07-raylib-source-code"
           "08-custom-compiler"
           "09-shared-lib"
+          "10-cross-compile"
         )
 
         for test in "${tests[@]}"; do

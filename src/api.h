@@ -21,90 +21,23 @@
 */
 
 /* --- Type Definitions --- */
-typedef struct {
-  uint64_t last_build;
-  bool samurai_build;
-  bool first_build;
-} MateCache;
+typedef enum {
+  ARCH_X64 = 1,
+  ARCH_X86,
+  ARCH_ARM64,
+  ARCH_ARM32,
+  ARCH_RISCV64,
+  ARCH_PPC64,
+  ARCH_S390X,
+  ARCH_WASM32,
+} Arch;
 
 typedef struct {
-  char *compiler;          // TODO: remove
-  Compiler compilerFamily; //       remove
-  char *mateSource;        //       remove
-  char *mateExe;           //       remove
-
-  char *buildDirectory;
-  char *rebuildFlags;
-} MateOptions;
-
-typedef struct {
-  String compiler;          // TODO: compiler -> script_compiler
-  Compiler compiler_family; // remove
-
-  String build_directory;
-  String mate_source;
-  String mate_exe;
-  String rebuild_flags;
-
-  String cwd;
-  MateCache mate_cache;
-  IniFile cache;
-
-  Arena *arena;
-  bool init_config;
-
-  int64_t start_time;
-  int64_t total_time;
-} MateConfig;
-
-typedef struct {
-  String output;
-  String outputPath;
-  String ninjaBuildPath;
-
-  String flags;
-  String libs;
-  String includes;
-  String linkerFlags;
-
-  bool installed;
-
-  StringVector sources;
-  StringVector staticLibOutputs;
-  StringVector sharedLibOutputs;
-} Executable;
-
-typedef struct {
-  String output;
-  String outputPath;
-  String ninjaBuildPath;
-
-  String flags;
-  String libs;
-  String includes;
-  String arFlags;
-
-  bool installed;
-
-  StringVector sources;
-} StaticLib;
-
-typedef struct {
-  String output;
-  String outputPath;
-  String ninjaBuildPath;
-
-  String flags;
-  String libs;
-  String includes;
-  String linkerFlags;
-
-  bool installed;
-
-  StringVector sources;
-  StringVector staticLibOutputs;
-  StringVector sharedLibOutputs;
-} SharedLib;
+  OS os;
+  Arch arch;
+  char *compiler;
+  CompilerFamily compilerFamily;
+} Target;
 
 typedef enum {
   FLAG_WARNINGS_NONE = 1, // -w
@@ -151,6 +84,7 @@ typedef struct {
   char *output; // NOTE: adds extension automatically
 
 /* optional: */
+  Target target;
   char *flags;
   char *libs;
   char *includes;
@@ -169,6 +103,7 @@ typedef struct {
   char *output; // NOTE: adds "lib" prefix and extension automatically
 
 /* optional: */
+  Target target;
   char *flags;
   char *libs;
   char *includes;
@@ -187,6 +122,7 @@ typedef struct {
   char *output; // NOTE: adds "lib" prefix and extension automatically
 
 /* optional: */
+  Target target;
   char *flags;
   char *libs;
   char *includes;
@@ -200,6 +136,89 @@ typedef struct {
   FlagErrorFormat error;
 } SharedLibOptions;
 
+typedef struct {
+  Target scriptCompiler;
+  char *buildDirectory;
+  char *rebuildFlags;
+} MateOptions;
+
+typedef struct {
+  uint64_t last_build;
+  bool samurai_build;
+  bool first_build;
+} MateCache;
+
+typedef struct {
+  Target script_compiler;
+
+  String build_directory;
+  String mate_source;
+  String mate_exe;
+  String rebuild_flags;
+
+  String cwd;
+  MateCache mate_cache;
+  IniFile cache;
+
+  Arena *arena;
+  bool init_config;
+
+  int64_t start_time;
+  int64_t total_time;
+} MateConfig;
+
+typedef struct {
+  String output;
+  String outputPath;
+  String ninjaBuildPath;
+
+  Target target;
+  String flags;
+  String libs;
+  String includes;
+  String linkerFlags;
+
+  bool installed;
+
+  StringVector sources;
+  StringVector staticLibOutputs;
+  StringVector sharedLibOutputs;
+} Executable;
+
+typedef struct {
+  String output;
+  String outputPath;
+  String ninjaBuildPath;
+
+  Target target;
+  String flags;
+  String libs;
+  String includes;
+  String arFlags;
+
+  bool installed;
+
+  StringVector sources;
+} StaticLib;
+
+typedef struct {
+  String output;
+  String outputPath;
+  String ninjaBuildPath;
+
+  Target target;
+  String flags;
+  String libs;
+  String includes;
+  String linkerFlags;
+
+  bool installed;
+
+  StringVector sources;
+  StringVector staticLibOutputs;
+  StringVector sharedLibOutputs;
+} SharedLib;
+
 typedef enum { NONE = 0, NEEDED, WEAK } LinkFrameworkOptions;
 
 typedef StringBuilder FlagBuilder;
@@ -212,89 +231,89 @@ void StartBuildEx(int argc, char **argv);
 void EndBuild(void);
 
 Executable CreateExecutable(ExecutableOptions opts);
-#define InstallExecutable(target) mate_install_executable(&(target))
+#define InstallExecutable(_target) mate_install_executable(&(_target))
 static void mate_install_executable(Executable *executable);
 
 StaticLib CreateStaticLib(StaticLibOptions opts);
-#define InstallStaticLib(target) mate_install_static_lib(&(target))
+#define InstallStaticLib(_target) mate_install_static_lib(&(_target))
 static void mate_install_static_lib(StaticLib *static_lib);
 
 SharedLib CreateSharedLib(SharedLibOptions opts);
-#define InstallSharedLib(target) mate_install_shared_lib(&(target))
+#define InstallSharedLib(_target) mate_install_shared_lib(&(_target))
 static void mate_install_shared_lib(SharedLib *shared_lib);
 
-#define LinkStaticLib(target, static_lib) mate_link_static_lib(&(target).staticLibOutputs, &(static_lib));
-#define LinkSharedLib(target, shared_lib) mate_link_shared_lib(&(target).sharedLibOutputs, &(shared_lib));
+#define LinkStaticLib(_target, _static_lib) mate_link_static_lib(&(_target).staticLibOutputs, &(_static_lib));
+#define LinkSharedLib(_target, _shared_lib) mate_link_shared_lib(&(_target).sharedLibOutputs, &(_shared_lib));
 static void mate_link_static_lib(StringVector *static_lib_outputs, StaticLib *static_lib);
 static void mate_link_shared_lib(StringVector *shared_lib_outputs, SharedLib *shared_lib);
 
 typedef enum { COMPILE_COMMANDS_SUCCESS = 0, COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMPILE_COMMANDS_FAILED_COMPDB } CreateCompileCommandsError;
-#define CreateCompileCommands(target) mate_create_compile_commands((target).ninjaBuildPath);
+#define CreateCompileCommands(_target) mate_create_compile_commands((_target).ninjaBuildPath);
 static WARN_UNUSED CreateCompileCommandsError mate_create_compile_commands(String ninja_build_path);
 
-#define AddLibraryPaths(target, ...)                               \
-  do {                                                             \
-    char *_libs[] = {__VA_ARGS__};                                 \
-    mate_add_library_paths(&(target).libs, _libs, ARR_LEN(_libs)); \
+#define AddLibraryPaths(_target, ...)                                                \
+  do {                                                                              \
+    char *_libs[] = {__VA_ARGS__};                                                  \
+    mate_add_library_paths((_target).target, &(_target).libs, _libs, ARR_LEN(_libs)); \
   } while (0)
-static void mate_add_library_paths(String *targetLibs, char **libs, size_t libs_size);
+static void mate_add_library_paths(Target t, String *targetLibs, char **libs, size_t libs_size);
 
-#define LinkSystemLibraries(target, ...)                               \
-  do {                                                                 \
-    char *_libs[] = {__VA_ARGS__};                                       \
-    mate_link_system_libraries(&(target).libs, _libs, ARR_LEN(_libs)); \
+#define LinkSystemLibraries(_target, ...)                                                \
+  do {                                                                                  \
+    char *_libs[] = {__VA_ARGS__};                                                      \
+    mate_link_system_libraries((_target).target, &(_target).libs, _libs, ARR_LEN(_libs)); \
   } while (0)
-static void mate_link_system_libraries(String *targetLibs, char **libs, size_t libs_size);
+static void mate_link_system_libraries(Target t, String *targetLibs, char **libs, size_t libs_size);
 
-#define LinkFrameworks(target, ...)                                          \
-  do {                                                                       \
-    char *_frameworks[] = {__VA_ARGS__};                                     \
-    mate_link_frameworks(&(target).libs, _frameworks, ARR_LEN(_frameworks)); \
+#define LinkFrameworks(_target, ...)                                                           \
+  do {                                                                                        \
+    char *_frameworks[] = {__VA_ARGS__};                                                      \
+    mate_link_frameworks((_target).target, &(_target).libs, _frameworks, ARR_LEN(_frameworks)); \
   } while (0)
-static void mate_link_frameworks(String *targetLibs, char **frameworks, size_t frameworks_size);
+static void mate_link_frameworks(Target t, String *targetLibs, char **frameworks, size_t frameworks_size);
 
-#define LinkFrameworksWithOptions(target, options, ...)                                            \
-  do {                                                                                             \
-    char *_frameworks[] = {__VA_ARGS__};                                                           \
-    mate_link_frameworks_with_options(&(target).libs, options, _frameworks, ARR_LEN(_frameworks)); \
+#define LinkFrameworksWithOptions(_target, _options, ...)                                                             \
+  do {                                                                                                              \
+    char *_frameworks[] = {__VA_ARGS__};                                                                            \
+    mate_link_frameworks_with_options((_target).target, &(_target).libs, _options, _frameworks, ARR_LEN(_frameworks)); \
   } while (0)
-static void mate_link_frameworks_with_options(String *targetLibs, LinkFrameworkOptions options, char **frameworks, size_t frameworks_size);
+static void mate_link_frameworks_with_options(Target t, String *targetLibs, LinkFrameworkOptions options, char **frameworks, size_t frameworks_size);
 
-#define AddIncludePaths(target, ...)                                           \
-  do {                                                                         \
-    char *_includes[] = {__VA_ARGS__};                                         \
-    mate_add_include_paths(&(target).includes, _includes, ARR_LEN(_includes)); \
+#define AddIncludePaths(_target, ...)                                                            \
+  do {                                                                                          \
+    char *_includes[] = {__VA_ARGS__};                                                          \
+    mate_add_include_paths((_target).target, &(_target).includes, _includes, ARR_LEN(_includes)); \
   } while (0)
-static void mate_add_include_paths(String *targetIncludes, char **includes, size_t includes_size);
+static void mate_add_include_paths(Target t, String *targetIncludes, char **includes, size_t includes_size);
 
-#define AddFrameworkPaths(target, ...)                                               \
-  do {                                                                               \
-    char *_frameworks[] = {__VA_ARGS__};                                             \
-    mate_add_framework_paths(&(target).includes, _frameworks, ARR_LEN(_frameworks)); \
+#define AddFrameworkPaths(_target, ...)                                                                \
+  do {                                                                                                \
+    char *_frameworks[] = {__VA_ARGS__};                                                              \
+    mate_add_framework_paths((_target).target, &(_target).includes, _frameworks, ARR_LEN(_frameworks)); \
   } while (0)
-static void mate_add_framework_paths(String *targetIncludes, char **includes, size_t includes_size);
+static void mate_add_framework_paths(Target t, String *targetIncludes, char **includes, size_t includes_size);
 
-#define AddFile(target, ...)                                   \
+#define AddFile(_target, ...)                                    \
   do {                                                          \
     char *_files[] = {__VA_ARGS__};                             \
-    mate_add_files(&(target).sources, _files, ARR_LEN(_files)); \
+    mate_add_files(&(_target).sources, _files, ARR_LEN(_files)); \
   } while (0);
 static void mate_add_file(StringVector *sources, String source);
 static void mate_add_files(StringVector *sources, char **source, size_t size);
 
-#define RemoveFile(target, source) mate_remove_file(&(target).sources, s(source));
+#define RemoveFile(_target, _source) mate_remove_file(&(_target).sources, s(_source));
 static bool mate_remove_file(StringVector *sources, String source);
 
 /* --- Flag Builder --- */
 StringBuilder FlagBuilderCreate(void);
 FlagBuilder FlagBuilderReserve(size_t count);
 
-#define FlagBuilderAdd(builder, ...) mate_flag_builder_add_list(builder, (char *[]){__VA_ARGS__, NULL})
-static void mate_flag_builder_add_string(FlagBuilder *builder, char *flag);
-static void mate_flag_builder_add_list(FlagBuilder *fb, char **flags);
+#define FlagBuilderAdd(_t, _builder, ...) mate_flag_builder_add_list(_t, _builder, (char *[]){__VA_ARGS__, NULL})
+static void mate_flag_builder_add_string(Target t, FlagBuilder *builder, char *flag);
+static void mate_flag_builder_add_list(Target t, FlagBuilder *fb, char **flags);
 
 /* --- Path Utils --- */
-static String mate_path_with_platform_ext(Arena *arena, String path, String unix_ext, String win_ext, String macos_ext);
+static String mate_path_with_platform_ext(Target t, Arena *arena, String path, String unix_ext, String win_ext, String macos_ext);
 
 String PathJoin(String base, String tail);
 String PathStem(String path);
@@ -303,27 +322,38 @@ String NormPath(String path);
 String NormPathStart(String path);
 String NormPathEnd(String path) ;
 
-String NormPathExe(String str);
-String NormPathStaticLib(String str);
-String NormPathSharedLib(String str);
+String NormPathExe(Target t, String str);
+String NormPathStaticLib(Target t, String str);
+String NormPathSharedLib(Target t, String str);
 String NormPathNinja(String str);
-String NormPathOutput(String str);
+String NormPathOutput(Target t, String str);
 
 String AbsoluteNormPath(String str);
-String AbsoluteNormPathExe(String str);
-String AbsoluteNormPathStaticLib(String str);
+String AbsoluteNormPathExe(Target t, String str);
+String AbsoluteNormPathStaticLib(Target t, String str);
 
 /* --- Utils --- */
 WARN_UNUSED errno_t RunCommand(String command);
-#define RunCommandF(format, ...) RunCommand(F(mate_state.arena, format, __VA_ARGS__))
+#define RunCommandF(_format, ...) RunCommand(F(mate_state.arena, _format, __VA_ARGS__))
 
-String CompilerStr(void);     // TODO: CompilerStr() -> GetScriptCompiler()
-String MetaCompilerStr(void); // remove
+char *GetScriptCompiler(void);
 
-bool isMSVC(void);
-bool isGCC(void);
-bool isClang(void);
-bool isTCC(void);
+Target HostTarget(void);
+Target CreateTarget(Target t);
+bool isTargetSet(Target t);
+bool isTargetHost(Target t);
+
+bool isLinux(Target t);
+bool isMacOS(Target t);
+bool isWindows(Target t);
+bool isAndroid(Target t);
+bool isEmscripten(Target t);
+bool isFreeBSD(Target t);
+
+bool isGCC(Target t);
+bool isClang(Target t);
+bool isTCC(Target t);
+bool isMSVC(Target t);
 
 #define SAMURAI_AMALGAM "SAMURAI SOURCE"
 

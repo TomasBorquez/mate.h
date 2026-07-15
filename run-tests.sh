@@ -11,6 +11,7 @@ TESTS=(
   "07-raylib-source-code"
   "08-custom-compiler"
   "09-shared-lib"
+  "10-cross-compile"
 )
 
 WINDOWS_SKIP=("05-samurai-source-code")
@@ -83,7 +84,17 @@ for test in "${TESTS[@]}"; do
   fi
 
   echo "$test PASSED"
+
+  echo "Rebuilding $test with $COMPILER..."
+  if ! "$COMPILER" -g3 mate.c -o "mate${EXE}"; then
+    echo ""
+    echo "Rebuild of $test failed"
+    exit 1
+  fi
+
+  echo "$test REBUILD PASSED"
 done
 
 echo ""
 echo "All tests PASSED with $COMPILER"
+

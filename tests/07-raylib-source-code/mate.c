@@ -1,47 +1,49 @@
 #define MATE_IMPLEMENTATION
 #include "../../mate.h"
 
-static char *GetCFlags(void) {
-  FlagBuilder flagsBuilder = FlagBuilderCreate();
+static char *GetCFlags(Target t) {
+  FlagBuilder fb = FlagBuilderCreate();
 
   // NOTE: Default Raylib Flags
-  FlagBuilderAdd(&flagsBuilder,
+  FlagBuilderAdd(t, &fb,
                  "std=c99",
                  "D_GNU_SOURCE",
                  "DGL_SILENCE_DEPRECATION=199309L",
                  "fno-sanitize=undefined" // https://github.com/raysan5/raylib/issues/3674
   );
 
-  if (isLinux()) {
-    FlagBuilderAdd(&flagsBuilder, "DPLATFORM_DESKTOP_GLFW", "D_GLFW_X11");
+  if (isLinux(t)) {
+    FlagBuilderAdd(t, &fb, "DPLATFORM_DESKTOP_GLFW", "D_GLFW_X11");
   }
 
-  if (isFreeBSD()) {
-    FlagBuilderAdd(&flagsBuilder, "DPLATFORM_DESKTOP_GLFW", "D_GLFW_X11");
+  if (isFreeBSD(t)) {
+    FlagBuilderAdd(t, &fb, "DPLATFORM_DESKTOP_GLFW", "D_GLFW_X11");
     // Required due to raylib's use of X11 on FreeBSD
-    FlagBuilderAdd(&flagsBuilder, "isystem /usr/local/include");
+    FlagBuilderAdd(t, &fb, "isystem /usr/local/include");
   }
 
-  if (isMacOs()) {
-    FlagBuilderAdd(&flagsBuilder, "DPLATFORM_DESKTOP_GLFW", "D_GL_SILENCE_DEPRECATION=1");
+  if (isMacOS(t)) {
+    FlagBuilderAdd(t, &fb, "DPLATFORM_DESKTOP_GLFW", "D_GL_SILENCE_DEPRECATION=1");
     // Required due to raylib's use of Objective-C types on macOS.
-    FlagBuilderAdd(&flagsBuilder, "x objective-c");
+    FlagBuilderAdd(t, &fb, "x objective-c");
   }
 
-  if (isWindows()) {
-    FlagBuilderAdd(&flagsBuilder, "DPLATFORM_DESKTOP_GLFW");
+  if (isWindows(t)) {
+    FlagBuilderAdd(t, &fb, "DPLATFORM_DESKTOP_GLFW");
   }
 
-  return flagsBuilder.buffer.data;
+  return fb.buffer.data;
 }
 
 int main(void) {
+  Target t = HostTarget();
+
   StartBuild();
   {
     // static lib:
     StaticLib staticLib = CreateStaticLib((StaticLibOptions){
         .output = "raylib",
-        .flags = GetCFlags(),
+        .flags = GetCFlags(t),
     });
 
     AddFile(staticLib, "./src/rcore.c", "./src/utils.c", "./src/rglfw.c");
@@ -54,21 +56,21 @@ int main(void) {
     AddIncludePaths(staticLib, "./src/platforms");
     AddIncludePaths(staticLib, "./src/external/glfw/include");
 
-    if (isLinux()) {
+    if (isLinux(t)) {
       LinkSystemLibraries(staticLib, "GL", "rt", "dl", "m", "X11", "Xcursor", "Xext", "Xfixes", "Xi", "Xinerama", "Xrandr", "Xrender");
     }
-    if (isFreeBSD()) {
+    if (isFreeBSD(t)) {
       // Link regular system libraries.
       AddLibraryPaths(staticLib, "/usr/local/lib");
       LinkSystemLibraries(staticLib, "GL", "rt", "dl", "m", "X11", "Xcursor", "Xext", "Xfixes", "Xi", "Xinerama", "Xrandr", "Xrender");
     }
-    if (isMacOs()) {
+    if (isMacOS(t)) {
       // Link regular system libraries.
       LinkSystemLibraries(staticLib, "m");
       // Link macOS system frameworks.
       LinkFrameworks(staticLib, "Foundation", "AppKit", "IOKit", "OpenGL", "CoreVideo");
     }
-    if (isWindows()) {
+    if (isWindows(t)) {
       LinkSystemLibraries(staticLib, "winmm", "gdi32", "opengl32");
     }
 
@@ -86,21 +88,21 @@ int main(void) {
     AddIncludePaths(executable, "./src");
 
     LinkStaticLib(executable, staticLib);
-    if (isLinux()) {
+    if (isLinux(t)) {
       LinkSystemLibraries(executable, "GL", "rt", "dl", "m", "X11");
     }
-    if (isFreeBSD()) {
+    if (isFreeBSD(t)) {
       // Link regular system libraries.
       AddLibraryPaths(executable, "/usr/local/lib");
       LinkSystemLibraries(executable, "GL", "rt", "dl", "m", "X11");
     }
-    if (isMacOs()) {
+    if (isMacOS(t)) {
       // Link regular system libraries.
       LinkSystemLibraries(executable, "m");
       // Link macOS system frameworks.
       LinkFrameworks(executable, "CoreVideo", "IOKit", "Cocoa", "GLUT", "OpenGL");
     }
-    if (isWindows()) {
+    if (isWindows(t)) {
       LinkSystemLibraries(executable, "winmm", "gdi32", "opengl32");
     }
 

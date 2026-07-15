@@ -20,10 +20,12 @@ int main(void) {
 
     AddFile(exe, "./src/main.c");
 
-    LinkSystemLibraries(exe, "m"); // fabsf()
     LinkSharedLib(exe, mathlib);
+    LinkSystemLibraries(exe, "m"); // fabsf()
 
     InstallExecutable(exe);
+    errno_t errExe = RunCommand(exe.outputPath);
+    Assert(errExe == SUCCESS, "Failed, RunCommand should be SUCCESS");
   }
   EndBuild();
 }

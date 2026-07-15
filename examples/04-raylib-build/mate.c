@@ -2,13 +2,15 @@
 #include "../../mate.h"
 
 int main(void) {
+  Target t = HostTarget();
+
   StartBuild();
   {
     Executable executable = CreateExecutable((ExecutableOptions){.output = "main", .flags = "-Wall -g"});
 
     AddFile(executable, "./src/main.c");
 
-    if (isLinux()) {
+    if (isLinux(t)) {
       // `AddIncludePaths` are usually for vendor `.h` files, in this case `./include`
       AddIncludePaths(executable, "./vendor/raylib/include");
 

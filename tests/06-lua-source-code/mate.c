@@ -1,25 +1,36 @@
 #define MATE_IMPLEMENTATION
 #include "../../mate.h"
 
-static char *GetCFlags(void) {
+static char *GetCFlags(Target t) {
   FlagBuilder flagsBuilder = FlagBuilderCreate();
-  FlagBuilderAdd(&flagsBuilder, "fno-stack-protector", "fno-common", "march=native", "Wno-tautological-compare");
+  FlagBuilderAdd(t, &flagsBuilder, "fno-stack-protector", "fno-common", "march=native", "Wno-tautological-compare");
 
-  if (isWindows()) {
-    FlagBuilderAdd(&flagsBuilder, "DLUA_USE_WINDOWS");
-  } else if (isMacOs()) {
-    FlagBuilderAdd(&flagsBuilder, "DLUA_USE_MACOSX");
-  } else if (isLinux()) {
-    FlagBuilderAdd(&flagsBuilder, "DLUA_USE_LINUX");
+  if (isWindows(t)) {
+    FlagBuilderAdd(t, &flagsBuilder, "DLUA_USE_WINDOWS");
+  }
+
+  if (isMacOS(t)) {
+    FlagBuilderAdd(t, &flagsBuilder, "DLUA_USE_MACOSX");
+  }
+
+  if (isLinux(t)) {
+    FlagBuilderAdd(t, &flagsBuilder, "DLUA_USE_LINUX");
   }
 
   return flagsBuilder.buffer.data;
 }
 
 int main(void) {
+  Target t = HostTarget();
+
   StartBuild();
   {
-    StaticLib staticLib = CreateStaticLib((StaticLibOptions){.output = "liblua", .std = FLAG_STD_C99, .warnings = FLAG_WARNINGS_NONE, .flags = GetCFlags()});
+    StaticLib staticLib = CreateStaticLib((StaticLibOptions){
+        .output = "liblua",
+        .std = FLAG_STD_C99,
+        .warnings = FLAG_WARNINGS_NONE,
+        .flags = GetCFlags(t)
+    });
 
     AddFile(staticLib, "./src/*.c");
     RemoveFile(staticLib, "./src/lua.c");
@@ -27,12 +38,17 @@ int main(void) {
 
     InstallStaticLib(staticLib);
 
-    Executable executable = CreateExecutable((ExecutableOptions){.output = "lua", .std = FLAG_STD_C99, .warnings = FLAG_WARNINGS_NONE, .flags = GetCFlags()});
+    Executable executable = CreateExecutable((ExecutableOptions){
+        .output = "lua",
+        .std = FLAG_STD_C99,
+        .warnings = FLAG_WARNINGS_NONE,
+        .flags = GetCFlags(t)
+    });
     AddFile(executable, "./src/lua.c");
 
     LinkStaticLib(executable, staticLib);
     LinkSystemLibraries(executable, "m");
-    if (isLinux()) {
+    if (isLinux(t)) {
       LinkSystemLibraries(executable, "dl");
     }
 

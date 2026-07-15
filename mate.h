@@ -16,7 +16,7 @@
 /* MIT License
 
   base.h - Better cross-platform STD
-  Version - 2026-04-20 (0.2.7):
+  Version - 2026-07-15 (0.2.8):
   https://github.com/TomasBorquez/base.h
 
   Usage:
@@ -257,19 +257,11 @@ void __base_vec_free(void **data, size_t *length, size_t *capacity);
 int64_t TimeNow(void);
 void WaitTime(int64_t ms);
 
-bool isLinux(void);
-bool isMacOs(void);
-bool isWindows(void);
-bool isUnix(void);
-bool isAndroid(void);
-bool isEmscripten(void);
-bool isFreeBSD(void);
+typedef enum { OS_LINUX = 1, OS_WINDOWS, OS_MACOS, OS_FREEBSD, OS_ANDROID, OS_EMSCRIPTEN } OS;
+OS GetOS(void);
 
-typedef enum { WINDOWS = 1, LINUX, MACOS, FREEBSD } Platform;
-Platform GetPlatform(void);
-
-typedef enum { GCC = 1, CLANG, TCC, MSVC } Compiler;
-Compiler GetCompiler(void);
+typedef enum { GCC = 1, CLANG, TCC, MSVC } CompilerFamily;
+CompilerFamily GetCompilerFamily(void);
 
 /* --- Error --- */
 typedef int32_t errno_t;
@@ -640,63 +632,7 @@ WARN_UNUSED errno_t memcpy_s(void *dest, size_t destSize, const void *src, size_
 }
 #  endif
 
-bool isLinux(void) {
-#  if defined(PLATFORM_LINUX)
-  return true;
-#  else
-  return false;
-#  endif
-}
-
-bool isMacOs(void) {
-#  if defined(PLATFORM_MACOS)
-  return true;
-#  else
-  return false;
-#  endif
-}
-
-bool isWindows(void) {
-#  if defined(PLATFORM_WIN)
-  return true;
-#  else
-  return false;
-#  endif
-}
-
-bool isUnix(void) {
-#  if defined(PLATFORM_UNIX)
-  return true;
-#  else
-  return false;
-#  endif
-}
-
-bool isAndroid(void) {
-#  if defined(PLATFORM_ANDROID)
-  return true;
-#  else
-  return false;
-#  endif
-}
-
-bool isEmscripten(void) {
-#  if defined(PLATFORM_EMSCRIPTEN)
-  return true;
-#  else
-  return false;
-#  endif
-}
-
-bool isFreeBSD(void) {
-#  if defined(PLATFORM_FREEBSD)
-  return true;
-#  else
-  return false;
-#  endif
-}
-
-Compiler GetCompiler(void) {
+CompilerFamily GetCompilerFamily(void) {
 #  if defined(COMPILER_CLANG)
   return CLANG;
 #  elif defined(COMPILER_GCC)
@@ -708,15 +644,15 @@ Compiler GetCompiler(void) {
 #  endif
 }
 
-Platform GetPlatform(void) {
+OS GetOS(void) {
 #  if defined(PLATFORM_WIN)
-  return WINDOWS;
+  return OS_WINDOWS;
 #  elif defined(PLATFORM_LINUX)
-  return LINUX;
+  return OS_LINUX;
 #  elif defined(PLATFORM_MACOS)
-  return MACOS;
+  return OS_MACOS;
 #  elif defined(PLATFORM_FREEBSD)
-  return FREEBSD;
+  return OS_FREEBSD;
 #  endif
 }
 
@@ -2002,90 +1938,23 @@ bool IniGetBool(IniFile *ini_file, String key) {
 */
 
 /* --- Type Definitions --- */
-typedef struct {
-  uint64_t last_build;
-  bool samurai_build;
-  bool first_build;
-} MateCache;
+typedef enum {
+  ARCH_X64 = 1,
+  ARCH_X86,
+  ARCH_ARM64,
+  ARCH_ARM32,
+  ARCH_RISCV64,
+  ARCH_PPC64,
+  ARCH_S390X,
+  ARCH_WASM32,
+} Arch;
 
 typedef struct {
-  char *compiler;          // TODO: remove
-  Compiler compilerFamily; //       remove
-  char *mateSource;        //       remove
-  char *mateExe;           //       remove
-
-  char *buildDirectory;
-  char *rebuildFlags;
-} MateOptions;
-
-typedef struct {
-  String compiler;          // TODO: compiler -> script_compiler
-  Compiler compiler_family; // remove
-
-  String build_directory;
-  String mate_source;
-  String mate_exe;
-  String rebuild_flags;
-
-  String cwd;
-  MateCache mate_cache;
-  IniFile cache;
-
-  Arena *arena;
-  bool init_config;
-
-  int64_t start_time;
-  int64_t total_time;
-} MateConfig;
-
-typedef struct {
-  String output;
-  String outputPath;
-  String ninjaBuildPath;
-
-  String flags;
-  String libs;
-  String includes;
-  String linkerFlags;
-
-  bool installed;
-
-  StringVector sources;
-  StringVector staticLibOutputs;
-  StringVector sharedLibOutputs;
-} Executable;
-
-typedef struct {
-  String output;
-  String outputPath;
-  String ninjaBuildPath;
-
-  String flags;
-  String libs;
-  String includes;
-  String arFlags;
-
-  bool installed;
-
-  StringVector sources;
-} StaticLib;
-
-typedef struct {
-  String output;
-  String outputPath;
-  String ninjaBuildPath;
-
-  String flags;
-  String libs;
-  String includes;
-  String linkerFlags;
-
-  bool installed;
-
-  StringVector sources;
-  StringVector staticLibOutputs;
-  StringVector sharedLibOutputs;
-} SharedLib;
+  OS os;
+  Arch arch;
+  char *compiler;
+  CompilerFamily compilerFamily;
+} Target;
 
 typedef enum {
   FLAG_WARNINGS_NONE = 1, // -w
@@ -2132,6 +2001,7 @@ typedef struct {
   char *output; // NOTE: adds extension automatically
 
 /* optional: */
+  Target target;
   char *flags;
   char *libs;
   char *includes;
@@ -2150,6 +2020,7 @@ typedef struct {
   char *output; // NOTE: adds "lib" prefix and extension automatically
 
 /* optional: */
+  Target target;
   char *flags;
   char *libs;
   char *includes;
@@ -2168,6 +2039,7 @@ typedef struct {
   char *output; // NOTE: adds "lib" prefix and extension automatically
 
 /* optional: */
+  Target target;
   char *flags;
   char *libs;
   char *includes;
@@ -2181,6 +2053,89 @@ typedef struct {
   FlagErrorFormat error;
 } SharedLibOptions;
 
+typedef struct {
+  Target scriptCompiler;
+  char *buildDirectory;
+  char *rebuildFlags;
+} MateOptions;
+
+typedef struct {
+  uint64_t last_build;
+  bool samurai_build;
+  bool first_build;
+} MateCache;
+
+typedef struct {
+  Target script_compiler;
+
+  String build_directory;
+  String mate_source;
+  String mate_exe;
+  String rebuild_flags;
+
+  String cwd;
+  MateCache mate_cache;
+  IniFile cache;
+
+  Arena *arena;
+  bool init_config;
+
+  int64_t start_time;
+  int64_t total_time;
+} MateConfig;
+
+typedef struct {
+  String output;
+  String outputPath;
+  String ninjaBuildPath;
+
+  Target target;
+  String flags;
+  String libs;
+  String includes;
+  String linkerFlags;
+
+  bool installed;
+
+  StringVector sources;
+  StringVector staticLibOutputs;
+  StringVector sharedLibOutputs;
+} Executable;
+
+typedef struct {
+  String output;
+  String outputPath;
+  String ninjaBuildPath;
+
+  Target target;
+  String flags;
+  String libs;
+  String includes;
+  String arFlags;
+
+  bool installed;
+
+  StringVector sources;
+} StaticLib;
+
+typedef struct {
+  String output;
+  String outputPath;
+  String ninjaBuildPath;
+
+  Target target;
+  String flags;
+  String libs;
+  String includes;
+  String linkerFlags;
+
+  bool installed;
+
+  StringVector sources;
+  StringVector staticLibOutputs;
+  StringVector sharedLibOutputs;
+} SharedLib;
+
 typedef enum { NONE = 0, NEEDED, WEAK } LinkFrameworkOptions;
 
 typedef StringBuilder FlagBuilder;
@@ -2193,89 +2148,89 @@ void StartBuildEx(int argc, char **argv);
 void EndBuild(void);
 
 Executable CreateExecutable(ExecutableOptions opts);
-#define InstallExecutable(target) mate_install_executable(&(target))
+#define InstallExecutable(_target) mate_install_executable(&(_target))
 static void mate_install_executable(Executable *executable);
 
 StaticLib CreateStaticLib(StaticLibOptions opts);
-#define InstallStaticLib(target) mate_install_static_lib(&(target))
+#define InstallStaticLib(_target) mate_install_static_lib(&(_target))
 static void mate_install_static_lib(StaticLib *static_lib);
 
 SharedLib CreateSharedLib(SharedLibOptions opts);
-#define InstallSharedLib(target) mate_install_shared_lib(&(target))
+#define InstallSharedLib(_target) mate_install_shared_lib(&(_target))
 static void mate_install_shared_lib(SharedLib *shared_lib);
 
-#define LinkStaticLib(target, static_lib) mate_link_static_lib(&(target).staticLibOutputs, &(static_lib));
-#define LinkSharedLib(target, shared_lib) mate_link_shared_lib(&(target).sharedLibOutputs, &(shared_lib));
+#define LinkStaticLib(_target, _static_lib) mate_link_static_lib(&(_target).staticLibOutputs, &(_static_lib));
+#define LinkSharedLib(_target, _shared_lib) mate_link_shared_lib(&(_target).sharedLibOutputs, &(_shared_lib));
 static void mate_link_static_lib(StringVector *static_lib_outputs, StaticLib *static_lib);
 static void mate_link_shared_lib(StringVector *shared_lib_outputs, SharedLib *shared_lib);
 
 typedef enum { COMPILE_COMMANDS_SUCCESS = 0, COMPILE_COMMANDS_FAILED_OPEN_FILE = 1000, COMPILE_COMMANDS_FAILED_COMPDB } CreateCompileCommandsError;
-#define CreateCompileCommands(target) mate_create_compile_commands((target).ninjaBuildPath);
+#define CreateCompileCommands(_target) mate_create_compile_commands((_target).ninjaBuildPath);
 static WARN_UNUSED CreateCompileCommandsError mate_create_compile_commands(String ninja_build_path);
 
-#define AddLibraryPaths(target, ...)                               \
-  do {                                                             \
-    char *_libs[] = {__VA_ARGS__};                                 \
-    mate_add_library_paths(&(target).libs, _libs, ARR_LEN(_libs)); \
+#define AddLibraryPaths(_target, ...)                                                \
+  do {                                                                              \
+    char *_libs[] = {__VA_ARGS__};                                                  \
+    mate_add_library_paths((_target).target, &(_target).libs, _libs, ARR_LEN(_libs)); \
   } while (0)
-static void mate_add_library_paths(String *targetLibs, char **libs, size_t libs_size);
+static void mate_add_library_paths(Target t, String *targetLibs, char **libs, size_t libs_size);
 
-#define LinkSystemLibraries(target, ...)                               \
-  do {                                                                 \
-    char *_libs[] = {__VA_ARGS__};                                       \
-    mate_link_system_libraries(&(target).libs, _libs, ARR_LEN(_libs)); \
+#define LinkSystemLibraries(_target, ...)                                                \
+  do {                                                                                  \
+    char *_libs[] = {__VA_ARGS__};                                                      \
+    mate_link_system_libraries((_target).target, &(_target).libs, _libs, ARR_LEN(_libs)); \
   } while (0)
-static void mate_link_system_libraries(String *targetLibs, char **libs, size_t libs_size);
+static void mate_link_system_libraries(Target t, String *targetLibs, char **libs, size_t libs_size);
 
-#define LinkFrameworks(target, ...)                                          \
-  do {                                                                       \
-    char *_frameworks[] = {__VA_ARGS__};                                     \
-    mate_link_frameworks(&(target).libs, _frameworks, ARR_LEN(_frameworks)); \
+#define LinkFrameworks(_target, ...)                                                           \
+  do {                                                                                        \
+    char *_frameworks[] = {__VA_ARGS__};                                                      \
+    mate_link_frameworks((_target).target, &(_target).libs, _frameworks, ARR_LEN(_frameworks)); \
   } while (0)
-static void mate_link_frameworks(String *targetLibs, char **frameworks, size_t frameworks_size);
+static void mate_link_frameworks(Target t, String *targetLibs, char **frameworks, size_t frameworks_size);
 
-#define LinkFrameworksWithOptions(target, options, ...)                                            \
-  do {                                                                                             \
-    char *_frameworks[] = {__VA_ARGS__};                                                           \
-    mate_link_frameworks_with_options(&(target).libs, options, _frameworks, ARR_LEN(_frameworks)); \
+#define LinkFrameworksWithOptions(_target, _options, ...)                                                             \
+  do {                                                                                                              \
+    char *_frameworks[] = {__VA_ARGS__};                                                                            \
+    mate_link_frameworks_with_options((_target).target, &(_target).libs, _options, _frameworks, ARR_LEN(_frameworks)); \
   } while (0)
-static void mate_link_frameworks_with_options(String *targetLibs, LinkFrameworkOptions options, char **frameworks, size_t frameworks_size);
+static void mate_link_frameworks_with_options(Target t, String *targetLibs, LinkFrameworkOptions options, char **frameworks, size_t frameworks_size);
 
-#define AddIncludePaths(target, ...)                                           \
-  do {                                                                         \
-    char *_includes[] = {__VA_ARGS__};                                         \
-    mate_add_include_paths(&(target).includes, _includes, ARR_LEN(_includes)); \
+#define AddIncludePaths(_target, ...)                                                            \
+  do {                                                                                          \
+    char *_includes[] = {__VA_ARGS__};                                                          \
+    mate_add_include_paths((_target).target, &(_target).includes, _includes, ARR_LEN(_includes)); \
   } while (0)
-static void mate_add_include_paths(String *targetIncludes, char **includes, size_t includes_size);
+static void mate_add_include_paths(Target t, String *targetIncludes, char **includes, size_t includes_size);
 
-#define AddFrameworkPaths(target, ...)                                               \
-  do {                                                                               \
-    char *_frameworks[] = {__VA_ARGS__};                                             \
-    mate_add_framework_paths(&(target).includes, _frameworks, ARR_LEN(_frameworks)); \
+#define AddFrameworkPaths(_target, ...)                                                                \
+  do {                                                                                                \
+    char *_frameworks[] = {__VA_ARGS__};                                                              \
+    mate_add_framework_paths((_target).target, &(_target).includes, _frameworks, ARR_LEN(_frameworks)); \
   } while (0)
-static void mate_add_framework_paths(String *targetIncludes, char **includes, size_t includes_size);
+static void mate_add_framework_paths(Target t, String *targetIncludes, char **includes, size_t includes_size);
 
-#define AddFile(target, ...)                                   \
+#define AddFile(_target, ...)                                    \
   do {                                                          \
     char *_files[] = {__VA_ARGS__};                             \
-    mate_add_files(&(target).sources, _files, ARR_LEN(_files)); \
+    mate_add_files(&(_target).sources, _files, ARR_LEN(_files)); \
   } while (0);
 static void mate_add_file(StringVector *sources, String source);
 static void mate_add_files(StringVector *sources, char **source, size_t size);
 
-#define RemoveFile(target, source) mate_remove_file(&(target).sources, s(source));
+#define RemoveFile(_target, _source) mate_remove_file(&(_target).sources, s(_source));
 static bool mate_remove_file(StringVector *sources, String source);
 
 /* --- Flag Builder --- */
 StringBuilder FlagBuilderCreate(void);
 FlagBuilder FlagBuilderReserve(size_t count);
 
-#define FlagBuilderAdd(builder, ...) mate_flag_builder_add_list(builder, (char *[]){__VA_ARGS__, NULL})
-static void mate_flag_builder_add_string(FlagBuilder *builder, char *flag);
-static void mate_flag_builder_add_list(FlagBuilder *fb, char **flags);
+#define FlagBuilderAdd(_t, _builder, ...) mate_flag_builder_add_list(_t, _builder, (char *[]){__VA_ARGS__, NULL})
+static void mate_flag_builder_add_string(Target t, FlagBuilder *builder, char *flag);
+static void mate_flag_builder_add_list(Target t, FlagBuilder *fb, char **flags);
 
 /* --- Path Utils --- */
-static String mate_path_with_platform_ext(Arena *arena, String path, String unix_ext, String win_ext, String macos_ext);
+static String mate_path_with_platform_ext(Target t, Arena *arena, String path, String unix_ext, String win_ext, String macos_ext);
 
 String PathJoin(String base, String tail);
 String PathStem(String path);
@@ -2284,27 +2239,38 @@ String NormPath(String path);
 String NormPathStart(String path);
 String NormPathEnd(String path) ;
 
-String NormPathExe(String str);
-String NormPathStaticLib(String str);
-String NormPathSharedLib(String str);
+String NormPathExe(Target t, String str);
+String NormPathStaticLib(Target t, String str);
+String NormPathSharedLib(Target t, String str);
 String NormPathNinja(String str);
-String NormPathOutput(String str);
+String NormPathOutput(Target t, String str);
 
 String AbsoluteNormPath(String str);
-String AbsoluteNormPathExe(String str);
-String AbsoluteNormPathStaticLib(String str);
+String AbsoluteNormPathExe(Target t, String str);
+String AbsoluteNormPathStaticLib(Target t, String str);
 
 /* --- Utils --- */
 WARN_UNUSED errno_t RunCommand(String command);
-#define RunCommandF(format, ...) RunCommand(F(mate_state.arena, format, __VA_ARGS__))
+#define RunCommandF(_format, ...) RunCommand(F(mate_state.arena, _format, __VA_ARGS__))
 
-String CompilerStr(void);     // TODO: CompilerStr() -> GetScriptCompiler()
-String MetaCompilerStr(void); // remove
+char *GetScriptCompiler(void);
 
-bool isMSVC(void);
-bool isGCC(void);
-bool isClang(void);
-bool isTCC(void);
+Target HostTarget(void);
+Target CreateTarget(Target t);
+bool isTargetSet(Target t);
+bool isTargetHost(Target t);
+
+bool isLinux(Target t);
+bool isMacOS(Target t);
+bool isWindows(Target t);
+bool isAndroid(Target t);
+bool isEmscripten(Target t);
+bool isFreeBSD(Target t);
+
+bool isGCC(Target t);
+bool isClang(Target t);
+bool isTCC(Target t);
+bool isMSVC(Target t);
 
 // clang-format off
 // --- SAMURAI START ---
@@ -5234,14 +5200,13 @@ static MateConfig mate_state = {0};
 static void mate_set_default_state(void) {
   {
     mate_state.arena = ArenaCreate(20000 * sizeof(String));
-    mate_state.compiler = S("");
-    mate_state.compiler_family = GetCompiler();
+    mate_state.script_compiler = HostTarget();
 
     GetCwdResult cwd_result = GetCwd();
     Assert(cwd_result.error == SUCCESS, "mate_set_default_state: failed at getting current working directory, with error %s", ErrToStr(cwd_result.error).data);
     mate_state.cwd = cwd_result.data;
 
-    mate_state.mate_exe = AbsoluteNormPathExe(S("./mate"));
+    mate_state.mate_exe = AbsoluteNormPathExe(mate_state.script_compiler, S("./mate"));
     mate_state.mate_source = AbsoluteNormPath(S("./mate.c"));
     mate_state.build_directory = AbsoluteNormPath(S("./build"));
 		mate_state.rebuild_flags = S("");
@@ -5250,14 +5215,18 @@ static void mate_set_default_state(void) {
   mate_state.init_config = true;
 }
 
-void CreateConfig(MateOptions options) {
+void CreateConfig(MateOptions opts) {
   mate_set_default_state();
-  if (options.compiler != NULL)       mate_state.compiler = s(options.compiler);
-  if (options.compilerFamily != 0)    mate_state.compiler_family = options.compilerFamily;
-  if (options.mateExe != NULL)        mate_state.mate_exe = AbsoluteNormPathExe(s(options.mateExe));
-  if (options.mateSource != NULL)     mate_state.mate_source = AbsoluteNormPath(s(options.mateSource));
-  if (options.buildDirectory != NULL) mate_state.build_directory = AbsoluteNormPath(s(options.buildDirectory));
-  if (options.rebuildFlags != NULL)   mate_state.rebuild_flags = s(options.rebuildFlags);
+  if (opts.buildDirectory != NULL) mate_state.build_directory = AbsoluteNormPath(s(opts.buildDirectory));
+  if (opts.rebuildFlags != NULL)   mate_state.rebuild_flags = s(opts.rebuildFlags);
+  if (isTargetSet(opts.scriptCompiler)) {
+    Target t = CreateTarget(opts.scriptCompiler);
+    Target host = HostTarget();
+    Assert(t.os == host.os && t.arch == host.arch,
+           "CreateConfig: .scriptCompiler must target the host machine since it compiles mate itself and samurai,\n"
+           "use the .target field on ExecutableOptions/StaticLibOptions/SharedLibOptions to cross-compile your artifacts instead");
+    mate_state.script_compiler = t;
+  }
 }
 
 static void mate_read_cache(void) {
@@ -5292,7 +5261,7 @@ static void mate_read_cache(void) {
     Assert(err_file_write == SUCCESS, "MateReadCache: failed writing samurai source code to path %s", source_path.data);
 
     String output_path = PathJoin(mate_state.build_directory, S("samurai"));
-    String compile_command = F(mate_state.arena, "%s \"%s\" -o \"%s\" -std=c99", CompilerStr().data, source_path.data, output_path.data);
+    String compile_command = F(mate_state.arena, "%s \"%s\" -o \"%s\" -std=c99", mate_state.script_compiler.compiler, source_path.data, output_path.data);
 
     errno_t run_error = RunCommand(compile_command);
     Assert(run_error == SUCCESS, "MateReadCache: Error meanwhile compiling samurai at %s, if you are seeing this please make an issue at github.com/TomasBorquez/mate.h", source_path.data);
@@ -5331,15 +5300,16 @@ static void mate_rebuild(int argc, char **argv) {
     return;
   }
 
+  Target t = mate_state.script_compiler;
   String mate_exe     = mate_state.mate_exe;
-  String mate_exe_new = NormPathExe(PathJoin(mate_state.build_directory, S("mate-new")));
-  String mate_exe_old = NormPathExe(PathJoin(mate_state.build_directory, S("mate-old")));
+  String mate_exe_new = NormPathExe(t, PathJoin(mate_state.build_directory, S("mate-new")));
+  String mate_exe_old = NormPathExe(t, PathJoin(mate_state.build_directory, S("mate-old")));
 
   String compile_command;
-  if (isMSVC()) {
-    compile_command = F(mate_state.arena, "cl.exe \"%s\" /Fe:\"%s\" %s", mate_state.mate_source.data, mate_exe_new.data, mate_state.rebuild_flags.data);
+  if (t.compilerFamily == MSVC) {
+    compile_command = F(mate_state.arena, "%s \"%s\" /Fe:\"%s\" %s", t.compiler, mate_state.mate_source.data, mate_exe_new.data, mate_state.rebuild_flags.data);
   } else {
-    compile_command = F(mate_state.arena, "%s \"%s\" -o \"%s\" %s", CompilerStr().data, mate_state.mate_source.data, mate_exe_new.data, mate_state.rebuild_flags.data);
+    compile_command = F(mate_state.arena, "%s \"%s\" -o \"%s\" %s", t.compiler, mate_state.mate_source.data, mate_exe_new.data, mate_state.rebuild_flags.data);
   }
 
   LogWarn("%s changed rebuilding...", mate_state.mate_source.data);
@@ -5381,8 +5351,8 @@ void StartBuildEx(int argc, char **argv) {
   mate_rebuild(argc, argv);
 }
 
-static void mate_apply_warning_flags(FlagBuilder *fb, FlagWarnings w) {
-  Compiler c = mate_state.compiler_family;
+static void mate_apply_warning_flags(Target t, FlagBuilder *fb, FlagWarnings w) {
+  CompilerFamily c = t.compilerFamily;
 
   static char *general[][4] = {
       [FLAG_WARNINGS_NONE] = {"w", NULL},
@@ -5396,11 +5366,11 @@ static void mate_apply_warning_flags(FlagBuilder *fb, FlagWarnings w) {
       [FLAG_WARNINGS] = {"W4", NULL},
       [FLAG_WARNINGS_VERBOSE] = {"Wall", NULL},
   };
-  mate_flag_builder_add_list(fb, c == MSVC ? msvc[w] : general[w]);
+  mate_flag_builder_add_list(t, fb, c == MSVC ? msvc[w] : general[w]);
 }
 
-static void mate_apply_debug_flags(FlagBuilder *fb, FlagDebug d) {
-  Compiler c = mate_state.compiler_family;
+static void mate_apply_debug_flags(Target t, FlagBuilder *fb, FlagDebug d) {
+  CompilerFamily c = t.compilerFamily;
 
   static char *general[][2] = {
       [FLAG_DEBUG_MINIMAL] = {"g1", NULL},
@@ -5412,11 +5382,11 @@ static void mate_apply_debug_flags(FlagBuilder *fb, FlagDebug d) {
       [FLAG_DEBUG_MEDIUM] = {"ZI", NULL},
       [FLAG_DEBUG] = {"ZI", NULL},
   };
-  mate_flag_builder_add_list(fb, c == MSVC ? msvc[d] : general[d]);
+  mate_flag_builder_add_list(t, fb, c == MSVC ? msvc[d] : general[d]);
 }
 
-static void mate_apply_optimization_flags(FlagBuilder *fb, FlagOptimization o) {
-  Compiler c = mate_state.compiler_family;
+static void mate_apply_optimization_flags(Target t, FlagBuilder *fb, FlagOptimization o) {
+  CompilerFamily c = t.compilerFamily;
 
   static char *general[][2] = {
       [FLAG_OPTIMIZATION_NONE] = {"O0", NULL},
@@ -5432,11 +5402,11 @@ static void mate_apply_optimization_flags(FlagBuilder *fb, FlagOptimization o) {
       [FLAG_OPTIMIZATION_SIZE] = {"O1", NULL},
       [FLAG_OPTIMIZATION_AGGRESSIVE] = {"Ox", NULL},
   };
-  mate_flag_builder_add_list(fb, c == MSVC ? msvc[o] : general[o]);
+  mate_flag_builder_add_list(t, fb, c == MSVC ? msvc[o] : general[o]);
 }
 
-static void mate_apply_std_flags(FlagBuilder *fb, FlagSTD std) {
-  Compiler c = mate_state.compiler_family;
+static void mate_apply_std_flags(Target t, FlagBuilder *fb, FlagSTD std) {
+  CompilerFamily c = t.compilerFamily;
 
   static char *general[][2] = {
       [FLAG_STD_C99] = {"std=c99", NULL},
@@ -5452,11 +5422,11 @@ static void mate_apply_std_flags(FlagBuilder *fb, FlagSTD std) {
       [FLAG_STD_C23] = {"std:clatest", NULL},
       [FLAG_STD_C2X] = {"std:clatest", NULL},
   };
-  mate_flag_builder_add_list(fb, c == MSVC ? msvc[std] : general[std]);
+  mate_flag_builder_add_list(t, fb, c == MSVC ? msvc[std] : general[std]);
 }
 
-static void mate_apply_sanitizer_flags(FlagBuilder *fb, FlagSanitizer s) {
-  Compiler c = mate_state.compiler_family;
+static void mate_apply_sanitizer_flags(Target t, FlagBuilder *fb, FlagSanitizer s) {
+  CompilerFamily c = t.compilerFamily;
 
   static char *general[][4] = {
       [FLAG_SANITIZER_ADDRESS] = {"fsanitize=address", "fno-omit-frame-pointer", NULL},
@@ -5469,11 +5439,11 @@ static void mate_apply_sanitizer_flags(FlagBuilder *fb, FlagSanitizer s) {
       [FLAG_SANITIZER_UB] = {NULL},
       [FLAG_SANITIZER] = {"fsanitize=address", NULL},
   };
-  mate_flag_builder_add_list(fb, c == MSVC ? msvc[s] : general[s]);
+  mate_flag_builder_add_list(t, fb, c == MSVC ? msvc[s] : general[s]);
 }
 
-static void mate_apply_error_flags(FlagBuilder *fb, FlagErrorFormat e) {
-  Compiler c = mate_state.compiler_family;
+static void mate_apply_error_flags(Target t, FlagBuilder *fb, FlagErrorFormat e) {
+  CompilerFamily c = t.compilerFamily;
 
   static char *general[][5] = {
       [FLAG_ERROR] = {"fdiagnostics-color=always", NULL},
@@ -5488,7 +5458,7 @@ static void mate_apply_error_flags(FlagBuilder *fb, FlagErrorFormat e) {
       [FLAG_ERROR_MAX] = {"nologo", "diagnostics:caret", NULL},
   };
   char **row = c == MSVC ? msvc[e] : c == CLANG ? clang[e] : general[e];
-  mate_flag_builder_add_list(fb, row);
+  mate_flag_builder_add_list(t, fb, row);
 }
 
 static bool mate_is_valid_output(String output) {
@@ -5506,6 +5476,10 @@ static bool mate_is_valid_output(String output) {
 }
 
 Executable CreateExecutable(ExecutableOptions opts) {
+  Target t = HostTarget();
+  if (isTargetSet(opts.target)) {
+    t = CreateTarget(opts.target);
+  }
   Assert(mate_state.init_config,
          "CreateExecutable: before creating an executable you must use StartBuild(), like this: \n"
          "\n"
@@ -5532,17 +5506,18 @@ Executable CreateExecutable(ExecutableOptions opts) {
          "CreateConfig((MateOptions){.buildDirectory = \"./custom-dir\"});");
 
   Executable result = {0};
-  result.output = NormPathExe(s(opts.output));
+  result.output = NormPathExe(t, s(opts.output));
+  result.target = t;
 
   FlagBuilder fb = FlagBuilderCreate();
   if (opts.flags != NULL)     SBAdd(&fb, s(opts.flags));
-  if (opts.warnings != 0)     mate_apply_warning_flags(&fb, opts.warnings);
-  if (opts.debug != 0)        mate_apply_debug_flags(&fb, opts.debug);
-  if (opts.optimization != 0) mate_apply_optimization_flags(&fb, opts.optimization);
-  if (opts.std != 0)          mate_apply_std_flags(&fb, opts.std);
-  if (opts.sanitizer != 0)    mate_apply_sanitizer_flags(&fb, opts.sanitizer);
+  if (opts.warnings != 0)     mate_apply_warning_flags(t, &fb, opts.warnings);
+  if (opts.debug != 0)        mate_apply_debug_flags(t, &fb, opts.debug);
+  if (opts.optimization != 0) mate_apply_optimization_flags(t, &fb, opts.optimization);
+  if (opts.std != 0)          mate_apply_std_flags(t, &fb, opts.std);
+  if (opts.sanitizer != 0)    mate_apply_sanitizer_flags(t, &fb, opts.sanitizer);
 
-  mate_apply_error_flags(&fb, opts.error);
+  mate_apply_error_flags(t, &fb, opts.error);
   if (!StrIsNull(fb.buffer)) result.flags = fb.buffer;
 
   if (opts.libs != NULL) result.libs = s(opts.libs);
@@ -5555,8 +5530,11 @@ Executable CreateExecutable(ExecutableOptions opts) {
 }
 
 StaticLib CreateStaticLib(StaticLibOptions opts) {
-  // TODO: should depend on target
-  Assert(!isMSVC(), "CreateStaticLib: MSVC compiler not yet implemented for static libraries");
+  Target t = HostTarget();
+  if (isTargetSet(opts.target)) {
+    t = CreateTarget(opts.target);
+  }
+  Assert(t.compilerFamily != MSVC, "CreateStaticLib: MSVC compiler not yet implemented for static libraries");
   Assert(mate_state.init_config,
          "CreateStaticLib: before creating a static library you must use StartBuild(), like this: \n"
          "\n"
@@ -5582,23 +5560,23 @@ StaticLib CreateStaticLib(StaticLibOptions opts) {
          "CreateStaticLib((StaticLibOptions) {.output = \"./output/libexample.a\"});");
 
   StaticLib result = {0};
-  result.output = NormPathStaticLib(s(opts.output));
-  // TODO: should depend on target
-  if (!isMSVC()) {
+  result.output = NormPathStaticLib(t, s(opts.output));
+  if (t.compilerFamily != MSVC) {
     result.output = StrConcat(mate_state.arena, S("lib"), result.output);
   }
 
+  result.target = t;
   result.arFlags = S("rcs");
 
   FlagBuilder fb = FlagBuilderCreate();
   if (opts.flags != NULL)     SBAdd(&fb, s(opts.flags));
-  if (opts.warnings != 0)     mate_apply_warning_flags(&fb, opts.warnings);
-  if (opts.debug != 0)        mate_apply_debug_flags(&fb, opts.debug);
-  if (opts.optimization != 0) mate_apply_optimization_flags(&fb, opts.optimization);
-  if (opts.std != 0)          mate_apply_std_flags(&fb, opts.std);
-  if (opts.sanitizer != 0)    mate_apply_sanitizer_flags(&fb, opts.sanitizer);
+  if (opts.warnings != 0)     mate_apply_warning_flags(t, &fb, opts.warnings);
+  if (opts.debug != 0)        mate_apply_debug_flags(t, &fb, opts.debug);
+  if (opts.optimization != 0) mate_apply_optimization_flags(t, &fb, opts.optimization);
+  if (opts.std != 0)          mate_apply_std_flags(t, &fb, opts.std);
+  if (opts.sanitizer != 0)    mate_apply_sanitizer_flags(t, &fb, opts.sanitizer);
 
-  mate_apply_error_flags(&fb, opts.error);
+  mate_apply_error_flags(t, &fb, opts.error);
   if (!StrIsNull(fb.buffer)) result.flags = fb.buffer;
 
   if (opts.libs != NULL) result.libs = s(opts.libs);
@@ -5611,8 +5589,11 @@ StaticLib CreateStaticLib(StaticLibOptions opts) {
 }
 
 SharedLib CreateSharedLib(SharedLibOptions opts) {
-  // TODO: should depend on target
-  Assert(!isMSVC(), "CreateSharedLib: MSVC compiler not yet implemented for shared libraries");
+  Target t = HostTarget();
+  if (isTargetSet(opts.target)) {
+    t = CreateTarget(opts.target);
+  }
+  Assert(t.compilerFamily != MSVC, "CreateSharedLib: MSVC compiler not yet implemented for shared libraries");
   Assert(mate_state.init_config,
          "CreateSharedLib: before creating an shared lib you must use StartBuild(), like this: \n"
          "\n"
@@ -5639,21 +5620,21 @@ SharedLib CreateSharedLib(SharedLibOptions opts) {
          "CreateConfig((MateOptions){.buildDirectory = \"./custom-dir\"});");
 
   SharedLib result = {0};
-  result.output = NormPathSharedLib(s(opts.output));
-  // TODO: should depend on target
-  if (!isMSVC()) {
+  result.output = NormPathSharedLib(t, s(opts.output));
+  if (t.compilerFamily != MSVC) {
     result.output = StrConcat(mate_state.arena, S("lib"), result.output);
   }
+  result.target = t;
 
   FlagBuilder fb = FlagBuilderCreate();
   if (opts.flags != NULL)     SBAdd(&fb, s(opts.flags));
-  if (opts.warnings != 0)     mate_apply_warning_flags(&fb, opts.warnings);
-  if (opts.debug != 0)        mate_apply_debug_flags(&fb, opts.debug);
-  if (opts.optimization != 0) mate_apply_optimization_flags(&fb, opts.optimization);
-  if (opts.std != 0)          mate_apply_std_flags(&fb, opts.std);
-  if (opts.sanitizer != 0)    mate_apply_sanitizer_flags(&fb, opts.sanitizer);
+  if (opts.warnings != 0)     mate_apply_warning_flags(t, &fb, opts.warnings);
+  if (opts.debug != 0)        mate_apply_debug_flags(t, &fb, opts.debug);
+  if (opts.optimization != 0) mate_apply_optimization_flags(t, &fb, opts.optimization);
+  if (opts.std != 0)          mate_apply_std_flags(t, &fb, opts.std);
+  if (opts.sanitizer != 0)    mate_apply_sanitizer_flags(t, &fb, opts.sanitizer);
 
-  mate_apply_error_flags(&fb, opts.error);
+  mate_apply_error_flags(t, &fb, opts.error);
   if (!StrIsNull(fb.buffer)) result.flags = fb.buffer;
 
   if (opts.libs != NULL) result.libs = s(opts.libs);
@@ -5818,10 +5799,11 @@ static bool mate_remove_file(StringVector *sources, String source) {
 static void mate_install_executable(Executable *executable) {
   Assert(executable->sources.length != 0, "InstallExecutable: Executable has zero sources, add at least one with AddFile(\"./main.c\")");
 
+  Target t = executable->target;
   StringBuilder builder = SBReserve(mate_state.arena, 1024);
 
   { // Variables
-    SBAddF(&builder, "cc = %S\n", MetaCompilerStr());
+    SBAddF(&builder, "cc = %s\n", t.compiler);
     if (executable->linkerFlags.length > 0) SBAddF(&builder, "linker_flags = %S\n", executable->linkerFlags);
     if (executable->flags.length > 0)       SBAddF(&builder, "flags = %S\n", executable->flags);
     if (executable->includes.length > 0)    SBAddF(&builder, "includes = %S\n", executable->includes);
@@ -5838,15 +5820,13 @@ static void mate_install_executable(Executable *executable) {
     if (executable->flags.length > 0)       SBAddS(&builder, " $flags");
     if (executable->linkerFlags.length > 0) SBAddS(&builder, " $linker_flags");
 
-    // TODO: should depend on target
     if (executable->sharedLibOutputs.length > 0) {
-      if (GetPlatform() == MACOS)        SBAddS(&builder, " '-Wl,-rpath,@loader_path'");
-      else if (GetPlatform() != WINDOWS) SBAddS(&builder, " '-Wl,-rpath,$$ORIGIN'");
+      if (isMacOS(t))         SBAddS(&builder, " '-Wl,-rpath,@loader_path'");
+      else if (!isWindows(t)) SBAddS(&builder, " '-Wl,-rpath,$$ORIGIN'");
     }
 
-    // TODO: should depend on target
-    if (!isMSVC()) SBAddS(&builder, " -o $out $in");
-    else           SBAddS(&builder, " /Fe:$out $in");
+    if (t.compilerFamily != MSVC) SBAddS(&builder, " -o $out $in");
+    else                           SBAddS(&builder, " /Fe:$out $in");
 
     if (executable->libs.length > 0) SBAddS(&builder, " $libs");
     SBAddS(&builder, "\n");
@@ -5859,12 +5839,11 @@ static void mate_install_executable(Executable *executable) {
     if (executable->flags.length > 0)    SBAddS(&builder, " $flags");
     if (executable->includes.length > 0) SBAddS(&builder, " $includes");
 
-    // TODO: should depend on target
-    if (isMSVC()) {
+    if (t.compilerFamily == MSVC) {
       SBAddS(&builder, " /showIncludes /c $in /Fo:$out\n");
       SBAddS(&builder, "  deps = msvc\n\n");
     } else {
-      if (mate_state.compiler_family != GCC && mate_state.compiler_family != CLANG)
+      if (t.compilerFamily != GCC && t.compilerFamily != CLANG)
         SBAddS(&builder, " -c $cwd/$in -o $out\n");
       else {
         SBAddS(&builder, " -c $cwd/$in -o $out -MMD -MF $depfile\n");
@@ -5881,11 +5860,11 @@ static void mate_install_executable(Executable *executable) {
       String curr_source = VecAt(executable->sources, i);
       if (StrIsNull(curr_source)) continue;
 
-      String output_file = NormPathOutput(curr_source);
+      String output_file = NormPathOutput(t, curr_source);
       String source_file = NormPathStart(curr_source);
       SBAddF(&builder, "build $builddir/%S: compile %S\n", output_file, source_file);
 
-      if (mate_state.compiler_family == GCC || mate_state.compiler_family == CLANG) {
+      if (t.compilerFamily == GCC || t.compilerFamily == CLANG) {
         String dep_file = StrNewSize(mate_state.arena, output_file.data, output_file.length);
         dep_file.data[dep_file.length - 1] = 'd';
         SBAddF(&builder, "  depfile = $builddir/%S\n", dep_file);
@@ -5936,11 +5915,13 @@ static void mate_install_executable(Executable *executable) {
 static void mate_install_static_lib(StaticLib *static_lib) {
   Assert(static_lib->sources.length != 0, "InstallStaticLib: Static Library has zero sources, add at least one with AddFile(\"./main.c\")");
 
+  Target t = static_lib->target;
   StringBuilder builder = SBReserve(mate_state.arena, 1024);
 
   { // Variables
-    SBAddF(&builder, "cc = %S\n", MetaCompilerStr());
-    SBAddS(&builder, "ar = ar\n"); // TODO: Add different ar for MSVC
+    SBAddF(&builder, "cc = %s\n", t.compiler);
+    SBAddS(&builder, "ar = ar\n"); // TODO: Add different ar for MSVC and for cross-builds
+                                   // maybe a target field (ar) - and add error handling for wrong (ar)
 
     if (static_lib->flags.length > 0)    SBAddF(&builder, "flags = %S\n", static_lib->flags);
     if (static_lib->arFlags.length > 0)  SBAddF(&builder, "ar_flags = %S\n", static_lib->arFlags);
@@ -5960,13 +5941,12 @@ static void mate_install_static_lib(StaticLib *static_lib) {
   { // Compile command
     SBAddS(&builder, "rule compile\n"
                      "  command = $cc");
-    // TODO: should depend on target
     // INFO: static libs are always PIC to be able to link with shared libs
-    if (GetPlatform() != WINDOWS)        SBAddS(&builder, " -fPIC");
+    if (!isWindows(t))                   SBAddS(&builder, " -fPIC");
     if (static_lib->flags.length > 0)    SBAddS(&builder, " $flags");
     if (static_lib->includes.length > 0) SBAddS(&builder, " $includes");
 
-    if (mate_state.compiler_family != GCC && mate_state.compiler_family != CLANG)
+    if (!isGCC(t) && !isClang(t))
       SBAddS(&builder, " -c $cwd/$in -o $out\n");
     else {
       SBAddS(&builder, " -c $cwd/$in -o $out -MMD -MF $depfile\n");
@@ -5982,12 +5962,12 @@ static void mate_install_static_lib(StaticLib *static_lib) {
       String curr_source_file = VecAt(static_lib->sources, i);
       if (StrIsNull(curr_source_file)) continue;
 
-      String output_file = NormPathOutput(curr_source_file);
+      String output_file = NormPathOutput(t, curr_source_file);
       String source_file = NormPathStart(curr_source_file);
 
       SBAddF(&builder, "build $builddir/%S: compile %S\n", output_file, source_file);
 
-      if (mate_state.compiler_family == GCC || mate_state.compiler_family == CLANG) {
+      if (t.compilerFamily == GCC || t.compilerFamily == CLANG) {
         String dep_file = StrNewSize(mate_state.arena, output_file.data, output_file.length);
         dep_file.data[dep_file.length - 1] = 'd';
         SBAddF(&builder, "  depfile = $builddir/%S\n", dep_file);
@@ -6031,10 +6011,11 @@ static void mate_install_static_lib(StaticLib *static_lib) {
 static void mate_install_shared_lib(SharedLib *shared_lib) {
   Assert(shared_lib->sources.length != 0, "InstallSharedLib: Shared Lib has zero sources, add at least one with AddFile(\"./main.c\")");
 
+  Target t = shared_lib->target;
   StringBuilder builder = SBReserve(mate_state.arena, 1024);
 
   { // Variables
-    SBAddF(&builder, "cc = %S\n", MetaCompilerStr());
+    SBAddF(&builder, "cc = %s\n", t.compiler);
     if (shared_lib->linkerFlags.length > 0) SBAddF(&builder, "linker_flags = %S\n", shared_lib->linkerFlags);
     if (shared_lib->flags.length > 0)       SBAddF(&builder, "flags = %S\n", shared_lib->flags);
     if (shared_lib->includes.length > 0)    SBAddF(&builder, "includes = %S\n", shared_lib->includes);
@@ -6048,12 +6029,11 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
   { // Link command
     SBAddS(&builder, "rule link\n"
                      "  command = $cc");
-    // TODO: should depend on target
-    if (GetPlatform() != MACOS) SBAddS(&builder, " -shared");
-    else                        SBAddS(&builder, " -dynamiclib");
+    if (!isMacOS(t)) SBAddS(&builder, " -shared");
+    else             SBAddS(&builder, " -dynamiclib");
 
-    if (GetPlatform() == MACOS)        SBAddF(&builder, " -install_name @rpath/%S", shared_lib->output);
-    else if (GetPlatform() != WINDOWS) SBAddF(&builder, " '-Wl,-soname,%S'", shared_lib->output);
+    if (isMacOS(t))         SBAddF(&builder, " -install_name @rpath/%S", shared_lib->output);
+    else if (!isWindows(t)) SBAddF(&builder, " '-Wl,-soname,%S'", shared_lib->output);
 
     if (shared_lib->flags.length > 0)       SBAddS(&builder, " $flags");
     if (shared_lib->linkerFlags.length > 0) SBAddS(&builder, " $linker_flags");
@@ -6068,12 +6048,11 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
   { // Compile command
     SBAddS(&builder, "rule compile\n"
                      "  command = $cc");
-    // TODO: should depend on target
-    if (GetPlatform() != WINDOWS)        SBAddS(&builder, " -fPIC");
+    if (!isWindows(t))                   SBAddS(&builder, " -fPIC");
     if (shared_lib->flags.length > 0)    SBAddS(&builder, " $flags");
     if (shared_lib->includes.length > 0) SBAddS(&builder, " $includes");
 
-    if (mate_state.compiler_family != GCC && mate_state.compiler_family != CLANG)
+    if (t.compilerFamily != GCC && t.compilerFamily != CLANG)
       SBAddS(&builder, " -c $cwd/$in -o $out\n");
     else {
       SBAddS(&builder, " -c $cwd/$in -o $out -MMD -MF $depfile\n");
@@ -6089,11 +6068,11 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
       String curr_source = VecAt(shared_lib->sources, i);
       if (StrIsNull(curr_source)) continue;
 
-      String output_file = NormPathOutput(curr_source);
+      String output_file = NormPathOutput(t, curr_source);
       String source_file = NormPathStart(curr_source);
       SBAddF(&builder, "build $builddir/%S: compile %S\n", output_file, source_file);
 
-      if (mate_state.compiler_family == GCC || mate_state.compiler_family == CLANG) {
+      if (t.compilerFamily == GCC || t.compilerFamily == CLANG) {
         String dep_file = StrNewSize(mate_state.arena, output_file.data, output_file.length);
         dep_file.data[dep_file.length - 1] = 'd';
         SBAddF(&builder, "  depfile = $builddir/%S\n", dep_file);
@@ -6177,11 +6156,10 @@ static void mate_link_shared_lib(StringVector *shared_lib_outputs, SharedLib *sh
   VecPush(*shared_lib_outputs, shared_lib->output);
 }
 
-static void mate_add_library_paths(String *targetLibs, char **libs, size_t libs_size) {
+static void mate_add_library_paths(Target t, String *targetLibs, char **libs, size_t libs_size) {
   StringBuilder builder = SBCreate(mate_state.arena);
 
-  // TODO: should depend on target
-  if (isMSVC() && targetLibs->length == 0) {
+  if (t.compilerFamily == MSVC && targetLibs->length == 0) {
     SBAddS(&builder, "/link");
   }
 
@@ -6189,8 +6167,7 @@ static void mate_add_library_paths(String *targetLibs, char **libs, size_t libs_
     SBAdd(&builder, *targetLibs);
   }
 
-  // TODO: should depend on target
-  if (isMSVC()) {
+  if (t.compilerFamily == MSVC) {
     // MSVC format: /LIBPATH:"path"
     for (size_t i = 0; i < libs_size; i++) {
       char *curr_lib = libs[i];
@@ -6211,11 +6188,10 @@ static void mate_add_library_paths(String *targetLibs, char **libs, size_t libs_
   *targetLibs = builder.buffer;
 }
 
-static void mate_link_system_libraries(String *targetLibs, char **libs, size_t libs_size) {
+static void mate_link_system_libraries(Target t, String *targetLibs, char **libs, size_t libs_size) {
   StringBuilder builder = SBCreate(mate_state.arena);
 
-  // TODO: should depend on target
-  if (isMSVC() && targetLibs->length == 0) {
+  if (t.compilerFamily == MSVC && targetLibs->length == 0) {
     SBAddS(&builder, "/link");
   }
 
@@ -6223,8 +6199,7 @@ static void mate_link_system_libraries(String *targetLibs, char **libs, size_t l
     SBAdd(&builder, *targetLibs);
   }
 
-  // TODO: should depend on target
-  if (isMSVC()) {
+  if (t.compilerFamily == MSVC) {
     // MSVC format: library.lib
     for (size_t i = 0; i < libs_size; i++) {
       char *curr_lib = libs[i];
@@ -6245,9 +6220,8 @@ static void mate_link_system_libraries(String *targetLibs, char **libs, size_t l
   *targetLibs = builder.buffer;
 }
 
-static void mate_link_frameworks_with_options(String *targetLibs, LinkFrameworkOptions options, char **frameworks, size_t frameworks_size) {
-  // TODO: should depend on target
-  Assert(isClang(), "LinkFrameworks: This function is only supported for Clang.");
+static void mate_link_frameworks_with_options(Target t, String *targetLibs, LinkFrameworkOptions options, char **frameworks, size_t frameworks_size) {
+  Assert(t.compilerFamily == CLANG, "LinkFrameworks: This function is only supported for Clang.");
 
   char *framework_flag = NULL;
   switch (options) {
@@ -6282,19 +6256,18 @@ static void mate_link_frameworks_with_options(String *targetLibs, LinkFrameworkO
   *targetLibs = builder.buffer;
 }
 
-static void mate_link_frameworks(String *targetLibs, char **frameworks, size_t frameworks_size) {
-  mate_link_frameworks_with_options(targetLibs, NONE, frameworks, frameworks_size);
+static void mate_link_frameworks(Target t, String *targetLibs, char **frameworks, size_t frameworks_size) {
+  mate_link_frameworks_with_options(t, targetLibs, NONE, frameworks, frameworks_size);
 }
 
-static void mate_add_include_paths(String *target_includes, char **includes, size_t includes_size) {
+static void mate_add_include_paths(Target t, String *target_includes, char **includes, size_t includes_size) {
   StringBuilder builder = SBCreate(mate_state.arena);
 
   if (target_includes->length) {
     SBAdd(&builder, *target_includes);
   }
 
-  // TODO: should depend on target
-  if (isMSVC()) {
+  if (t.compilerFamily == MSVC) {
     // MSVC format: /I"path"
     for (size_t i = 0; i < includes_size; i++) {
       char *curr_include = includes[i];
@@ -6319,9 +6292,8 @@ static void mate_add_include_paths(String *target_includes, char **includes, siz
   *target_includes = builder.buffer;
 }
 
-static void mate_add_framework_paths(String *target_includes, char **frameworks, size_t frameworks_size) {
-  // TODO: should depend on target
-  Assert(isClang() || isGCC(), "AddFrameworkPaths: This function is only supported for GCC/Clang.");
+static void mate_add_framework_paths(Target t, String *target_includes, char **frameworks, size_t frameworks_size) {
+  Assert(t.compilerFamily == GCC || t.compilerFamily == CLANG, "AddFrameworkPaths: This function is only supported for GCC/Clang.");
 
   StringBuilder builder = SBCreate(mate_state.arena);
 
@@ -6356,9 +6328,9 @@ FlagBuilder FlagBuilderReserve(size_t count) {
   return SBReserve(mate_state.arena, count);
 }
 
-static void mate_flag_builder_add_string(FlagBuilder *builder, char *flag) {
+static void mate_flag_builder_add_string(Target t, FlagBuilder *builder, char *flag) {
   bool is_empty = builder->buffer.length == 0;
-  if (mate_state.compiler_family == MSVC) {
+  if (t.compilerFamily == MSVC) {
     Assert(flag[0] != '/', "FlagBuilderAdd: flag should not contain '/'. Your flag:\n%s \n\ne.g usage FlagBuilderAdd(\"W4\")", flag);
     SBAdd(builder, is_empty ? S("/") : S(" /"));
   } else {
@@ -6368,9 +6340,9 @@ static void mate_flag_builder_add_string(FlagBuilder *builder, char *flag) {
   SBAdd(builder, s(flag));
 }
 
-static void mate_flag_builder_add_list(FlagBuilder *fb, char **flags) {
+static void mate_flag_builder_add_list(Target t, FlagBuilder *fb, char **flags) {
   for (; *flags != NULL; flags++) {
-    mate_flag_builder_add_string(fb, *flags);
+    mate_flag_builder_add_string(t, fb, *flags);
   }
 }
 
@@ -6420,7 +6392,7 @@ static bool mate_is_platform_ext(String ext) {
          StrEq(ext, S(".so"))  || StrEq(ext, S(".dll")) || StrEq(ext, S(".dylib"));
 }
 
-static String mate_path_with_platform_ext(Arena *arena, String path, String unix_ext, String win_ext, String macos_ext) {
+static String mate_path_with_platform_ext(Target t, Arena *arena, String path, String unix_ext, String win_ext, String macos_ext) {
   String result = mate_path_strip_dot_slash(path);
   String current_ext = mate_path_get_ext(result);
   Assert(!mate_is_platform_ext(current_ext),
@@ -6434,12 +6406,11 @@ static String mate_path_with_platform_ext(Arena *arena, String path, String unix
          path.data,
          current_ext.data);
 
-  // TODO: should depend on target
   String target_ext;
-  switch (GetPlatform()) {
-    case WINDOWS: target_ext = win_ext;   break;
-    case MACOS:   target_ext = macos_ext; break;
-    default:      target_ext = unix_ext;  break;
+  switch (t.os) {
+    case OS_WINDOWS: target_ext = win_ext;   break;
+    case OS_MACOS:   target_ext = macos_ext; break;
+    default:         target_ext = unix_ext;  break;
   }
 
   result = StrConcat(arena, StrNewSize(arena, result.data, result.length), target_ext);
@@ -6487,16 +6458,16 @@ String NormPathEnd(String path) {
   return StrNewSize(mate_state.arena, path.data + last_slash, path.length - last_slash);
 }
 
-String NormPathExe(String str) {
-  return mate_path_with_platform_ext(mate_state.arena, str, S(""), S(".exe"), S(""));
+String NormPathExe(Target t, String str) {
+  return mate_path_with_platform_ext(t, mate_state.arena, str, S(""), S(".exe"), S(""));
 }
 
-String NormPathStaticLib(String str) {
-  return mate_path_with_platform_ext(mate_state.arena, str, S(".a"), S(".lib"), S(".a"));
+String NormPathStaticLib(Target t, String str) {
+  return mate_path_with_platform_ext(t, mate_state.arena, str, S(".a"), S(".lib"), S(".a"));
 }
 
-String NormPathSharedLib(String str) {
-  return mate_path_with_platform_ext(mate_state.arena, str, S(".so"), S(".dll"), S(".dylib"));
+String NormPathSharedLib(Target t, String str) {
+  return mate_path_with_platform_ext(t, mate_state.arena, str, S(".so"), S(".dll"), S(".dylib"));
 }
 
 String NormPathNinja(String str) {
@@ -6511,9 +6482,8 @@ String NormPathNinja(String str) {
 #endif
 }
 
-String NormPathOutput(String str) {
-  // TODO: should depend on target
-  String ext = isMSVC() ? S(".obj") : S(".o");
+String NormPathOutput(Target t, String str) {
+  String ext = t.compilerFamily == MSVC ? S(".obj") : S(".o");
   String stem = PathStem(str);
   Assert(stem.length > 0, "NormPathOutput: failed to get stem from %s", str.data);
   return StrConcat(mate_state.arena, stem, ext);
@@ -6523,12 +6493,12 @@ String AbsoluteNormPath(String str) {
   return PathJoin(mate_state.cwd, NormPath(str));
 }
 
-String AbsoluteNormPathExe(String str) {
-  return PathJoin(mate_state.cwd, NormPathExe(str));
+String AbsoluteNormPathExe(Target t, String str) {
+  return PathJoin(mate_state.cwd, NormPathExe(t, str));
 }
 
-String AbsoluteNormPathStaticLib(String str) {
-  return PathJoin(mate_state.cwd, NormPathStaticLib(str));
+String AbsoluteNormPathStaticLib(Target t, String str) {
+  return PathJoin(mate_state.cwd, NormPathStaticLib(t, str));
 }
 
 /* --- Utils Implementation --- */
@@ -6541,58 +6511,160 @@ errno_t RunCommand(String command) {
 #endif
 }
 
-String CompilerStr(void) {
-  switch (GetCompiler()) {
+char *GetScriptCompiler(void) {
+  switch (GetCompilerFamily()) {
   case GCC:
-    return S("gcc");
+    return "gcc";
   case CLANG:
-    return S("clang");
+    return "clang";
   case TCC:
-    return S("tcc");
+    return "tcc";
   case MSVC:
-    return S("cl.exe");
+    return "cl.exe";
   default:
-    Unreachable("CompilerToStr: failed, should never get here, compiler family given does not exist: %d", mate_state.compiler_family);
-    return S("");
+    Unreachable("GetScriptCompiler: should never get here, compiler does not exist");
+    return "";
   }
 }
 
-String MetaCompilerStr(void) {
-  if (!StrEq(mate_state.compiler, S(""))) {
-    return mate_state.compiler;
+Target HostTarget(void) {
+  Target t = {0};
+
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
+  t.os = OS_WINDOWS;
+#else
+#  if defined(__ANDROID__)
+  t.os = OS_ANDROID;
+#  elif defined(__linux__) || defined(__gnu_linux__)
+  t.os = OS_LINUX;
+#  elif defined(__APPLE__) || defined(__MACH__)
+  t.os = OS_MACOS;
+#  elif defined(__FreeBSD__)
+  t.os = OS_FREEBSD;
+#  elif defined(__EMSCRIPTEN__)
+  t.os = OS_EMSCRIPTEN;
+#  else
+#    error "The codebase only supports linux, macos, FreeBSD, windows, android and emscripten"
+#  endif
+#endif
+
+#if defined(__x86_64__) || defined(_M_X64)
+  t.arch = ARCH_X64;
+#elif defined(__aarch64__) || defined(_M_ARM64)
+  t.arch = ARCH_ARM64;
+#elif defined(__i386__) || defined(_M_IX86)
+  t.arch = ARCH_X86;
+#elif defined(__arm__) || defined(_M_ARM)
+  t.arch = ARCH_ARM32;
+#elif defined(__riscv) && (__riscv_xlen == 64)
+  t.arch = ARCH_RISCV64;
+#elif defined(__powerpc64__) || defined(__ppc64__)
+  t.arch = ARCH_PPC64;
+#elif defined(__s390x__)
+  t.arch = ARCH_S390X;
+#elif defined(__wasm32__)
+  t.arch = ARCH_WASM32;
+#else
+#  error "The codebase only supports x64, x86, arm64, arm32, riscv64, ppc64, s390x and wasm32"
+#endif
+
+  t.compiler = GetScriptCompiler();
+  t.compilerFamily = GetCompilerFamily();
+  return t;
+}
+
+Target CreateTarget(Target t) {
+  Assert((t.compiler == NULL) == (t.compilerFamily == 0),
+         "CreateTarget: .compiler and .compilerFamily must be set together, e.g:\n"
+         "\n"
+         "(Target){.compiler = \"clang\", .compilerFamily = CLANG}\n"
+         "(Target){.compiler = \"x86_64-w64-mingw32-gcc\", .compilerFamily = GCC, .os = OS_WINDOWS}");
+
+  Target host = HostTarget();
+  Target result = host;
+  if (t.os != 0) {
+    result.os = t.os;
+  }
+  if (t.arch != 0) {
+    result.arch = t.arch;
+  }
+  if (t.compiler != NULL) {
+    result.compiler = t.compiler;
+  }
+  if (t.compilerFamily != 0) {
+    result.compilerFamily = t.compilerFamily;
   }
 
-  switch (mate_state.compiler_family) {
-  case GCC:
-    return S("gcc");
-  case CLANG:
-    return S("clang");
-  case TCC:
-    return S("tcc");
-  case MSVC:
-    return S("cl.exe");
-  default:
-    Unreachable("CompilerToStr: failed, should never get here, compiler family given does not exist: %d", mate_state.compiler_family);
-    return S("");
-  }
+  bool is_cross = result.os != host.os || result.arch != host.arch;
+  Assert(!is_cross || t.compiler != NULL,
+         "CreateTarget: cross-compilation target (.os/.arch differs from host) requires an explicit cross-compiler, e.g:\n"
+         "\n"
+         "(Target){.compiler = \"x86_64-w64-mingw32-gcc\", .compilerFamily = GCC, .os = OS_WINDOWS}\n"
+         "(Target){.compiler = \"aarch64-linux-gnu-gcc\", .compilerFamily = GCC, .arch = ARCH_ARM64}\n"
+         "\n"
+         "otherwise the host compiler would silently produce a host binary with the wrong name/extension");
+
+  // TODO: when compilerFamily == CLANG && !isTargetHost(result), derive and
+  // append `--target=<triple>` from result.os/result.arch instead of requiring
+  // a separate cross-compiler binary (clang cross-compiles with one binary)
+  Assert(result.os != 0 && result.arch != 0 && result.compiler != NULL && result.compilerFamily != 0,
+         "CreateTarget: incomplete target after merge, this is a bug in mate.h, please make an issue at github.com/TomasBorquez/mate.h");
+
+  return result;
 }
 
-// remove {
-bool isMSVC(void) {
-  return mate_state.compiler_family == MSVC;
+bool isTargetSet(Target t) {
+  return t.os != 0 || t.arch != 0 || t.compiler != NULL || t.compilerFamily != 0;
 }
 
-bool isGCC(void) {
-  return mate_state.compiler_family == GCC;
+bool isTargetHost(Target t) {
+  Target host = HostTarget();
+  bool os_eq = host.os == t.os;
+  bool arch_eq = host.arch == t.arch;
+  bool compiler_eq = t.compiler != NULL && strcmp(host.compiler, t.compiler) == 0;
+  bool family_eq = host.compilerFamily == t.compilerFamily;
+
+  return os_eq && arch_eq && compiler_eq && family_eq;
 }
 
-bool isClang(void) {
-  return mate_state.compiler_family == CLANG;
+bool isLinux(Target t) {
+  return t.os == OS_LINUX;
 }
 
-bool isTCC(void) {
-  return mate_state.compiler_family == TCC;
+bool isMacOS(Target t) {
+  return t.os == OS_MACOS;
 }
-// }
+
+bool isWindows(Target t) {
+  return t.os == OS_WINDOWS;
+}
+
+bool isAndroid(Target t) {
+  return t.os == OS_ANDROID;
+}
+
+bool isEmscripten(Target t) {
+  return t.os == OS_EMSCRIPTEN;
+}
+
+bool isFreeBSD(Target t) {
+  return t.os == OS_FREEBSD;
+}
+
+bool isGCC(Target t) {
+  return t.compilerFamily == GCC;
+}
+
+bool isClang(Target t) {
+  return t.compilerFamily == CLANG;
+}
+
+bool isTCC(Target t) {
+  return t.compilerFamily == TCC;
+}
+
+bool isMSVC(Target t) {
+  return t.compilerFamily == MSVC;
+}
 #endif
 // --- MATE.H END ---

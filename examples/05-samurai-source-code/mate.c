@@ -2,6 +2,8 @@
 #include "../../mate.h"
 
 int main(void) {
+  Target t = HostTarget();
+
   StartBuild();
   {
     Executable executable = CreateExecutable((ExecutableOptions){
@@ -21,7 +23,7 @@ int main(void) {
     // Or use this wildcard
     AddFile(executable, "./src/*.c");
 
-    if (isLinux()) {
+    if (isLinux(t)) {
       LinkSystemLibraries(executable, "rt");
     }
 
