@@ -6,18 +6,14 @@
 - [ ] Test that asserts fail
 
 ## v0.4
+- [ ] Custom build step
+- [ ] `AddSubproject("./shared/raylib")`
 - [ ] Move to `exec` && `CreateProcess` for executables
 - [ ] `FindSystemPackage(exe, "sdl3")`
 - [ ] `FetchDependency(url, hash)`
 - [ ] Fetch samurai automatically
-- [ ] Full `MSVC` support on static/shared libs
-- [ ] Make `samurai` windows compatible
 - [ ] We should own all `char *` or pointers user gives
-- [ ] base.h
-    - [ ] StringView
-    - [ ] DynamicString
-    - [ ] StringBuilder
-    - [ ] Move all params and values to this pattern
+- [ ] Make `samurai` windows compatible
 
 ## v0.3
 - [x] `LinkStaticLib()` for linking another `StaticLib`
@@ -26,14 +22,13 @@
 - [x] `LinkStaticLib/LinkSharedLib` should assert that both were installed before
 - [x] `lib` prefix on output in `CreateStaticLib/CreateSharedLib` if not windows target
 - [x] Target field instead of global compiler
-- [ ] `ar` for cross-compiler
+- [x] `ar` for cross-compiler
 - [ ] Add cross-compile target for clang with `--target=<triple>`
+- [ ] Full `MSVC` support on static/shared libs
+- [ ] Build output on folder depending on platform/arch
 - [ ] `RunExec` for running executable
-- [ ] Custom build step
-- [ ] `AddSubproject("./shared/raylib")`
 - [ ] Add `args` parser
-- [ ] base.h
-    - [ ] Generic HashMap
+- [ ] base.h - Generic HashMap
 
 ## v0.2
 - [x] Samurai does not generate `compile_commands.json`?

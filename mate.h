@@ -1,7 +1,7 @@
 /* MIT License
 
   mate.h - A single-header library for compiling your C code in C
-  Version - 2026-07-14 (0.3.0):
+  Version - 2026-07-16 (0.3.1):
   https://github.com/TomasBorquez/mate.h
 
   Guide on the `README.md`
@@ -1953,6 +1953,7 @@ typedef struct {
   OS os;
   Arch arch;
   char *compiler;
+  char *ar;
   CompilerFamily compilerFamily;
 } Target;
 
@@ -2253,6 +2254,7 @@ String AbsoluteNormPathStaticLib(Target t, String str);
 WARN_UNUSED errno_t RunCommand(String command);
 #define RunCommandF(_format, ...) RunCommand(F(mate_state.arena, _format, __VA_ARGS__))
 
+char *GetAr(Target t);
 char *GetScriptCompiler(void);
 
 Target HostTarget(void);
@@ -5476,10 +5478,7 @@ static bool mate_is_valid_output(String output) {
 }
 
 Executable CreateExecutable(ExecutableOptions opts) {
-  Target t = HostTarget();
-  if (isTargetSet(opts.target)) {
-    t = CreateTarget(opts.target);
-  }
+  Target t = CreateTarget(opts.target);
   Assert(mate_state.init_config,
          "CreateExecutable: before creating an executable you must use StartBuild(), like this: \n"
          "\n"
@@ -5530,10 +5529,7 @@ Executable CreateExecutable(ExecutableOptions opts) {
 }
 
 StaticLib CreateStaticLib(StaticLibOptions opts) {
-  Target t = HostTarget();
-  if (isTargetSet(opts.target)) {
-    t = CreateTarget(opts.target);
-  }
+  Target t = CreateTarget(opts.target);
   Assert(t.compilerFamily != MSVC, "CreateStaticLib: MSVC compiler not yet implemented for static libraries");
   Assert(mate_state.init_config,
          "CreateStaticLib: before creating a static library you must use StartBuild(), like this: \n"
@@ -5589,10 +5585,7 @@ StaticLib CreateStaticLib(StaticLibOptions opts) {
 }
 
 SharedLib CreateSharedLib(SharedLibOptions opts) {
-  Target t = HostTarget();
-  if (isTargetSet(opts.target)) {
-    t = CreateTarget(opts.target);
-  }
+  Target t = CreateTarget(opts.target);
   Assert(t.compilerFamily != MSVC, "CreateSharedLib: MSVC compiler not yet implemented for shared libraries");
   Assert(mate_state.init_config,
          "CreateSharedLib: before creating an shared lib you must use StartBuild(), like this: \n"
@@ -5920,8 +5913,7 @@ static void mate_install_static_lib(StaticLib *static_lib) {
 
   { // Variables
     SBAddF(&builder, "cc = %s\n", t.compiler);
-    SBAddS(&builder, "ar = ar\n"); // TODO: Add different ar for MSVC and for cross-builds
-                                   // maybe a target field (ar) - and add error handling for wrong (ar)
+    SBAddF(&builder, "ar = %s\n", t.ar);
 
     if (static_lib->flags.length > 0)    SBAddF(&builder, "flags = %S\n", static_lib->flags);
     if (static_lib->arFlags.length > 0)  SBAddF(&builder, "ar_flags = %S\n", static_lib->arFlags);
@@ -6511,6 +6503,67 @@ errno_t RunCommand(String command) {
 #endif
 }
 
+static bool mate_program_exists(char *program) {
+#if defined(PLATFORM_WIN)
+  String command = F(mate_state.arena, "where %s >nul 2>&1", program);
+#else
+  String command = F(mate_state.arena, "command -v %s >/dev/null 2>&1", program);
+#endif
+  return RunCommand(command) == SUCCESS;
+}
+
+char *GetAr(Target t) {
+  if (t.ar != NULL) {
+    return t.ar;
+  }
+
+  Target host = HostTarget();
+  if (t.arch == host.arch && t.os == host.os) {
+    if (t.compilerFamily == MSVC) {
+      return "lib.exe";
+    }
+    if (t.compilerFamily == CLANG && mate_program_exists("llvm-ar")) {
+      return "llvm-ar";
+    }
+    return "ar";
+  }
+
+  if (t.compilerFamily == CLANG && mate_program_exists("llvm-ar")) {
+    LogWarn("GetAr: cross target detected, using \"llvm-ar\", if this is wrong set it yourself with:\n"
+            "\n"
+            "(Target){.ar = \"<your-ar>\"}\n");
+    return "llvm-ar";
+  }
+
+  // derive: x86_64-w64-mingw32-gcc -> x86_64-w64-mingw32-ar
+  String compiler = s(t.compiler);
+  size_t last_dash = 0;
+  bool found = false;
+  for (size_t i = compiler.length; i-- > 0;) {
+    if (compiler.data[i] == '-') { last_dash = i; found = true; break; }
+  }
+
+  if (found && last_dash > 0) {
+    String prefix = StrNewSize(mate_state.arena, compiler.data, (size_t)last_dash);
+    String derived = F(mate_state.arena, "%s-ar", prefix.data);
+    if (mate_program_exists(derived.data)) {
+      LogWarn("GetAr: cross target detected, derived \"%s\" from compiler \"%s\" if this is wrong set it yourself with:\n"
+              "\n"
+              "(Target){.ar = \"<your-ar>\"}\n",
+              derived.data,
+              t.compiler);
+      return derived.data;
+    }
+  }
+
+  LogWarn("GetAr: cross target detected but could not derive from compiler \"%s\" falling back to \"ar\", if this produces "
+          "the wrong archive, set it yourself with:\n"
+          "\n"
+          "(Target){.ar = \"ar\"}\n",
+          t.compiler);
+  return "ar";
+}
+
 char *GetScriptCompiler(void) {
   switch (GetCompilerFamily()) {
   case GCC:
@@ -6570,6 +6623,7 @@ Target HostTarget(void) {
 
   t.compiler = GetScriptCompiler();
   t.compilerFamily = GetCompilerFamily();
+
   return t;
 }
 
@@ -6591,6 +6645,9 @@ Target CreateTarget(Target t) {
   if (t.compiler != NULL) {
     result.compiler = t.compiler;
   }
+  if (t.ar != NULL) {
+    result.ar = t.ar;
+  }
   if (t.compilerFamily != 0) {
     result.compilerFamily = t.compilerFamily;
   }
@@ -6604,6 +6661,8 @@ Target CreateTarget(Target t) {
          "\n"
          "otherwise the host compiler would silently produce a host binary with the wrong name/extension");
 
+  result.ar = GetAr(result);
+
   // TODO: when compilerFamily == CLANG && !isTargetHost(result), derive and
   // append `--target=<triple>` from result.os/result.arch instead of requiring
   // a separate cross-compiler binary (clang cross-compiles with one binary)
@@ -6614,7 +6673,7 @@ Target CreateTarget(Target t) {
 }
 
 bool isTargetSet(Target t) {
-  return t.os != 0 || t.arch != 0 || t.compiler != NULL || t.compilerFamily != 0;
+  return t.os != 0 || t.arch != 0 || t.compiler != NULL || t.ar != NULL || t.compilerFamily != 0;
 }
 
 bool isTargetHost(Target t) {

@@ -1,7 +1,7 @@
 /* MIT License
 
   mate.h - A single-header library for compiling your C code in C
-  Version - 2026-07-14 (0.3.0):
+  Version - 2026-07-16 (0.3.1):
   https://github.com/TomasBorquez/mate.h
 
   Guide on the `README.md`
@@ -36,6 +36,7 @@ typedef struct {
   OS os;
   Arch arch;
   char *compiler;
+  char *ar;
   CompilerFamily compilerFamily;
 } Target;
 
@@ -336,6 +337,7 @@ String AbsoluteNormPathStaticLib(Target t, String str);
 WARN_UNUSED errno_t RunCommand(String command);
 #define RunCommandF(_format, ...) RunCommand(F(mate_state.arena, _format, __VA_ARGS__))
 
+char *GetAr(Target t);
 char *GetScriptCompiler(void);
 
 Target HostTarget(void);
