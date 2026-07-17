@@ -14,10 +14,11 @@ static char *GetCFlags(Target t) {
   } else {
     FlagBuilderAdd(t, &fb,
                    "std=c99",
-                   "D_GNU_SOURCE",
-                   "D_POSIX_C_SOURCE=199309L",
                    "fno-sanitize=undefined" // https://github.com/raysan5/raylib/issues/3674
     );
+    if (!isMacOS(t)) {
+      FlagBuilderAdd(t, &fb, "D_GNU_SOURCE", "D_POSIX_C_SOURCE=199309L");
+    }
   }
 
   if (isLinux(t)) {
