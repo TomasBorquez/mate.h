@@ -15,7 +15,6 @@ static void ExpectVec3(const char *name, Vec3 got, Vec3 want) {
     failures++;
     return;
   }
-  printf("PASS %s\n", name);
 }
 
 int main(void) {

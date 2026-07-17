@@ -1,5 +1,6 @@
 CompileFlags:
   Add: [
+    # --target=x86_64-w64-mingw32,
     -xc, -std=c99, -Wpedantic, -pedantic-errors,
     -Wall, -Wextra, -Waggregate-return, -Wbad-function-cast, 
     -Wcast-align, -Wcast-qual, -Wfloat-equal, -Wformat=2, 

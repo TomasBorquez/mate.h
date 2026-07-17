@@ -14,7 +14,11 @@ TESTS=(
   "10-cross-compile"
 )
 
-WINDOWS_SKIP=("05-samurai-source-code")
+WINDOWS_SKIP=(
+  "05-samurai-source-code"
+  "06-lua-source-code"
+  "10-cross-compile"
+)
 
 if [ $# -lt 1 ]; then
   echo "Usage: $0 <compiler> [specific_test]"
@@ -26,6 +30,11 @@ fi
 COMPILER="$1"
 SPECIFIC_TEST="${2:-}"
 
+case "$(basename "$COMPILER")" in
+  cl|cl.exe) IS_MSVC=true ;;
+  *)         IS_MSVC=false ;;
+esac
+
 case "$OSTYPE" in
   msys*|cygwin*|win32*) EXE=".exe"; IS_WINDOWS=true ;;
   *) EXE=""; IS_WINDOWS=false ;;
@@ -36,10 +45,19 @@ if ! command -v "$COMPILER" &> /dev/null; then
   exit 1
 fi
 
+compile() {
+  if "$IS_MSVC"; then
+    "$COMPILER" -w -nologo mate.c -Fe:"mate${EXE}" | tr -d '\r' | grep -vx "mate.c"
+    return "${PIPESTATUS[0]}"
+  else
+    "$COMPILER" -w mate.c -o "mate${EXE}"
+  fi
+}
+
 cleanup() {
   rm -rf "build"
   rm -rf "custom-dir"
-  rm -f "mate${EXE}"
+  rm -f "mate${EXE}" mate.obj mate.pdb mate.ilk
 }
 
 if [ -n "$SPECIFIC_TEST" ]; then
@@ -70,8 +88,7 @@ for test in "${TESTS[@]}"; do
   cd "$ROOT_DIR/tests/$test" || { echo "Error: could not cd into tests/$test"; exit 1; }
   cleanup
 
-  # if ! "$COMPILER" -g3 -fsanitize=address,undefined mate.c -o "mate${EXE}"; then
-  if ! "$COMPILER" -g3 mate.c -o "mate${EXE}"; then
+  if ! compile; then
     echo ""
     echo "Compilation of $test failed"
     exit 1
@@ -86,7 +103,7 @@ for test in "${TESTS[@]}"; do
   echo "$test PASSED"
 
   echo "Rebuilding $test with $COMPILER..."
-  if ! "$COMPILER" -g3 mate.c -o "mate${EXE}"; then
+  if ! compile; then
     echo ""
     echo "Rebuild of $test failed"
     exit 1

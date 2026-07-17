@@ -5,7 +5,13 @@
 - [x] Test rebuilding scripts (just a second run).
 - [ ] Test that asserts fail
 
+#### MSVC Future
+- [ ] Add `msvc_deps_prefix` for MSVC in a different language or VSLANG=1033
+- [ ] On MSVC shared lib build, FileStats the expected .lib and check exports
+- [ ] `/MD` and `/MDd` should be the default flags for shared libs
+
 ## v0.4
+- [ ] Assertions should follow some structure
 - [ ] Custom build step
 - [ ] `AddSubproject("./shared/raylib")`
 - [ ] Move to `exec` && `CreateProcess` for executables
@@ -23,8 +29,15 @@
 - [x] `lib` prefix on output in `CreateStaticLib/CreateSharedLib` if not windows target
 - [x] Target field instead of global compiler
 - [x] `ar` for cross-compiler
+- [x] Full `MSVC` support on static/shared libs
+    - [x] GetAr
+    - [x] StaticLib
+    - [x] SharedLib
+    - [x] Raylib example
+    - [x] Replace `/Zi` with `/Z7` and warn
+    - [x] Warn on `/Zi` and add `/Debug`
 - [ ] Add cross-compile target for clang with `--target=<triple>`
-- [ ] Full `MSVC` support on static/shared libs
+- [ ] Assert to not link/install/add-files to already installed targets
 - [ ] Build output on folder depending on platform/arch
 - [ ] `RunExec` for running executable
 - [ ] Add `args` parser

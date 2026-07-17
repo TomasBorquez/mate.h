@@ -112,7 +112,7 @@ static void mate_rebuild(int argc, char **argv) {
   String mate_exe_old = NormPathExe(t, PathJoin(mate_state.build_directory, S("mate-old")));
 
   String compile_command;
-  if (t.compilerFamily == MSVC) {
+  if (isMSVC(t)) {
     compile_command = F(mate_state.arena, "%s \"%s\" /Fe:\"%s\" %s", t.compiler, mate_state.mate_source.data, mate_exe_new.data, mate_state.rebuild_flags.data);
   } else {
     compile_command = F(mate_state.arena, "%s \"%s\" -o \"%s\" %s", t.compiler, mate_state.mate_source.data, mate_exe_new.data, mate_state.rebuild_flags.data);
@@ -180,13 +180,13 @@ static void mate_apply_debug_flags(Target t, FlagBuilder *fb, FlagDebug d) {
 
   static char *general[][2] = {
       [FLAG_DEBUG_MINIMAL] = {"g1", NULL},
-      [FLAG_DEBUG_MEDIUM] = {"g2", NULL},
-      [FLAG_DEBUG] = {"g3", NULL},
+      [FLAG_DEBUG_MEDIUM] =  {"g2", NULL},
+      [FLAG_DEBUG] =         {"g3", NULL},
   };
   static char *msvc[][2] = {
-      [FLAG_DEBUG_MINIMAL] = {"Zi", NULL},
-      [FLAG_DEBUG_MEDIUM] = {"ZI", NULL},
-      [FLAG_DEBUG] = {"ZI", NULL},
+      [FLAG_DEBUG_MINIMAL] = {"Z7", NULL},
+      [FLAG_DEBUG_MEDIUM] =  {"Z7", NULL},
+      [FLAG_DEBUG] =         {"Z7", NULL},
   };
   mate_flag_builder_add_list(t, fb, c == MSVC ? msvc[d] : general[d]);
 }
@@ -281,6 +281,20 @@ static bool mate_is_valid_output(String output) {
   return true;
 }
 
+static void mate_assert_no_serial_pdb_flags(Target t, char *flags, const char *fn_name) {
+  if (!isMSVC(t) || flags == NULL) return;
+
+  String f = s(flags);
+  bool has_zi = StrIncludes(f, S("/Zi")) || StrIncludes(f, S("/ZI"));
+  bool has_fs = StrIncludes(f, S("/FS"));
+
+  Assert(!has_zi || has_fs,
+         "%s: /Zi and /ZI break parallel builds (all compiles contend on one vcNNN.pdb), causing intermittent C1041 errors under ninja.\n"
+         "\n"
+         "Preferred: use .debug = FLAG_DEBUG instead (mate uses /Z7: per-object debug info, collected into a PDB at link time).\n"
+         "If you truly need /Zi, add /FS to your flags to enable serialized PDB writes.", fn_name);
+}
+
 Executable CreateExecutable(ExecutableOptions opts) {
   Target t = CreateTarget(opts.target);
   Assert(mate_state.init_config,
@@ -293,9 +307,9 @@ Executable CreateExecutable(ExecutableOptions opts) {
          "}\n"
          "EndBuild();\n");
   Assert(opts.output != NULL,
-      "CreateExecutable: failed, ExecutableOptions.output should never be null, please define the output name like this: \n"
-      "\n"
-      "CreateExecutable((ExecutableOptions) { .output = \"main\"});");
+         "CreateExecutable: failed, ExecutableOptions.output should never be null, please define the output name like this: \n"
+         "\n"
+         "CreateExecutable((ExecutableOptions) { .output = \"main\"});");
   Assert(mate_is_valid_output(s(opts.output)),
          "CreateExecutable: ExecutableOptions.output shouldn't be a path, e.g: \n"
          "\n"
@@ -308,9 +322,31 @@ Executable CreateExecutable(ExecutableOptions opts) {
          "TIP: For custom build folder look into `CreateConfig, e.g:\n"
          "CreateConfig((MateOptions){.buildDirectory = \"./custom-dir\"});");
 
+  mate_assert_no_serial_pdb_flags(t, opts.flags, "CreateExecutable");
+
+  if (isMSVC(t)) {
+    if (opts.linkerFlags != NULL)
+      Assert(!StrIncludes(s(opts.linkerFlags), S("/link")),
+             "CreateExecutable: Do not include '/link' in linkerFlags, mate adds it automatically, e.g:\n"
+             ".linkerFlags = \"/SUBSYSTEM:WINDOWS /STACK:8000000\"\n");
+    if (opts.libPaths != NULL)
+      Assert(!StrIncludes(s(opts.libPaths), S("/link")),
+             "CreateExecutable: Do not include '/link' in libPaths, mate adds it automatically, e.g:\n"
+             ".libPaths = \"/LIBPATH:vendor/lib\"\n");
+    if (opts.libs != NULL)
+      Assert(!StrIncludes(s(opts.libs), S("/link")),
+             "CreateExecutable: Do not include '/link' in libs, mate adds it automatically, e.g:\n"
+             ".libs = \"winmm.lib gdi32.lib\"\n");
+    if (opts.flags != NULL)
+      Assert(!StrIncludes(s(opts.flags), S("/link")),
+             "CreateExecutable: Do not include '/link' in flags, linker options go in linkerFlags, e.g:\n"
+             ".linkerFlags = \"/SUBSYSTEM:WINDOWS\"\n");
+  }
+
   Executable result = {0};
   result.output = NormPathExe(t, s(opts.output));
   result.target = t;
+  result.debug = opts.debug != 0;
 
   FlagBuilder fb = FlagBuilderCreate();
   if (opts.flags != NULL)     SBAdd(&fb, s(opts.flags));
@@ -323,8 +359,16 @@ Executable CreateExecutable(ExecutableOptions opts) {
   mate_apply_error_flags(t, &fb, opts.error);
   if (!StrIsNull(fb.buffer)) result.flags = fb.buffer;
 
-  if (opts.libs != NULL) result.libs = s(opts.libs);
-  if (opts.includes != NULL) result.includes = s(opts.includes);
+  if (isMSVC(t) && !result.debug && result.flags.length > 0 && StrIncludes(result.flags, S("/Z7"))) {
+    LogWarn("CreateExecutable: /Z7 found in flags but .debug is not set.\n"
+            "Objects will carry debug info, but without /DEBUG at link time no PDB is produced"
+            " and the info is discarded. Set .debug = FLAG_DEBUG to get a usable PDB.\n");
+  }
+
+  if (opts.libs != NULL)        result.libs = s(opts.libs);
+  if (opts.libPaths != NULL)    result.libPaths = s(opts.libPaths);
+  if (opts.frameworks != NULL)  result.frameworks = s(opts.frameworks);
+  if (opts.includes != NULL)    result.includes = s(opts.includes);
   if (opts.linkerFlags != NULL) result.linkerFlags = s(opts.linkerFlags);
 
   String build_file_name = F(mate_state.arena, "exe-%s.ninja", PathStem(result.output).data);
@@ -334,7 +378,6 @@ Executable CreateExecutable(ExecutableOptions opts) {
 
 StaticLib CreateStaticLib(StaticLibOptions opts) {
   Target t = CreateTarget(opts.target);
-  Assert(t.compilerFamily != MSVC, "CreateStaticLib: MSVC compiler not yet implemented for static libraries");
   Assert(mate_state.init_config,
          "CreateStaticLib: before creating a static library you must use StartBuild(), like this: \n"
          "\n"
@@ -359,14 +402,16 @@ StaticLib CreateStaticLib(StaticLibOptions opts) {
          "Incorrect:\n"
          "CreateStaticLib((StaticLibOptions) {.output = \"./output/libexample.a\"});");
 
+  mate_assert_no_serial_pdb_flags(t, opts.flags, "CreateStaticLib");
+
   StaticLib result = {0};
   result.output = NormPathStaticLib(t, s(opts.output));
-  if (t.compilerFamily != MSVC) {
+  if (!isMSVC(t)) {
     result.output = StrConcat(mate_state.arena, S("lib"), result.output);
   }
 
   result.target = t;
-  result.arFlags = S("rcs");
+  result.arFlags = !isMSVC(t) ? S("rcs") : S("");
 
   FlagBuilder fb = FlagBuilderCreate();
   if (opts.flags != NULL)     SBAdd(&fb, s(opts.flags));
@@ -379,7 +424,6 @@ StaticLib CreateStaticLib(StaticLibOptions opts) {
   mate_apply_error_flags(t, &fb, opts.error);
   if (!StrIsNull(fb.buffer)) result.flags = fb.buffer;
 
-  if (opts.libs != NULL) result.libs = s(opts.libs);
   if (opts.includes != NULL) result.includes = s(opts.includes);
   if (opts.arFlags != NULL) result.arFlags = s(opts.arFlags);
 
@@ -390,7 +434,6 @@ StaticLib CreateStaticLib(StaticLibOptions opts) {
 
 SharedLib CreateSharedLib(SharedLibOptions opts) {
   Target t = CreateTarget(opts.target);
-  Assert(t.compilerFamily != MSVC, "CreateSharedLib: MSVC compiler not yet implemented for shared libraries");
   Assert(mate_state.init_config,
          "CreateSharedLib: before creating an shared lib you must use StartBuild(), like this: \n"
          "\n"
@@ -416,12 +459,34 @@ SharedLib CreateSharedLib(SharedLibOptions opts) {
          "TIP: For custom build folder look into `CreateConfig, e.g:\n"
          "CreateConfig((MateOptions){.buildDirectory = \"./custom-dir\"});");
 
+  mate_assert_no_serial_pdb_flags(t, opts.flags, "CreateSharedLib");
+
+  if (isMSVC(t)) {
+    if (opts.linkerFlags != NULL)
+      Assert(!StrIncludes(s(opts.linkerFlags), S("/link")),
+             "CreateSharedLib: Do not include '/link' in linkerFlags, mate adds it automatically, e.g:\n"
+             ".linkerFlags = \"/SUBSYSTEM:WINDOWS /STACK:8000000\"\n");
+    if (opts.libPaths != NULL)
+      Assert(!StrIncludes(s(opts.libPaths), S("/link")),
+             "CreateSharedLib: Do not include '/link' in libPaths, mate adds it automatically, e.g:\n"
+             ".libPaths = \"/LIBPATH:vendor/lib\"\n");
+    if (opts.libs != NULL)
+      Assert(!StrIncludes(s(opts.libs), S("/link")),
+             "CreateSharedLib: Do not include '/link' in libs, mate adds it automatically, e.g:\n"
+             ".libs = \"winmm.lib gdi32.lib\"\n");
+    if (opts.flags != NULL)
+      Assert(!StrIncludes(s(opts.flags), S("/link")),
+             "CreateSharedLib: Do not include '/link' in flags, linker options go in linkerFlags, e.g:\n"
+             ".linkerFlags = \"/SUBSYSTEM:WINDOWS\"\n");
+  }
+
   SharedLib result = {0};
   result.output = NormPathSharedLib(t, s(opts.output));
-  if (t.compilerFamily != MSVC) {
+  if (!isMSVC(t)) {
     result.output = StrConcat(mate_state.arena, S("lib"), result.output);
   }
   result.target = t;
+  result.debug = opts.debug != 0;
 
   FlagBuilder fb = FlagBuilderCreate();
   if (opts.flags != NULL)     SBAdd(&fb, s(opts.flags));
@@ -434,8 +499,16 @@ SharedLib CreateSharedLib(SharedLibOptions opts) {
   mate_apply_error_flags(t, &fb, opts.error);
   if (!StrIsNull(fb.buffer)) result.flags = fb.buffer;
 
-  if (opts.libs != NULL) result.libs = s(opts.libs);
-  if (opts.includes != NULL) result.includes = s(opts.includes);
+  if (isMSVC(t) && !result.debug && result.flags.length > 0 && StrIncludes(result.flags, S("/Z7"))) {
+    LogWarn("CreateSharedLib: /Z7 found in flags but .debug is not set.\n"
+            "Objects will carry debug info, but without /DEBUG at link time no PDB is produced"
+            " and the info is discarded. Set .debug = FLAG_DEBUG to get a usable PDB.\n");
+  }
+
+  if (opts.libs != NULL)        result.libs = s(opts.libs);
+  if (opts.libPaths != NULL)    result.libPaths = s(opts.libPaths);
+  if (opts.frameworks != NULL)  result.frameworks = s(opts.frameworks);
+  if (opts.includes != NULL)    result.includes = s(opts.includes);
   if (opts.linkerFlags != NULL) result.linkerFlags = s(opts.linkerFlags);
 
   String build_file_name = F(mate_state.arena, "shared-lib-%s.ninja", PathStem(result.output).data);
@@ -604,7 +677,9 @@ static void mate_install_executable(Executable *executable) {
     if (executable->linkerFlags.length > 0) SBAddF(&builder, "linker_flags = %S\n", executable->linkerFlags);
     if (executable->flags.length > 0)       SBAddF(&builder, "flags = %S\n", executable->flags);
     if (executable->includes.length > 0)    SBAddF(&builder, "includes = %S\n", executable->includes);
+    if (executable->libPaths.length > 0)    SBAddF(&builder, "lib_paths = %S\n", executable->libPaths);
     if (executable->libs.length > 0)        SBAddF(&builder, "libs = %S\n", executable->libs);
+    if (executable->frameworks.length > 0)  SBAddF(&builder, "frameworks = %S\n", executable->frameworks);
 
     SBAddF(&builder, "cwd = %S\n", NormPathNinja(mate_state.cwd));
     SBAddF(&builder, "builddir = %S\n", NormPathNinja(mate_state.build_directory));
@@ -614,18 +689,30 @@ static void mate_install_executable(Executable *executable) {
   { // Link command
     SBAddS(&builder, "rule link\n"
                      "  command = $cc");
-    if (executable->flags.length > 0)       SBAddS(&builder, " $flags");
-    if (executable->linkerFlags.length > 0) SBAddS(&builder, " $linker_flags");
+    if (executable->flags.length > 0) SBAddS(&builder, " $flags");
 
-    if (executable->sharedLibOutputs.length > 0) {
-      if (isMacOS(t))         SBAddS(&builder, " '-Wl,-rpath,@loader_path'");
-      else if (!isWindows(t)) SBAddS(&builder, " '-Wl,-rpath,$$ORIGIN'");
+    if (isMSVC(t)) {
+      SBAddS(&builder, " /nologo /Fe:$out $in");
+      if (executable->libs.length > 0) SBAddS(&builder, " $libs");
+
+      bool has_link_opts = executable->libPaths.length > 0 || executable->linkerFlags.length > 0 || executable->debug;
+      if (has_link_opts)                      SBAddS(&builder, " /link");
+      if (executable->debug)                  SBAddS(&builder, " /DEBUG");
+      if (executable->libPaths.length > 0)    SBAddS(&builder, " $lib_paths");
+      if (executable->linkerFlags.length > 0) SBAddS(&builder, " $linker_flags");
+    } else {
+      if (executable->linkerFlags.length > 0) SBAddS(&builder, " $linker_flags");
+
+      if (executable->sharedLibOutputs.length > 0) {
+        if (isMacOS(t))         SBAddS(&builder, " '-Wl,-rpath,@loader_path'");
+        else if (!isWindows(t)) SBAddS(&builder, " '-Wl,-rpath,$$ORIGIN'");
+      }
+
+      SBAddS(&builder, " -o $out $in");
+      if (executable->libPaths.length > 0)    SBAddS(&builder, " $lib_paths");
+      if (executable->libs.length > 0)        SBAddS(&builder, " $libs");
+      if (executable->frameworks.length > 0)  SBAddS(&builder, " $frameworks");
     }
-
-    if (t.compilerFamily != MSVC) SBAddS(&builder, " -o $out $in");
-    else                           SBAddS(&builder, " /Fe:$out $in");
-
-    if (executable->libs.length > 0) SBAddS(&builder, " $libs");
     SBAddS(&builder, "\n");
     SBAddS(&builder, "  description = Linking C executable $target\n\n");
   }
@@ -633,22 +720,21 @@ static void mate_install_executable(Executable *executable) {
   { // Compile command
     SBAddS(&builder, "rule compile\n"
                      "  command = $cc");
+    if (isMSVC(t))                       SBAddS(&builder, " /nologo /showIncludes");
     if (executable->flags.length > 0)    SBAddS(&builder, " $flags");
     if (executable->includes.length > 0) SBAddS(&builder, " $includes");
 
-    if (t.compilerFamily == MSVC) {
-      SBAddS(&builder, " /showIncludes /c $in /Fo:$out\n");
-      SBAddS(&builder, "  deps = msvc\n\n");
+    if (isMSVC(t)) {
+      SBAddS(&builder, " /c \"$cwd/$in\" /Fo$out\n");
+      SBAddS(&builder, "  deps = msvc\n");
+    } else if (isGCC(t) || isClang(t)) {
+      SBAddS(&builder, " -c \"$cwd/$in\" -o $out -MMD -MF $depfile\n");
+      SBAddS(&builder, "  depfile = $depfile\n");
+      SBAddS(&builder, "  deps = gcc\n"); // INFO: clang replicates this
     } else {
-      if (t.compilerFamily != GCC && t.compilerFamily != CLANG)
-        SBAddS(&builder, " -c $cwd/$in -o $out\n");
-      else {
-        SBAddS(&builder, " -c $cwd/$in -o $out -MMD -MF $depfile\n");
-        SBAddS(&builder, "  depfile = $depfile\n");
-        SBAddS(&builder, "  deps = gcc\n"); // INFO: clang replicates this
-      }
-      SBAddS(&builder, "  description = Building C object ./$in\n\n");
+      SBAddS(&builder, " -c \"$cwd/$in\" -o $out\n");
     }
+    SBAddS(&builder, "  description = Building C object ./$in\n\n");
   }
 
   { // Build individual source files
@@ -661,7 +747,7 @@ static void mate_install_executable(Executable *executable) {
       String source_file = NormPathStart(curr_source);
       SBAddF(&builder, "build $builddir/%S: compile %S\n", output_file, source_file);
 
-      if (t.compilerFamily == GCC || t.compilerFamily == CLANG) {
+      if (isGCC(t) || isClang(t)) {
         String dep_file = StrNewSize(mate_state.arena, output_file.data, output_file.length);
         dep_file.data[dep_file.length - 1] = 'd';
         SBAddF(&builder, "  depfile = $builddir/%S\n", dep_file);
@@ -677,7 +763,12 @@ static void mate_install_executable(Executable *executable) {
       SBAddF(&builder, " $builddir/%S", executable->staticLibOutputs.data[i]);
     }
     for (size_t i = 0; i < executable->sharedLibOutputs.length; i++) {
-      SBAddF(&builder, " $builddir/%S", executable->sharedLibOutputs.data[i]);
+      String dep = executable->sharedLibOutputs.data[i];
+      if (isMSVC(t)) {
+        String stem = PathStem(dep);
+        dep = StrConcat(mate_state.arena, stem, S(".lib"));
+      }
+      SBAddF(&builder, " $builddir/%S", dep);
     }
     SBAddS(&builder, "\n\n");
   }
@@ -729,25 +820,38 @@ static void mate_install_static_lib(StaticLib *static_lib) {
   }
 
   { // Archive command
-    SBAddS(&builder, "rule archive\n"
-                     "  command = $ar $ar_flags $out $in\n"
-                     "  description = Archiving $out\n\n");
+    SBAddS(&builder, "rule archive\n");
+    bool has_ar_flags = static_lib->arFlags.length > 0;
+
+    if (!isMSVC(t)) {
+      if (has_ar_flags) SBAddS(&builder, "  command = $ar $ar_flags $out $in\n");
+      else              SBAddS(&builder, "  command = $ar $out $in\n");
+    } else {
+      if (has_ar_flags) SBAddS(&builder, "  command = $ar /nologo $ar_flags /OUT:$out $in\n");
+      else              SBAddS(&builder, "  command = $ar /nologo /OUT:$out $in\n");
+    }
+
+    SBAddS(&builder, "  description = Archiving $out\n\n");
   }
 
   { // Compile command
     SBAddS(&builder, "rule compile\n"
                      "  command = $cc");
+    if (isMSVC(t))                       SBAddS(&builder, " /nologo /showIncludes");
     // INFO: static libs are always PIC to be able to link with shared libs
     if (!isWindows(t))                   SBAddS(&builder, " -fPIC");
     if (static_lib->flags.length > 0)    SBAddS(&builder, " $flags");
     if (static_lib->includes.length > 0) SBAddS(&builder, " $includes");
 
-    if (!isGCC(t) && !isClang(t))
-      SBAddS(&builder, " -c $cwd/$in -o $out\n");
-    else {
-      SBAddS(&builder, " -c $cwd/$in -o $out -MMD -MF $depfile\n");
+    if (isMSVC(t)) {
+      SBAddS(&builder, " /c \"$cwd/$in\" /Fo$out\n");
+      SBAddS(&builder, "  deps = msvc\n");
+    } else if (isGCC(t) || isClang(t)) {
+      SBAddS(&builder, " -c \"$cwd/$in\" -o $out -MMD -MF $depfile\n");
       SBAddS(&builder, "  depfile = $depfile\n");
       SBAddS(&builder, "  deps = gcc\n"); // INFO: clang replicates this
+    } else {
+      SBAddS(&builder, " -c \"$cwd/$in\" -o $out\n");
     }
     SBAddS(&builder, "  description = Building C object ./$in\n\n");
   }
@@ -763,7 +867,7 @@ static void mate_install_static_lib(StaticLib *static_lib) {
 
       SBAddF(&builder, "build $builddir/%S: compile %S\n", output_file, source_file);
 
-      if (t.compilerFamily == GCC || t.compilerFamily == CLANG) {
+      if (isGCC(t) || isClang(t)) {
         String dep_file = StrNewSize(mate_state.arena, output_file.data, output_file.length);
         dep_file.data[dep_file.length - 1] = 'd';
         SBAddF(&builder, "  depfile = $builddir/%S\n", dep_file);
@@ -815,7 +919,9 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
     if (shared_lib->linkerFlags.length > 0) SBAddF(&builder, "linker_flags = %S\n", shared_lib->linkerFlags);
     if (shared_lib->flags.length > 0)       SBAddF(&builder, "flags = %S\n", shared_lib->flags);
     if (shared_lib->includes.length > 0)    SBAddF(&builder, "includes = %S\n", shared_lib->includes);
+    if (shared_lib->libPaths.length > 0)    SBAddF(&builder, "lib_paths = %S\n", shared_lib->libPaths);
     if (shared_lib->libs.length > 0)        SBAddF(&builder, "libs = %S\n", shared_lib->libs);
+    if (shared_lib->frameworks.length > 0)  SBAddF(&builder, "frameworks = %S\n", shared_lib->frameworks);
 
     SBAddF(&builder, "cwd = %S\n", NormPathNinja(mate_state.cwd));
     SBAddF(&builder, "builddir = %S\n", NormPathNinja(mate_state.build_directory));
@@ -825,18 +931,32 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
   { // Link command
     SBAddS(&builder, "rule link\n"
                      "  command = $cc");
-    if (!isMacOS(t)) SBAddS(&builder, " -shared");
-    else             SBAddS(&builder, " -dynamiclib");
+    if (isMSVC(t))       SBAddS(&builder, " /nologo /LD");
+    else if (isMacOS(t)) SBAddS(&builder, " -dynamiclib");
+    else                 SBAddS(&builder, " -shared");
 
     if (isMacOS(t))         SBAddF(&builder, " -install_name @rpath/%S", shared_lib->output);
     else if (!isWindows(t)) SBAddF(&builder, " '-Wl,-soname,%S'", shared_lib->output);
 
-    if (shared_lib->flags.length > 0)       SBAddS(&builder, " $flags");
-    if (shared_lib->linkerFlags.length > 0) SBAddS(&builder, " $linker_flags");
+    if (shared_lib->flags.length > 0) SBAddS(&builder, " $flags");
 
-    SBAddS(&builder, " -o $out $in");
+    if (isMSVC(t)) {
+      SBAddS(&builder, " /Fe:$out $in");
+      if (shared_lib->libs.length > 0) SBAddS(&builder, " $libs");
 
-    if (shared_lib->libs.length > 0) SBAddS(&builder, " $libs");
+      bool has_link_opts = shared_lib->libPaths.length > 0 || shared_lib->linkerFlags.length > 0 || shared_lib->debug;
+      if (has_link_opts)                      SBAddS(&builder, " /link");
+      if (shared_lib->debug)                  SBAddS(&builder, " /DEBUG");
+      if (shared_lib->libPaths.length > 0)    SBAddS(&builder, " $lib_paths");
+      if (shared_lib->linkerFlags.length > 0) SBAddS(&builder, " $linker_flags");
+    } else {
+      if (shared_lib->linkerFlags.length > 0) SBAddS(&builder, " $linker_flags");
+      SBAddS(&builder, " -o $out $in");
+      if (shared_lib->libPaths.length > 0)    SBAddS(&builder, " $lib_paths");
+      if (shared_lib->libs.length > 0)        SBAddS(&builder, " $libs");
+      if (shared_lib->frameworks.length > 0)  SBAddS(&builder, " $frameworks");
+    }
+
     SBAddS(&builder, "\n");
     SBAddS(&builder, "  description = Linking C shared library $target\n\n");
   }
@@ -844,16 +964,20 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
   { // Compile command
     SBAddS(&builder, "rule compile\n"
                      "  command = $cc");
+    if (isMSVC(t))                       SBAddS(&builder, " /nologo /showIncludes");
     if (!isWindows(t))                   SBAddS(&builder, " -fPIC");
     if (shared_lib->flags.length > 0)    SBAddS(&builder, " $flags");
     if (shared_lib->includes.length > 0) SBAddS(&builder, " $includes");
 
-    if (t.compilerFamily != GCC && t.compilerFamily != CLANG)
-      SBAddS(&builder, " -c $cwd/$in -o $out\n");
-    else {
-      SBAddS(&builder, " -c $cwd/$in -o $out -MMD -MF $depfile\n");
+    if (isMSVC(t)) {
+      SBAddS(&builder, " /c \"$cwd/$in\" /Fo$out\n");
+      SBAddS(&builder, "  deps = msvc\n");
+    } else if (isGCC(t) || isClang(t)) {
+      SBAddS(&builder, " -c \"$cwd/$in\" -o $out -MMD -MF $depfile\n");
       SBAddS(&builder, "  depfile = $depfile\n");
       SBAddS(&builder, "  deps = gcc\n"); // INFO: clang replicates this
+    } else {
+      SBAddS(&builder, " -c \"$cwd/$in\" -o $out\n");
     }
     SBAddS(&builder, "  description = Building C object ./$in\n\n");
   }
@@ -868,7 +992,7 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
       String source_file = NormPathStart(curr_source);
       SBAddF(&builder, "build $builddir/%S: compile %S\n", output_file, source_file);
 
-      if (t.compilerFamily == GCC || t.compilerFamily == CLANG) {
+      if (isGCC(t) || isClang(t)) {
         String dep_file = StrNewSize(mate_state.arena, output_file.data, output_file.length);
         dep_file.data[dep_file.length - 1] = 'd';
         SBAddF(&builder, "  depfile = $builddir/%S\n", dep_file);
@@ -879,12 +1003,23 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
       else          SBAddF(&output_builder, " $builddir/%S", output_file);
     }
 
-    SBAddF(&builder, "build $target: link %S", output_builder.buffer);
+    if (isMSVC(t)) {
+      String stem = PathStem(shared_lib->output);
+      SBAddF(&builder, "build $target | $builddir/%S.lib $builddir/%S.exp: link %S", stem, stem, output_builder.buffer);
+    } else {
+      SBAddF(&builder, "build $target: link %S", output_builder.buffer);
+    }
+
     for (size_t i = 0; i < shared_lib->staticLibOutputs.length; i++) {
       SBAddF(&builder, " $builddir/%S", shared_lib->staticLibOutputs.data[i]);
     }
     for (size_t i = 0; i < shared_lib->sharedLibOutputs.length; i++) {
-      SBAddF(&builder, " $builddir/%S", shared_lib->sharedLibOutputs.data[i]);
+      String dep = shared_lib->sharedLibOutputs.data[i];
+      if (isMSVC(t)) {
+        String stem = PathStem(dep);
+        dep = StrConcat(mate_state.arena, stem, S(".lib"));
+      }
+      SBAddF(&builder, " $builddir/%S", dep);
     }
     SBAddS(&builder, "\n\n");
   }
@@ -952,72 +1087,29 @@ static void mate_link_shared_lib(StringVector *shared_lib_outputs, SharedLib *sh
   VecPush(*shared_lib_outputs, shared_lib->output);
 }
 
-static void mate_add_library_paths(Target t, String *targetLibs, char **libs, size_t libs_size) {
-  StringBuilder builder = SBCreate(mate_state.arena);
-
-  if (t.compilerFamily == MSVC && targetLibs->length == 0) {
-    SBAddS(&builder, "/link");
-  }
-
-  if (targetLibs->length) {
-    SBAdd(&builder, *targetLibs);
-  }
-
-  if (t.compilerFamily == MSVC) {
-    // MSVC format: /LIBPATH:"path"
-    for (size_t i = 0; i < libs_size; i++) {
-      char *curr_lib = libs[i];
-      SBAddF(&builder, " /LIBPATH:\"%s\"", curr_lib);
-    }
-  } else {
-    // GCC/Clang format: -L"path"
-    for (size_t i = 0; i < libs_size; i++) {
-      char *curr_lib = libs[i];
-      if (builder.buffer.length == 0) {
-        SBAddF(&builder, "-L\"%s\"", curr_lib);
-        continue;
-      }
-      SBAddF(&builder, " -L\"%s\"", curr_lib);
-    }
-  }
-
-  *targetLibs = builder.buffer;
-}
-
 static void mate_link_system_libraries(Target t, String *targetLibs, char **libs, size_t libs_size) {
   StringBuilder builder = SBCreate(mate_state.arena);
+  if (targetLibs->length) SBAdd(&builder, *targetLibs);
 
-  if (t.compilerFamily == MSVC && targetLibs->length == 0) {
-    SBAddS(&builder, "/link");
-  }
-
-  if (targetLibs->length) {
-    SBAdd(&builder, *targetLibs);
-  }
-
-  if (t.compilerFamily == MSVC) {
+  if (isMSVC(t)) {
     // MSVC format: library.lib
     for (size_t i = 0; i < libs_size; i++) {
-      char *curr_lib = libs[i];
-      SBAddF(&builder, " %s.lib", curr_lib);
+      if (builder.buffer.length == 0) SBAddF(&builder, "%s.lib", libs[i]);
+      else                            SBAddF(&builder, " %s.lib", libs[i]);
     }
   } else {
     // GCC/Clang format: -llib
     for (size_t i = 0; i < libs_size; i++) {
-      char *curr_lib = libs[i];
-      if (builder.buffer.length == 0) {
-        SBAddF(&builder, "-l%s", curr_lib);
-        continue;
-      }
-      SBAddF(&builder, " -l%s", curr_lib);
+      if (builder.buffer.length == 0) SBAddF(&builder, "-l%s", libs[i]);
+      else                            SBAddF(&builder, " -l%s", libs[i]);
     }
   }
 
   *targetLibs = builder.buffer;
 }
 
-static void mate_link_frameworks_with_options(Target t, String *targetLibs, LinkFrameworkOptions options, char **frameworks, size_t frameworks_size) {
-  Assert(t.compilerFamily == CLANG, "LinkFrameworks: This function is only supported for Clang.");
+static void mate_link_frameworks_with_options(Target t, String *targetFrameworks, LinkFrameworkOptions options, char **frameworks, size_t frameworks_size) {
+  Assert(isClang(t), "LinkFrameworks: This function is only supported for Clang.");
 
   char *framework_flag = NULL;
   switch (options) {
@@ -1035,25 +1127,39 @@ static void mate_link_frameworks_with_options(Target t, String *targetLibs, Link
   }
 
   StringBuilder builder = SBCreate(mate_state.arena);
-
-  if (targetLibs->length) {
-    SBAdd(&builder, *targetLibs);
-  }
+  if (targetFrameworks->length) SBAdd(&builder, *targetFrameworks);
 
   for (size_t i = 0; i < frameworks_size; i++) {
-    char *curr_framework = frameworks[i];
-    if (builder.buffer.length == 0) {
-      SBAddF(&builder, "%s %s", framework_flag, curr_framework);
-      continue;
-    }
-    SBAddF(&builder, " %s %s", framework_flag, curr_framework);
+    if (builder.buffer.length == 0) SBAddF(&builder, "%s %s", framework_flag, frameworks[i]);
+    else                            SBAddF(&builder, " %s %s", framework_flag, frameworks[i]);
   }
 
-  *targetLibs = builder.buffer;
+  *targetFrameworks = builder.buffer;
 }
 
-static void mate_link_frameworks(Target t, String *targetLibs, char **frameworks, size_t frameworks_size) {
-  mate_link_frameworks_with_options(t, targetLibs, NONE, frameworks, frameworks_size);
+static void mate_link_frameworks(Target t, String *targetFrameworks, char **frameworks, size_t frameworks_size) {
+  mate_link_frameworks_with_options(t, targetFrameworks, NONE, frameworks, frameworks_size);
+}
+
+static void mate_add_library_paths(Target t, String *targetLibPaths, char **libs, size_t libs_size) {
+  StringBuilder builder = SBCreate(mate_state.arena);
+  if (targetLibPaths->length) SBAdd(&builder, *targetLibPaths);
+
+  if (isMSVC(t)) {
+    // MSVC format: /LIBPATH:"path"
+    for (size_t i = 0; i < libs_size; i++) {
+      if (builder.buffer.length == 0) SBAddF(&builder, "/LIBPATH:\"%s\"", libs[i]);
+      else                            SBAddF(&builder, " /LIBPATH:\"%s\"", libs[i]);
+    }
+  } else {
+    // GCC/Clang format: -L"path"
+    for (size_t i = 0; i < libs_size; i++) {
+      if (builder.buffer.length == 0) SBAddF(&builder, "-L\"%s\"", libs[i]);
+      else                            SBAddF(&builder, " -L\"%s\"", libs[i]);
+    }
+  }
+
+  *targetLibPaths = builder.buffer;
 }
 
 static void mate_add_include_paths(Target t, String *target_includes, char **includes, size_t includes_size) {
@@ -1063,7 +1169,7 @@ static void mate_add_include_paths(Target t, String *target_includes, char **inc
     SBAdd(&builder, *target_includes);
   }
 
-  if (t.compilerFamily == MSVC) {
+  if (isMSVC(t)) {
     // MSVC format: /I"path"
     for (size_t i = 0; i < includes_size; i++) {
       char *curr_include = includes[i];
@@ -1089,7 +1195,7 @@ static void mate_add_include_paths(Target t, String *target_includes, char **inc
 }
 
 static void mate_add_framework_paths(Target t, String *target_includes, char **frameworks, size_t frameworks_size) {
-  Assert(t.compilerFamily == GCC || t.compilerFamily == CLANG, "AddFrameworkPaths: This function is only supported for GCC/Clang.");
+  Assert(isGCC(t) || isClang(t), "AddFrameworkPaths: This function is only supported for GCC/Clang.");
 
   StringBuilder builder = SBCreate(mate_state.arena);
 
@@ -1126,8 +1232,12 @@ FlagBuilder FlagBuilderReserve(size_t count) {
 
 static void mate_flag_builder_add_string(Target t, FlagBuilder *builder, char *flag) {
   bool is_empty = builder->buffer.length == 0;
-  if (t.compilerFamily == MSVC) {
+  if (isMSVC(t)) {
     Assert(flag[0] != '/', "FlagBuilderAdd: flag should not contain '/'. Your flag:\n%s \n\ne.g usage FlagBuilderAdd(\"W4\")", flag);
+    Assert(!(strcmp(flag, "Zi") == 0 || strcmp(flag, "ZI") == 0),
+               "FlagBuilderAdd: /Zi and /ZI break parallel builds (all compiles contend on one vcNNN.pdb).\n"
+               "Use \"Z7\" instead: debug info is embedded per-object and collected into a PDB at link time.\n"
+               "If you truly need /Zi, add /FS as well and pass both via raw ExecutableOptions.flags.");
     SBAdd(builder, is_empty ? S("/") : S(" /"));
   } else {
     Assert(flag[0] != '-', "FlagBuilderAdd: flag should not contain '-'. Your flag:\n%s \n\ne.g usage FlagBuilderAdd(\"Wall\")", flag);
@@ -1279,7 +1389,7 @@ String NormPathNinja(String str) {
 }
 
 String NormPathOutput(Target t, String str) {
-  String ext = t.compilerFamily == MSVC ? S(".obj") : S(".o");
+  String ext = isMSVC(t) ? S(".obj") : S(".o");
   String stem = PathStem(str);
   Assert(stem.length > 0, "NormPathOutput: failed to get stem from %s", str.data);
   return StrConcat(mate_state.arena, stem, ext);
@@ -1323,16 +1433,16 @@ char *GetAr(Target t) {
 
   Target host = HostTarget();
   if (t.arch == host.arch && t.os == host.os) {
-    if (t.compilerFamily == MSVC) {
+    if (isMSVC(t)) {
       return "lib.exe";
     }
-    if (t.compilerFamily == CLANG && mate_program_exists("llvm-ar")) {
+    if (isClang(t) && mate_program_exists("llvm-ar")) {
       return "llvm-ar";
     }
     return "ar";
   }
 
-  if (t.compilerFamily == CLANG && mate_program_exists("llvm-ar")) {
+  if (isClang(t) && mate_program_exists("llvm-ar")) {
     LogWarn("GetAr: cross target detected, using \"llvm-ar\", if this is wrong set it yourself with:\n"
             "\n"
             "(Target){.ar = \"<your-ar>\"}\n");

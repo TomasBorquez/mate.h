@@ -78,7 +78,7 @@ jobs:
         @echo off
         setlocal enabledelayedexpansion
 
-        set tests=01-basic-build 02-custom-config 03-generic-flags 04-raylib-build
+        set tests=01-basic-build 02-custom-config 03-generic-flags 04-raylib-build 07-raylib-source-code 08-custom-compiler 09-shared-lib
 
         for %%t in (%tests%) do (
           echo Running test %%t with MSVC...

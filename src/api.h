@@ -87,9 +87,12 @@ typedef struct {
 /* optional: */
   Target target;
   char *flags;
-  char *libs;
-  char *includes;
   char *linkerFlags;
+
+  char *libPaths;   // -L"..." | /LIBPATH:"..."
+  char *libs;       // -lfoo   | foo.lib
+  char *includes;   // -I"..." | /I"path"
+  char *frameworks; // -framework Foo (clang only)
 
   FlagWarnings warnings;
   FlagDebug debug;
@@ -106,7 +109,6 @@ typedef struct {
 /* optional: */
   Target target;
   char *flags;
-  char *libs;
   char *includes;
   char *arFlags;
 
@@ -125,9 +127,12 @@ typedef struct {
 /* optional: */
   Target target;
   char *flags;
-  char *libs;
-  char *includes;
   char *linkerFlags;
+
+  char *libPaths;   // -L"..." | /LIBPATH:"..."
+  char *libs;       // -lfoo   | foo.lib
+  char *includes;   // -I"..." | /I"path"
+  char *frameworks; // -framework Foo (clang only)
 
   FlagWarnings warnings;
   FlagDebug debug;
@@ -175,11 +180,15 @@ typedef struct {
 
   Target target;
   String flags;
-  String libs;
-  String includes;
   String linkerFlags;
 
+  String libPaths;
+  String libs;
+  String includes;
+  String frameworks;
+
   bool installed;
+  bool debug;
 
   StringVector sources;
   StringVector staticLibOutputs;
@@ -193,9 +202,8 @@ typedef struct {
 
   Target target;
   String flags;
-  String libs;
-  String includes;
   String arFlags;
+  String includes;
 
   bool installed;
 
@@ -209,11 +217,15 @@ typedef struct {
 
   Target target;
   String flags;
-  String libs;
-  String includes;
   String linkerFlags;
 
+  String libPaths;
+  String libs;
+  String includes;
+  String frameworks;
+
   bool installed;
+  bool debug;
 
   StringVector sources;
   StringVector staticLibOutputs;
@@ -252,33 +264,33 @@ typedef enum { COMPILE_COMMANDS_SUCCESS = 0, COMPILE_COMMANDS_FAILED_OPEN_FILE =
 #define CreateCompileCommands(_target) mate_create_compile_commands((_target).ninjaBuildPath);
 static WARN_UNUSED CreateCompileCommandsError mate_create_compile_commands(String ninja_build_path);
 
-#define AddLibraryPaths(_target, ...)                                                \
-  do {                                                                              \
-    char *_libs[] = {__VA_ARGS__};                                                  \
-    mate_add_library_paths((_target).target, &(_target).libs, _libs, ARR_LEN(_libs)); \
-  } while (0)
-static void mate_add_library_paths(Target t, String *targetLibs, char **libs, size_t libs_size);
-
-#define LinkSystemLibraries(_target, ...)                                                \
-  do {                                                                                  \
-    char *_libs[] = {__VA_ARGS__};                                                      \
+#define LinkSystemLibraries(_target, ...)                                                 \
+  do {                                                                                    \
+    char *_libs[] = {__VA_ARGS__};                                                        \
     mate_link_system_libraries((_target).target, &(_target).libs, _libs, ARR_LEN(_libs)); \
   } while (0)
 static void mate_link_system_libraries(Target t, String *targetLibs, char **libs, size_t libs_size);
 
-#define LinkFrameworks(_target, ...)                                                           \
-  do {                                                                                        \
-    char *_frameworks[] = {__VA_ARGS__};                                                      \
-    mate_link_frameworks((_target).target, &(_target).libs, _frameworks, ARR_LEN(_frameworks)); \
+#define LinkFrameworks(_target, ...)                                                                  \
+  do {                                                                                                \
+    char *_frameworks[] = {__VA_ARGS__};                                                              \
+    mate_link_frameworks((_target).target, &(_target).frameworks, _frameworks, ARR_LEN(_frameworks)); \
   } while (0)
-static void mate_link_frameworks(Target t, String *targetLibs, char **frameworks, size_t frameworks_size);
+static void mate_link_frameworks(Target t, String *targetFrameworks, char **frameworks, size_t frameworks_size);
 
 #define LinkFrameworksWithOptions(_target, _options, ...)                                                             \
   do {                                                                                                              \
     char *_frameworks[] = {__VA_ARGS__};                                                                            \
-    mate_link_frameworks_with_options((_target).target, &(_target).libs, _options, _frameworks, ARR_LEN(_frameworks)); \
+    mate_link_frameworks_with_options((_target).target, &(_target).frameworks, _options, _frameworks, ARR_LEN(_frameworks)); \
   } while (0)
-static void mate_link_frameworks_with_options(Target t, String *targetLibs, LinkFrameworkOptions options, char **frameworks, size_t frameworks_size);
+static void mate_link_frameworks_with_options(Target t, String *targetFrameworks, LinkFrameworkOptions options, char **frameworks, size_t frameworks_size);
+
+#define AddLibraryPaths(_target, ...)                                                     \
+  do {                                                                                    \
+    char *_libs[] = {__VA_ARGS__};                                                        \
+    mate_add_library_paths((_target).target, &(_target).libPaths, _libs, ARR_LEN(_libs)); \
+  } while (0)
+static void mate_add_library_paths(Target t, String *libPaths, char **libs, size_t libs_size);
 
 #define AddIncludePaths(_target, ...)                                                            \
   do {                                                                                          \

@@ -4,13 +4,21 @@
 static char *GetCFlags(Target t) {
   FlagBuilder fb = FlagBuilderCreate();
 
-  // NOTE: Default Raylib Flags
-  FlagBuilderAdd(t, &fb,
-                 "std=c99",
-                 "D_GNU_SOURCE",
-                 "DGL_SILENCE_DEPRECATION=199309L",
-                 "fno-sanitize=undefined" // https://github.com/raysan5/raylib/issues/3674
-  );
+  // NOTE: Default Raylib MSVC flags
+  if (isMSVC(t)) {
+    FlagBuilderAdd(t, &fb,
+                   "D_CRT_SECURE_NO_WARNINGS",
+                   "D_CRT_SECURE_NO_DEPRECATE",
+                   "D_CRT_NONSTDC_NO_DEPRECATE",
+                   "DGRAPHICS_API_OPENGL_33");
+  } else {
+    FlagBuilderAdd(t, &fb,
+                   "std=c99",
+                   "D_GNU_SOURCE",
+                   "D_POSIX_C_SOURCE=199309L",
+                   "fno-sanitize=undefined" // https://github.com/raysan5/raylib/issues/3674
+    );
+  }
 
   if (isLinux(t)) {
     FlagBuilderAdd(t, &fb, "DPLATFORM_DESKTOP_GLFW", "D_GLFW_X11");
@@ -23,7 +31,7 @@ static char *GetCFlags(Target t) {
   }
 
   if (isMacOS(t)) {
-    FlagBuilderAdd(t, &fb, "DPLATFORM_DESKTOP_GLFW", "D_GL_SILENCE_DEPRECATION=1");
+    FlagBuilderAdd(t, &fb, "DPLATFORM_DESKTOP_GLFW", "DGL_SILENCE_DEPRECATION");
     // Required due to raylib's use of Objective-C types on macOS.
     FlagBuilderAdd(t, &fb, "x objective-c");
   }
@@ -56,24 +64,6 @@ int main(void) {
     AddIncludePaths(staticLib, "./src/platforms");
     AddIncludePaths(staticLib, "./src/external/glfw/include");
 
-    if (isLinux(t)) {
-      LinkSystemLibraries(staticLib, "GL", "rt", "dl", "m", "X11", "Xcursor", "Xext", "Xfixes", "Xi", "Xinerama", "Xrandr", "Xrender");
-    }
-    if (isFreeBSD(t)) {
-      // Link regular system libraries.
-      AddLibraryPaths(staticLib, "/usr/local/lib");
-      LinkSystemLibraries(staticLib, "GL", "rt", "dl", "m", "X11", "Xcursor", "Xext", "Xfixes", "Xi", "Xinerama", "Xrandr", "Xrender");
-    }
-    if (isMacOS(t)) {
-      // Link regular system libraries.
-      LinkSystemLibraries(staticLib, "m");
-      // Link macOS system frameworks.
-      LinkFrameworks(staticLib, "Foundation", "AppKit", "IOKit", "OpenGL", "CoreVideo");
-    }
-    if (isWindows(t)) {
-      LinkSystemLibraries(staticLib, "winmm", "gdi32", "opengl32");
-    }
-
     InstallStaticLib(staticLib);
 
     // executable:
@@ -103,7 +93,7 @@ int main(void) {
       LinkFrameworks(executable, "CoreVideo", "IOKit", "Cocoa", "GLUT", "OpenGL");
     }
     if (isWindows(t)) {
-      LinkSystemLibraries(executable, "winmm", "gdi32", "opengl32");
+      LinkSystemLibraries(executable, "winmm", "gdi32", "opengl32", "user32", "shell32");
     }
 
     InstallExecutable(executable);
