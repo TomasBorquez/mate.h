@@ -8,30 +8,14 @@
 */
 #pragma once
 
-#ifdef MATE_IMPLEMENTATION
+#if defined(MATE_IMPLEMENTATION)
 #  define BASE_IMPLEMENTATION
 #endif
 
 #include "../vendor/base/base.h"
 
-// --- MATE.H START ---
-/* MIT License
-   mate.h - Mate Definitions start here
-   Guide on the `README.md`
-*/
-
-/* --- Type Definitions --- */
-typedef enum {
-  ARCH_X64 = 1,
-  ARCH_X86,
-  ARCH_ARM64,
-  ARCH_ARM32,
-  ARCH_RISCV64,
-  ARCH_PPC64,
-  ARCH_S390X,
-  ARCH_WASM32,
-} Arch;
-
+/*}}} --- MATE.H START --- {{{*/
+/*    --- Type Definitions --- {{{   */
 typedef struct {
   OS os;
   Arch arch;
@@ -236,7 +220,7 @@ typedef enum { NONE = 0, NEEDED, WEAK } LinkFrameworkOptions;
 
 typedef StringBuilder FlagBuilder;
 
-/* --- Build System --- */
+/*   }}} --- Build System Definitions --- {{{   */
 void CreateConfig(MateOptions options);
 
 void StartBuild(void);
@@ -317,7 +301,7 @@ static void mate_add_files(StringVector *sources, char **source, size_t size);
 #define RemoveFile(_target, _source) mate_remove_file(&(_target).sources, s(_source));
 static bool mate_remove_file(StringVector *sources, String source);
 
-/* --- Flag Builder --- */
+/*   }}} --- Flag Builder Definitions --- {{{   */
 StringBuilder FlagBuilderCreate(void);
 FlagBuilder FlagBuilderReserve(size_t count);
 
@@ -325,7 +309,7 @@ FlagBuilder FlagBuilderReserve(size_t count);
 static void mate_flag_builder_add_string(Target t, FlagBuilder *builder, char *flag);
 static void mate_flag_builder_add_list(Target t, FlagBuilder *fb, char **flags);
 
-/* --- Path Utils --- */
+/*   }}} --- Path Utils Definitions --- {{{   */
 static String mate_path_with_platform_ext(Target t, Arena *arena, String path, String unix_ext, String win_ext, String macos_ext);
 
 String PathJoin(String base, String tail);
@@ -345,12 +329,11 @@ String AbsoluteNormPath(String str);
 String AbsoluteNormPathExe(Target t, String str);
 String AbsoluteNormPathStaticLib(Target t, String str);
 
-/* --- Utils --- */
+/*   }}} --- Utils Definitions --- {{{   */
 WARN_UNUSED errno_t RunCommand(String command);
 #define RunCommandF(_format, ...) RunCommand(F(mate_state.arena, _format, __VA_ARGS__))
 
 char *GetAr(Target t);
-char *GetScriptCompiler(void);
 
 Target HostTarget(void);
 Target CreateTarget(Target t);
@@ -371,4 +354,4 @@ bool isMSVC(Target t);
 
 #define SAMURAI_AMALGAM "SAMURAI SOURCE"
 
-// --- MATE.H END ---
+/*}}} --- MATE.H END --- {{{*/

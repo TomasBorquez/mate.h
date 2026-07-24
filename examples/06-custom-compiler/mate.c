@@ -12,7 +12,7 @@ int main(void) {
         .flags = "-Wall",
         .target = {
           .compiler = "g++",    // set target
-          .compilerFamily = GCC // set compiler family
+          .compilerFamily = COMPILER_GCC // set compiler family
         }
     });
 

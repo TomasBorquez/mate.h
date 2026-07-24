@@ -2,7 +2,7 @@
 
 static MateConfig mate_state = {0};
 
-/* --- Build System Implementation --- */
+/*   --- Build System Implementations --- {{{   */
 static void mate_set_default_state(void) {
   {
     mate_state.arena = ArenaCreate(20000 * sizeof(String));
@@ -47,11 +47,11 @@ static void mate_read_cache(void) {
     mate_state.mate_cache.first_build = true;
     mate_state.mate_cache.last_build = TimeNow() / 1000;
 
-    String modify_time = F(mate_state.arena, FMT_I64, mate_state.mate_cache.last_build);
+    String modify_time = F(mate_state.arena, I64, mate_state.mate_cache.last_build);
     IniSet(&mate_state.cache, S("modify-time"), modify_time);
   }
 
-#if defined(PLATFORM_WIN)
+#if defined(BASE_PLATFORM_WIN)
   if (mate_state.mate_cache.first_build) {
     errno_t ninjaCheck = RunCommand(S("ninja --version > nul 2> nul"));
     Assert(ninjaCheck == SUCCESS, "MateReadCache: Ninja build system not found. Please install Ninja and add it to your PATH.");
@@ -92,7 +92,7 @@ static bool mate_need_rebuild(void) {
   }
 
   String mate_cache_path = PathJoin(mate_state.build_directory, S("mate-cache.ini"));
-  String modify_time = F(mate_state.arena, FMT_I64, stats.modifyTime);
+  String modify_time = F(mate_state.arena, I64, stats.modifyTime);
   IniSet(&mate_state.cache, S("modify-time"), modify_time);
 
   Error write_error = IniWrite(mate_cache_path, &mate_state.cache);
@@ -172,7 +172,7 @@ static void mate_apply_warning_flags(Target t, FlagBuilder *fb, FlagWarnings w) 
       [FLAG_WARNINGS] = {"W4", NULL},
       [FLAG_WARNINGS_VERBOSE] = {"Wall", NULL},
   };
-  mate_flag_builder_add_list(t, fb, c == MSVC ? msvc[w] : general[w]);
+  mate_flag_builder_add_list(t, fb, c == COMPILER_MSVC ? msvc[w] : general[w]);
 }
 
 static void mate_apply_debug_flags(Target t, FlagBuilder *fb, FlagDebug d) {
@@ -188,7 +188,7 @@ static void mate_apply_debug_flags(Target t, FlagBuilder *fb, FlagDebug d) {
       [FLAG_DEBUG_MEDIUM] =  {"Z7", NULL},
       [FLAG_DEBUG] =         {"Z7", NULL},
   };
-  mate_flag_builder_add_list(t, fb, c == MSVC ? msvc[d] : general[d]);
+  mate_flag_builder_add_list(t, fb, c == COMPILER_MSVC ? msvc[d] : general[d]);
 }
 
 static void mate_apply_optimization_flags(Target t, FlagBuilder *fb, FlagOptimization o) {
@@ -208,7 +208,7 @@ static void mate_apply_optimization_flags(Target t, FlagBuilder *fb, FlagOptimiz
       [FLAG_OPTIMIZATION_SIZE] = {"O1", NULL},
       [FLAG_OPTIMIZATION_AGGRESSIVE] = {"Ox", NULL},
   };
-  mate_flag_builder_add_list(t, fb, c == MSVC ? msvc[o] : general[o]);
+  mate_flag_builder_add_list(t, fb, c == COMPILER_MSVC ? msvc[o] : general[o]);
 }
 
 static void mate_apply_std_flags(Target t, FlagBuilder *fb, FlagSTD std) {
@@ -228,7 +228,7 @@ static void mate_apply_std_flags(Target t, FlagBuilder *fb, FlagSTD std) {
       [FLAG_STD_C23] = {"std:clatest", NULL},
       [FLAG_STD_C2X] = {"std:clatest", NULL},
   };
-  mate_flag_builder_add_list(t, fb, c == MSVC ? msvc[std] : general[std]);
+  mate_flag_builder_add_list(t, fb, c == COMPILER_MSVC ? msvc[std] : general[std]);
 }
 
 static void mate_apply_sanitizer_flags(Target t, FlagBuilder *fb, FlagSanitizer s) {
@@ -245,7 +245,7 @@ static void mate_apply_sanitizer_flags(Target t, FlagBuilder *fb, FlagSanitizer 
       [FLAG_SANITIZER_UB] = {NULL},
       [FLAG_SANITIZER] = {"fsanitize=address", NULL},
   };
-  mate_flag_builder_add_list(t, fb, c == MSVC ? msvc[s] : general[s]);
+  mate_flag_builder_add_list(t, fb, c == COMPILER_MSVC ? msvc[s] : general[s]);
 }
 
 static void mate_apply_error_flags(Target t, FlagBuilder *fb, FlagErrorFormat e) {
@@ -263,7 +263,7 @@ static void mate_apply_error_flags(Target t, FlagBuilder *fb, FlagErrorFormat e)
       [FLAG_ERROR] = {"nologo", NULL},
       [FLAG_ERROR_MAX] = {"nologo", "diagnostics:caret", NULL},
   };
-  char **row = c == MSVC ? msvc[e] : c == CLANG ? clang[e] : general[e];
+  char **row = c == COMPILER_MSVC ? msvc[e] : c == COMPILER_CLANG ? clang[e] : general[e];
   mate_flag_builder_add_list(t, fb, row);
 }
 
@@ -534,7 +534,7 @@ static CreateCompileCommandsError mate_create_compile_commands(String ninja_buil
   String compile_commands_path = NormPath(PathJoin(mate_state.build_directory, S("compile_commands.json")));
 
   FILE *output_file = NULL;
-#  if defined(PLATFORM_WIN)
+#  if defined(BASE_PLATFORM_WIN)
   errno_t err = fopen_s(&output_file, compile_commands_path.data, "w");
   Assert(err == SUCCESS, "CreateCompileCommands: failed to fopen_s path %s", compile_commands_path.data);
 #  else
@@ -789,7 +789,7 @@ static void mate_install_executable(Executable *executable) {
   }
 
   errno_t run_error = RunCommand(build_command);
-  Assert(run_error == SUCCESS, "InstallExecutable: Ninja file compilation failed with code: " FMT_I32, run_error);
+  Assert(run_error == SUCCESS, "InstallExecutable: Ninja file compilation failed with code: " I32, run_error);
 
   mate_state.total_time = TimeNow() - mate_state.start_time;
   executable->outputPath = PathJoin(mate_state.build_directory, executable->output);
@@ -899,7 +899,7 @@ static void mate_install_static_lib(StaticLib *static_lib) {
   }
 
   errno_t run_error = RunCommand(build_command);
-  Assert(run_error == SUCCESS, "InstallStaticLib: Ninja file compilation failed with code: " FMT_I32, run_error);
+  Assert(run_error == SUCCESS, "InstallStaticLib: Ninja file compilation failed with code: " I32, run_error);
 
   mate_state.total_time = TimeNow() - mate_state.start_time;
   static_lib->outputPath = PathJoin(mate_state.build_directory, static_lib->output);
@@ -1040,7 +1040,7 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
   }
 
   errno_t run_error = RunCommand(build_command);
-  Assert(run_error == SUCCESS, "InstallSharedLib: Ninja file compilation failed with code: " FMT_I32, run_error);
+  Assert(run_error == SUCCESS, "InstallSharedLib: Ninja file compilation failed with code: " I32, run_error);
 
   mate_state.total_time = TimeNow() - mate_state.start_time;
   shared_lib->outputPath = PathJoin(mate_state.build_directory, shared_lib->output);
@@ -1217,11 +1217,11 @@ static void mate_add_framework_paths(Target t, String *target_includes, char **f
 }
 
 void EndBuild(void) {
-  LogInfo("Build took: " FMT_I64 "ms", mate_state.total_time);
+  LogInfo("Build took: " I64 "ms", mate_state.total_time);
   ArenaFree(mate_state.arena);
 }
 
-/* --- Flag Builder Implementation --- */
+/*   }}} --- Flag Builder Implementations --- {{{   */
 FlagBuilder FlagBuilderCreate(void) {
   return SBCreate(mate_state.arena);
 }
@@ -1252,7 +1252,7 @@ static void mate_flag_builder_add_list(Target t, FlagBuilder *fb, char **flags) 
   }
 }
 
-/* --- Path Utils Implementation --- */
+/*   }}} --- Path Utils Implementation --- {{{   */
 static String mate_path_strip_dot_slash(String path) {
   if (path.length >= 2 && path.data[0] == '.' && (path.data[1] == '/' || path.data[1] == '\\')) {
     return (String){ .data = path.data + 2, .length = path.length - 2 };
@@ -1276,7 +1276,7 @@ static String mate_path_strip_ext(String path) {
 }
 
 static String mate_path_fix_slashes(String path) {
-#  if defined(PLATFORM_WIN)
+#  if defined(BASE_PLATFORM_WIN)
   for (size_t i = 0; i < path.length; i++) {
     if (path.data[i] == '/') {
       path.data[i] = '\\';
@@ -1324,7 +1324,7 @@ static String mate_path_with_platform_ext(Target t, Arena *arena, String path, S
 }
 
 String PathJoin(String base, String tail) {
-#if defined(PLATFORM_WIN)
+#if defined(BASE_PLATFORM_WIN)
   return F(mate_state.arena, "%s\\%s", base.data, tail.data);
 #else
   return F(mate_state.arena, "%s/%s", base.data, tail.data);
@@ -1377,7 +1377,7 @@ String NormPathSharedLib(Target t, String str) {
 }
 
 String NormPathNinja(String str) {
-#if defined(PLATFORM_WIN)
+#if defined(BASE_PLATFORM_WIN)
   String copy = StrNewSize(mate_state.arena, str.data, str.length + 1);
   memmove(&copy.data[2], &copy.data[1], str.length - 1);
   copy.data[1] = '$';
@@ -1407,9 +1407,9 @@ String AbsoluteNormPathStaticLib(Target t, String str) {
   return PathJoin(mate_state.cwd, NormPathStaticLib(t, str));
 }
 
-/* --- Utils Implementation --- */
+/*   }}} --- Utils Implementations --- {{{   */
 errno_t RunCommand(String command) {
-#if defined(PLATFORM_LINUX) | defined(PLATFORM_MACOS) | defined(PLATFORM_FREEBSD)
+#if defined(BASE_PLATFORM_LINUX) | defined(BASE_PLATFORM_MACOS) | defined(BASE_PLATFORM_FREEBSD)
   // https://stackoverflow.com/questions/36007390/why-to-shift-bits-8-when-using-perl-system-function-to-execute-command
   return system(command.data) >> 8;
 #else
@@ -1418,7 +1418,7 @@ errno_t RunCommand(String command) {
 }
 
 static bool mate_program_exists(char *program) {
-#if defined(PLATFORM_WIN)
+#if defined(BASE_PLATFORM_WIN)
   String command = F(mate_state.arena, "where %s >nul 2>&1", program);
 #else
   String command = F(mate_state.arena, "command -v %s >/dev/null 2>&1", program);
@@ -1478,67 +1478,13 @@ char *GetAr(Target t) {
   return "ar";
 }
 
-char *GetScriptCompiler(void) {
-  switch (GetCompilerFamily()) {
-  case GCC:
-    return "gcc";
-  case CLANG:
-    return "clang";
-  case TCC:
-    return "tcc";
-  case MSVC:
-    return "cl.exe";
-  default:
-    Unreachable("GetScriptCompiler: should never get here, compiler does not exist");
-    return "";
-  }
-}
-
 Target HostTarget(void) {
-  Target t = {0};
-
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
-  t.os = OS_WINDOWS;
-#else
-#  if defined(__ANDROID__)
-  t.os = OS_ANDROID;
-#  elif defined(__linux__) || defined(__gnu_linux__)
-  t.os = OS_LINUX;
-#  elif defined(__APPLE__) || defined(__MACH__)
-  t.os = OS_MACOS;
-#  elif defined(__FreeBSD__)
-  t.os = OS_FREEBSD;
-#  elif defined(__EMSCRIPTEN__)
-  t.os = OS_EMSCRIPTEN;
-#  else
-#    error "The codebase only supports linux, macos, FreeBSD, windows, android and emscripten"
-#  endif
-#endif
-
-#if defined(__x86_64__) || defined(_M_X64)
-  t.arch = ARCH_X64;
-#elif defined(__aarch64__) || defined(_M_ARM64)
-  t.arch = ARCH_ARM64;
-#elif defined(__i386__) || defined(_M_IX86)
-  t.arch = ARCH_X86;
-#elif defined(__arm__) || defined(_M_ARM)
-  t.arch = ARCH_ARM32;
-#elif defined(__riscv) && (__riscv_xlen == 64)
-  t.arch = ARCH_RISCV64;
-#elif defined(__powerpc64__) || defined(__ppc64__)
-  t.arch = ARCH_PPC64;
-#elif defined(__s390x__)
-  t.arch = ARCH_S390X;
-#elif defined(__wasm32__)
-  t.arch = ARCH_WASM32;
-#else
-#  error "The codebase only supports x64, x86, arm64, arm32, riscv64, ppc64, s390x and wasm32"
-#endif
-
-  t.compiler = GetScriptCompiler();
-  t.compilerFamily = GetCompilerFamily();
-
-  return t;
+  return (Target) {
+    .os             = GetOS(),
+    .arch           = GetArch(),
+    .compiler       = GetCompilerStr(),
+    .compilerFamily = GetCompilerFamily(),
+  };
 }
 
 Target CreateTarget(Target t) {
@@ -1625,17 +1571,17 @@ bool isFreeBSD(Target t) {
 }
 
 bool isGCC(Target t) {
-  return t.compilerFamily == GCC;
+  return t.compilerFamily == COMPILER_GCC;
 }
 
 bool isClang(Target t) {
-  return t.compilerFamily == CLANG;
+  return t.compilerFamily == COMPILER_CLANG;
 }
 
 bool isTCC(Target t) {
-  return t.compilerFamily == TCC;
+  return t.compilerFamily == COMPILER_TCC;
 }
 
 bool isMSVC(Target t) {
-  return t.compilerFamily == MSVC;
+  return t.compilerFamily == COMPILER_MSVC;
 }

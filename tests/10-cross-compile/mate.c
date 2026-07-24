@@ -6,7 +6,7 @@ int main(void) {
       .os = OS_WINDOWS,
       .arch = ARCH_X64,
       .compiler = "x86_64-w64-mingw32-gcc",
-      .compilerFamily = GCC,
+      .compilerFamily = COMPILER_GCC,
   };
 
   StartBuild();

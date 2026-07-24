@@ -22,7 +22,7 @@ WINDOWS_SKIP=(
 
 if [ $# -lt 1 ]; then
   echo "Usage: $0 <compiler> [specific_test]"
-  echo "  compiler: gcc, clang, or tcc"
+  echo "  compiler: gcc, clang, tcc, cl.exe and filc"
   echo "  specific_test: Optional - Run only this test file"
   exit 1
 fi
@@ -76,9 +76,9 @@ for test in "${TESTS[@]}"; do
     done
   fi
 
-  if [[ "$COMPILER" == "tcc" ]]; then
+  if [[ "$COMPILER" == "tcc" || "$COMPILER" == "filc" ]]; then
     if [[ "$test" == "07-raylib-source-code" ]]; then
-      echo "Skipping $test (not supported on TCC)"
+      echo "Skipping $test (not supported on TCC/filc)"
       continue 2
     fi
   fi

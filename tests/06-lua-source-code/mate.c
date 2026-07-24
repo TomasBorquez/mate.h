@@ -26,7 +26,7 @@ int main(void) {
   StartBuild();
   {
     StaticLib staticLib = CreateStaticLib((StaticLibOptions){
-        .output = "liblua",
+        .output = "lua",
         .std = FLAG_STD_C99,
         .warnings = FLAG_WARNINGS_NONE,
         .flags = GetCFlags(t)

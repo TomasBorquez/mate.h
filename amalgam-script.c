@@ -114,13 +114,13 @@ static StringVector str_split_new_line(Arena *arena, String str) {
 }
 
 StringBuilder builder;
-#define SB_STR(str)                                       \
-  do {                                                     \
+#define SB_STR(str)           \
+  do {                        \
     SBAdd(&builder, S(str));  \
     SBAdd(&builder, S("\n")); \
   } while (0)
-#define SB_VAR(var)                                       \
-  do {                                                     \
+#define SB_VAR(var)           \
+  do {                        \
     SBAdd(&builder, var);     \
     SBAdd(&builder, S("\n")); \
   } while (0)
@@ -128,30 +128,32 @@ StringBuilder builder;
 int main(void) {
   reset_amalgam_file();
 
-  FileResult api_header = read_source(S("./src/api.h"));
-  FileResult api_impl = read_source(S("./src/api.c"));
-  FileResult vendor_base = read_source(S("./vendor/base/base.h"));
+  FileResult api_header     = read_source(S("./src/api.h"));
+  FileResult api_impl       = read_source(S("./src/api.c"));
+  FileResult vendor_base    = read_source(S("./vendor/base/base.h"));
   FileResult samurai_source = read_source(S("./vendor/samurai/samurai.c"));
+
+  Assert(vendor_base.stats.size > 0, "amalgam: base.h read empty");
 
   size_t total_size = (api_header.stats.size + api_impl.stats.size + vendor_base.stats.size + samurai_source.stats.size) * 2;
   Arena *arena = ArenaCreate(total_size);
   Arena *builder_arena = ArenaCreate(total_size);
   builder = SBReserve(builder_arena, total_size);
 
-  StringVector api_header_split = str_split_new_line(arena, api_header.buffer);
-  StringVector api_impl_split = str_split_new_line(arena, api_impl.buffer);
-  StringVector vendor_base_split = str_split_new_line(arena, vendor_base.buffer);
+  StringVector api_header_split     = str_split_new_line(arena, api_header.buffer);
+  StringVector api_impl_split       = str_split_new_line(arena, api_impl.buffer);
+  StringVector vendor_base_split    = str_split_new_line(arena, vendor_base.buffer);
   StringVector samurai_source_split = str_split_new_line(arena, samurai_source.buffer);
 
-  String delim_base = S("#include \"../vendor/base/base.h\"");
-  String delim_mate = S("// --- MATE.H END ---");
+  String delim_base    = S("#include \"../vendor/base/base.h\"");
+  String delim_mate    = S("/*}}} --- MATE.H END --- {{{*/");
   String samurai_macro = S("#define SAMURAI_AMALGAM \"SAMURAI SOURCE\"");
   VecForEach(api_header_split, api_header_curr_line) {
     if (StrEq(*api_header_curr_line, delim_base)) {
-      SB_STR("// --- BASE.H START ---");
+      SB_STR("/*}}} --- BASE.H START --- {{{*/");
 
       String pragma_once = S("#pragma once");
-      for (size_t j = 0; j < vendor_base_split.length; j++) {
+      for (size_t j = 13; j < vendor_base_split.length - 1; j++) {
         String curr_line = VecAt(vendor_base_split, j);
         if (StrEq(curr_line, pragma_once)) {
           continue;
@@ -159,16 +161,16 @@ int main(void) {
         SB_VAR(curr_line);
       }
 
-      SB_STR("// --- BASE.H END ---");
+      SB_STR("/*}}} --- BASE.H END --- {{{*/");
       continue;
     }
 
     if (StrEq(*api_header_curr_line, delim_mate)) {
-      String impl_comment = S("/* MIT License\n"
-                                       "   mate.h - Mate Implementations start here\n"
-                                       "   Guide on the `README.md`\n"
-                                       "*/");
-      String mate_impl_start = S("#ifdef MATE_IMPLEMENTATION");
+      String impl_comment = S("/*}}} --- MIT License --- {{{\n"
+                              "  mate.h - Implementation of mate.h\n"
+                              "  https://github.com/TomasBorquez/mate.h\n"
+                              "*/");
+      String mate_impl_start = S("#if defined(MATE_IMPLEMENTATION)");
       SB_VAR(impl_comment);
       SB_VAR(mate_impl_start);
 
@@ -178,13 +180,14 @@ int main(void) {
       }
 
       SB_STR("#endif");
-      SB_STR("// --- MATE.H END ---");
+      SB_STR("/*   }}}   */");
+      SB_STR("/*}}} --- MATE.H END --- {{{*/");
       continue;
     }
 
     if (StrEq(*api_header_curr_line, samurai_macro)) {
       SB_STR("// clang-format off");
-      SB_STR("// --- SAMURAI START ---");
+      SB_STR("/*   }}} --- SAMURAI START --- {{{   */");
       SB_STR("/* This code comes from Samurai (https://github.com/michaelforney/samurai)");
       SB_STR("*  Copyright © 2017-2021 Michael Forney");
       SB_STR("*  Licensed under ISC license, with portions under Apache License 2.0 and MIT licenses.");
@@ -215,7 +218,7 @@ int main(void) {
         SB_VAR(middle_line);
       }
 
-      SB_STR("// --- SAMURAI END ---");
+      SB_STR("/*   }}} --- SAMURAI END ---    */");
       SB_STR("// clang-format on");
       continue;
     }

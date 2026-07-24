@@ -4,20 +4,32 @@
 - [x] Remove all examples and create a blog post and guide page.
 - [x] Test rebuilding scripts (just a second run).
 - [ ] Test that asserts fail
+- [ ] Parallel running tests
 
-#### MSVC Future
+### MSVC Future
 - [ ] Add `msvc_deps_prefix` for MSVC in a different language or VSLANG=1033
 - [ ] On MSVC shared lib build, FileStats the expected .lib and check exports
 - [ ] `/MD` and `/MDd` should be the default flags for shared libs
 
+### GCC Future
+- [ ] `--start-group` and `--end-group` for transitive deps
+- [ ] flags dedupping
+
 ## v0.4
 - [ ] Assertions should follow some structure
+- [ ] Proper definition order in header to source
+- [ ] Minify ninja file
 - [ ] Custom build step
-- [ ] `AddSubproject("./shared/raylib")`
+- [ ] SubProjects:
+    - [ ] Mate cache should save installed targets
+    - [ ] Get transitive dependencies through `mate-cache.ini`
+    - [ ] `AddSubProject("./shared/raylib")` and a `AddSubProjectEx` variant for args?
+    - [ ] `SubProjectGetStaticLib(rl, "raylib");`
+    - [ ] `SubProjectGetSharedLib(rl, "raylib");`
+    - [ ] Private `LinkSystemLibraries` for transitive deps on shared libs
 - [ ] Move to `exec` && `CreateProcess` for executables
 - [ ] `FindSystemPackage(exe, "sdl3")`
 - [ ] `FetchDependency(url, hash)`
-- [ ] Fetch samurai automatically
 - [ ] We should own all `char *` or pointers user gives
 - [ ] Make `samurai` windows compatible
 
@@ -36,10 +48,13 @@
     - [x] Raylib example
     - [x] Replace `/Zi` with `/Z7` and warn
     - [x] Warn on `/Zi` and add `/Debug`
+- [x] Better compiler naming, code nagivation, move arch to base.h
+- [x] On comments add `Implementation/Definition` per feature
 - [ ] Add cross-compile target for clang with `--target=<triple>`
 - [ ] Assert to not link/install/add-files to already installed targets
 - [ ] Build output on folder depending on platform/arch
 - [ ] `RunExec` for running executable
+- [ ] Consistent formatting and line length, add a `.clang-format`
 - [ ] Add `args` parser
 - [ ] base.h - Generic HashMap
 

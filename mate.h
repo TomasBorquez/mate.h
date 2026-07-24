@@ -8,38 +8,149 @@
 */
 #pragma once
 
-#ifdef MATE_IMPLEMENTATION
+#if defined(MATE_IMPLEMENTATION)
 #  define BASE_IMPLEMENTATION
 #endif
 
-// --- BASE.H START ---
-/* MIT License
-
-  base.h - Better cross-platform STD
-  Version - 2026-07-15 (0.2.8):
-  https://github.com/TomasBorquez/base.h
-
-  Usage:
-    #define BASE_IMPLEMENTATION
-    #include "base.h"
-
-  More on the the `README.md`
-*/
-
-/* --- Platform MACROS and includes --- */
-#if defined(__clang__)
-#  define COMPILER_CLANG
-#elif defined(__GNUC__)
-#  define COMPILER_GCC
-#elif defined(_MSC_VER)
-#  define COMPILER_MSVC
-#elif defined(__TINYC__)
-#  define COMPILER_TCC
+/*}}} --- BASE.H START --- {{{*/
+/*    --- Platform MACROS and includes --- {{{   */
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
+#  define BASE_PLATFORM_WIN
+#elif defined(__EMSCRIPTEN__)
+#  define BASE_PLATFORM_EMSCRIPTEN
 #else
-#  error "The codebase only supports GCC, Clang, TCC and MSVC"
+#  define BASE_PLATFORM_UNIX
+#  if defined(__ANDROID__)
+#    define BASE_PLATFORM_ANDROID
+#  elif defined(__linux__) || defined(__gnu_linux__)
+#    define BASE_PLATFORM_LINUX
+#  elif defined(__APPLE__) || defined(__MACH__)
+#    define BASE_PLATFORM_MACOS
+#  elif defined(__FreeBSD__)
+#    define BASE_PLATFORM_FREEBSD
+#  else
+#    error "base.h: Unsupported platform"
+#  endif
 #endif
 
-#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
+#if defined(__x86_64__) || defined(_M_X64)
+#  define BASE_ARCH_X64
+#elif defined(__aarch64__) || defined(_M_ARM64)
+#  define BASE_ARCH_ARM64
+#elif defined(__i386__) || defined(_M_IX86)
+#  define BASE_ARCH_X86
+#elif defined(__arm__) || defined(_M_ARM)
+#  define BASE_ARCH_ARM32
+#elif defined(__riscv) && (__riscv_xlen == 64)
+#  define BASE_ARCH_RISCV64
+#elif defined(__powerpc64__) || defined(__ppc64__)
+#  define BASE_ARCH_PPC64
+#elif defined(__s390x__)
+#  define BASE_ARCH_S390X
+#elif defined(__wasm32__)
+#  define BASE_ARCH_WASM32
+#else
+#  error "base.h: Unsupported arch"
+#endif
+
+#if defined(__clang__)
+#  define BASE_COMPILER_CLANG
+#  if defined(__FILC__)
+#    define BASE_COMPILER_FILC
+#  endif
+#elif defined(__GNUC__)
+#  define BASE_COMPILER_GCC
+#elif defined(_MSC_VER)
+#  define BASE_COMPILER_MSVC
+#elif defined(__TINYC__)
+#  define BASE_COMPILER_TCC
+#else
+#  error "base.h: Unsupported compiler"
+#endif
+
+#if defined(__STDC_VERSION__)
+#  if (__STDC_VERSION__ >= 202311L)
+#    define C_STANDARD_C23
+#    define C_STANDARD "C23"
+#  elif (__STDC_VERSION__ >= 201710L)
+#    define C_STANDARD_C17
+#    define C_STANDARD "C17"
+#  elif (__STDC_VERSION__ >= 201112L)
+#    define C_STANDARD_C11
+#    define C_STANDARD "C11"
+#  elif (__STDC_VERSION__ >= 199901L)
+#    define C_STANDARD_C99
+#    define C_STANDARD "C99"
+#  else
+#    error "base.h: Unsupported C version, C99+"
+#  endif
+#else
+#  if defined(BASE_COMPILER_MSVC)
+#    if defined(_MSC_VER) && _MSC_VER >= 1920 // >= Visual Studio 2019
+#      define C_STANDARD_C17
+#      define C_STANDARD "C17"
+#    else
+#      define C_STANDARD_C11
+#      define C_STANDARD "C11"
+#    endif
+#  endif
+#endif
+
+#if defined(BASE_PLATFORM_WIN)
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
+#  if !defined(ENABLE_VIRTUAL_TERMINAL_PROCESSING) // old SDKs sometimes dont have it
+#    define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
+#  endif
+#  include <BaseTsd.h>
+#else
+#  define _POSIX_C_SOURCE 200809L
+#  define _GNU_SOURCE
+#  include <dirent.h>
+#  include <errno.h>
+#  include <fcntl.h>
+#  include <limits.h>
+#  include <sys/stat.h>
+#  include <sys/types.h>
+#  include <unistd.h>
+#endif
+
+#include <ctype.h>
+#include <inttypes.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+/*   }}} --- Types and MACRO Definitions --- {{{   */
+typedef float float32_t;
+typedef double float64_t;
+
+typedef int32_t errno_t;
+
+typedef struct {
+  size_t length; // does not include null terminator
+  char *data;
+} String;
+
+#define I8 "%" PRIi8
+#define I16 "%" PRIi16
+#define I32 "%" PRIi32
+#define I64 "%" PRIi64
+
+#define U8 "%" PRIu8
+#define U16 "%" PRIu16
+#define U32 "%" PRIu32
+#define U64 "%" PRIu64
+
+#define ARR_LEN(arr) sizeof((arr)) / sizeof(*(arr))
+
+/*   }}} --- Compiler Specific Defines/Types --- {{{   */
+#if defined(BASE_COMPILER_GCC) || defined(BASE_COMPILER_CLANG)
 #  define GCC_VERSION (__GNUC__ * 100 + __GNUC_MINOR__)
 #  define NORETURN __attribute__((noreturn))
 #  define RETURNS_NON_NULL __attribute__((returns_nonnull))
@@ -57,8 +168,7 @@
 #  else
 #    define ATTR_MALLOC_DEALLOC(fn)
 #  endif
-
-#elif defined(COMPILER_MSVC)
+#elif defined(BASE_COMPILER_MSVC)
 #  define NORETURN __declspec(noreturn)
 #  define RETURNS_NON_NULL
 #  define PARAM_NON_NULL
@@ -86,91 +196,14 @@
 #  define ATTR_MALLOC_DEALLOC(fn)
 #endif
 
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
-#  define PLATFORM_WIN
-#else
-#  define PLATFORM_UNIX
-#  if defined(__ANDROID__)
-#    define PLATFORM_ANDROID
-#  elif defined(__linux__) || defined(__gnu_linux__)
-#    define PLATFORM_LINUX
-#  elif defined(__APPLE__) || defined(__MACH__)
-#    define PLATFORM_MACOS
-#  elif defined(__FreeBSD__)
-#    define PLATFORM_FREEBSD
-#  elif defined(__EMSCRIPTEN__)
-#    define PLATFORM_EMSCRIPTEN
-#  else
-#    error "The codebase only supports linux, macos, FreeBSD, windows, android and emscripten"
-#  endif
-#endif
-
-#if defined(COMPILER_CLANG)
+#if defined(BASE_COMPILER_CLANG)
 #  define FILE_NAME __FILE_NAME__
 #else
 #  define FILE_NAME __FILE__
 #endif
 
-#if defined(PLATFORM_WIN)
-#  define WIN32_LEAN_AND_MEAN
-#  include <windows.h>
-#  if !defined(ENABLE_VIRTUAL_TERMINAL_PROCESSING) // old SDKs sometimes dont have it
-#    define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
-#  endif
-#  include <BaseTsd.h>
-#else
-#  define _POSIX_C_SOURCE 200809L
-#  define _GNU_SOURCE
-#  include <dirent.h>
-#  include <errno.h>
-#  include <fcntl.h>
-#  include <limits.h>
-#  include <sys/stat.h>
-#  include <sys/types.h>
-#  include <unistd.h>
-#endif
-
-#if defined(__STDC_VERSION__)
-#  if (__STDC_VERSION__ >= 202311L)
-#    define C_STANDARD_C23
-#    define C_STANDARD "C23"
-#  elif (__STDC_VERSION__ >= 201710L)
-#    define C_STANDARD_C17
-#    define C_STANDARD "C17"
-#  elif (__STDC_VERSION__ >= 201112L)
-#    define C_STANDARD_C11
-#    define C_STANDARD "C11"
-#  elif (__STDC_VERSION__ >= 199901L)
-#    define C_STANDARD_C99
-#    define C_STANDARD "C99"
-#  else
-#    error "Why C89 if you have C99"
-#  endif
-#else
-#  if defined(COMPILER_MSVC)
-#    if defined(_MSC_VER) && _MSC_VER >= 1920 // >= Visual Studio 2019
-#      define C_STANDARD_C17
-#      define C_STANDARD "C17"
-#    else
-#      define C_STANDARD_C11
-#      define C_STANDARD "C11"
-#    endif
-#  endif
-#endif
-
-#include <ctype.h>
-#include <inttypes.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-
-/* --- Platform Specific --- */
-#if defined(PLATFORM_WIN)
+/*   }}} --- Platform Specific Defines/Types --- {{{   */
+#if defined(BASE_PLATFORM_WIN)
 #  define ssize_t SSIZE_T
 
 /* Process/Threading */
@@ -180,34 +213,24 @@
 #  define pclose _pclose
 
 /* Some functions need complete replacements */
-#  if defined(COMPILER_MSVC)
+#  if defined(BASE_COMPILER_MSVC)
 #    define snprintf _snprintf
 #    define vsnprintf _vsnprintf
 #  endif
+#else
+WARN_UNUSED errno_t memcpy_s(void *dest, size_t destSize, const void *src, size_t count);
+
+#  if !defined(EINVAL)
+#    define EINVAL 22 // Invalid argument
+#  endif
+
+#  if !defined(ERANGE)
+#    define ERANGE 34 // Result too large
+#  endif
+
 #endif
 
-/* --- Types and MACRO types --- */
-typedef float float32_t;
-typedef double float64_t;
-
-typedef struct {
-  size_t length; // does not include null terminator
-  char *data;
-} String;
-
-#define FMT_I8 "%" PRIi8
-#define FMT_I16 "%" PRIi16
-#define FMT_I32 "%" PRIi32
-#define FMT_I64 "%" PRIi64
-
-#define FMT_U8 "%" PRIu8
-#define FMT_U16 "%" PRIu16
-#define FMT_U32 "%" PRIu32
-#define FMT_U64 "%" PRIu64
-
-#define ARR_LEN(arr) sizeof((arr)) / sizeof(*(arr))
-
-/* --- Vector --- */
+/*   }}} --- Vector Definitions --- {{{   */
 typedef int32_t (*CompareFunc)(const void *a, const void *b);
 
 int32_t __base_vec_partition(void **data, size_t element_size, CompareFunc compare, int32_t low, int32_t high);
@@ -253,19 +276,28 @@ void __base_vec_free(void **data, size_t *length, size_t *capacity);
 
 #define VecForEach(vector, it) for (__typeof__(*(vector).data) *(it) = (vector).data; (vector).data && (it) < (vector).data + (vector).length; (it)++)
 
-/* --- Time and Platforms --- */
+/*   }}} --- Time and Platform Definitions --- {{{   */
 int64_t TimeNow(void);
 void WaitTime(int64_t ms);
 
 typedef enum { OS_LINUX = 1, OS_WINDOWS, OS_MACOS, OS_FREEBSD, OS_ANDROID, OS_EMSCRIPTEN } OS;
-OS GetOS(void);
+OS    GetOS(void);
+char *GetOSStr(void);
 
-typedef enum { GCC = 1, CLANG, TCC, MSVC } CompilerFamily;
+typedef enum { ARCH_X64 = 1, ARCH_X86, ARCH_ARM64, ARCH_ARM32, ARCH_RISCV64, ARCH_PPC64, ARCH_S390X, ARCH_WASM32 } Arch;
+Arch  GetArch(void);
+char *GetArchStr(void);
+
+/* Compiler *family*: The convention set base treats a compiler as, NOT the
+   exact binary (use GetCompilerStr for that), forks collapse into their parent:
+   Fil-C reports COMPILER_CLANG because it's a drop-in clang fork and honors
+   clang's conventions. TCC keeps its own value even though it follows gcc,
+   because it's missing features you'll want to #if guard against. */
+typedef enum { COMPILER_GCC = 1, COMPILER_CLANG, COMPILER_TCC, COMPILER_MSVC } CompilerFamily;
 CompilerFamily GetCompilerFamily(void);
+char          *GetCompilerStr(void);
 
-/* --- Error --- */
-typedef int32_t errno_t;
-
+/*   }}} --- Error Definitions --- {{{   */
 typedef enum {
   SUCCESS = 0,
 
@@ -297,7 +329,7 @@ static void _custom_assert(const char *expr, const char *file, unsigned line, co
 #define Unreachable(...) (void)((_custom_unreachable(__FILE__, __LINE__, __VA_ARGS__), 0))
 static void _custom_unreachable(const char *file, unsigned line, const char *format, ...) FORMAT_CHECK(3, 4);
 
-/* --- Arena --- */
+/*   }}} --- Arena Definitions --- {{{   */
 typedef struct __ArenaChunk {
   struct __ArenaChunk *next;
   size_t cap;
@@ -322,12 +354,12 @@ void ArenaReset(Arena *arena) PARAM_NON_NULL;
 
 Arena *ArenaCreate(size_t chunk_size) ATTR_MALLOC_DEALLOC(ArenaFree);
 
-/* --- Memory Allocations --- */
+/*   }}} --- Memory Allocation Definitions --- {{{   */
 void *Realloc(void *block, size_t size) RETURNS_NON_NULL;
 void *Malloc(size_t size) RETURNS_NON_NULL;
 void Free(void *address) PARAM_NON_NULL;
 
-/* --- String and Macros --- */
+/*   }}} --- String and Macros Definitions --- {{{   */
 #define TYPE_INIT(type) (type)
 #define STRING_LENGTH(s) ((sizeof((s)) / sizeof((s)[0])) - sizeof((s)[0])) // NOTE: Inspired from clay.h
 #define ENSURE_STRING_LITERAL(x) ("" x "")
@@ -371,14 +403,14 @@ void SBAddFormatV(StringBuilder *builder, char *fmt, va_list args);
 
 #define SBAddS(builder, string) SBAdd(builder, S(string))
 
-/* --- Random --- */
+/*   }}} --- Random Definitions --- {{{   */
 void RandomInit(void);
 uint64_t RandomGetSeed(void);
 void RandomSetSeed(uint64_t newSeed);
 int32_t RandomInteger(int32_t min, int32_t max);
 float32_t RandomFloat(float32_t min, float32_t max);
 
-/* --- File System --- */
+/*   }}} --- File System Definitions --- {{{   */
 typedef struct {
   char *name;
   char *extension;
@@ -408,7 +440,7 @@ WARN_UNUSED Error FileDelete(String path);
 WARN_UNUSED Error FileRename(String oldPath, String newPath);
 WARN_UNUSED Error FileCopy(String sourcePath, String destPath);
 
-/* --- Logger --- */
+/*   }}} --- Logger Definitions --- {{{   */
 #define _RESET "\x1b[0m"
 #define _GRAY "\x1b[0;36m"
 #define _RED "\x1b[0;31m"
@@ -422,7 +454,7 @@ void LogError(const char *format, ...) FORMAT_CHECK(1, 2);
 void LogSuccess(const char *format, ...) FORMAT_CHECK(1, 2);
 void logErrorV(const char *format, va_list args) FORMAT_CHECK(1, 0);
 
-/* --- Math --- */
+/*   }}} --- Math Definitions --- {{{   */
 #define Min(a, b) (((a) < (b)) ? (a) : (b))
 #define Max(a, b) (((a) > (b)) ? (a) : (b))
 #define Clamp(a, x, b) (((x) < (a)) ? (a) : ((b) < (x)) ? (b) : (x))
@@ -433,10 +465,10 @@ void logErrorV(const char *format, va_list args) FORMAT_CHECK(1, 0);
     a ^= b;        \
   } while (0)
 
-/* --- Defer Macros --- */
+/*   }}} --- Defer Macros --- {{{   */
 #if defined(DEFER_MACRO)
 /* [GCC implementation] Must use C23 (depending on the platform) */
-#  if defined(COMPILER_GCC)
+#  if defined(BASE_COMPILER_GCC)
 #    define defer __DEFER(__COUNTER__)
 #    define __DEFER(N) __DEFER_(N)
 #    define __DEFER_(N) __DEFER__(__DEFER_FUNCTION_##N, __DEFER_VARIABLE_##N)
@@ -446,7 +478,7 @@ void logErrorV(const char *format, va_list args) FORMAT_CHECK(1, 0);
       auto void F(int *)
 
 /* [Clang implementation] Must compile with flag `-fblocks` */
-#  elif defined(COMPILER_CLANG)
+#  elif defined(BASE_COMPILER_CLANG)
 typedef void (^const __df_t)(void);
 
 [[maybe_unused]]
@@ -460,12 +492,12 @@ static inline void __df_cb(__df_t *__fp) {
 #    define __DEFER__(V) [[gnu::cleanup(__df_cb)]] __df_t V = ^void(void)
 
 /* [MSVC implementation] */
-#  elif defined(COMPILER_MSVC)
+#  elif defined(BASE_COMPILER_MSVC)
 #    error "Not available yet in MSVC, use `_try/_finally`"
 #  endif
 #endif
 
-/* --- INI Parser --- */
+/*   }}} --- INI Parser Definitions --- {{{   */
 typedef struct {
   String key;
   String value;
@@ -489,13 +521,30 @@ int32_t IniGetInt(IniFile *ini_file, String key);
 int64_t IniGetLong(IniFile *ini_file, String key);
 float64_t IniGetDouble(IniFile *ini_file, String key);
 bool IniGetBool(IniFile *ini_file, String key);
-
-/* MIT License
-   base.h - Implementation of base.h
-   https://github.com/TomasBorquez/base.h
+/*   }}}   */
+/*}}} --- MIT License --- {{{
+  base.h - Implementation of base.h
+  https://github.com/TomasBorquez/base.h
 */
 #if defined(BASE_IMPLEMENTATION)
-/* --- Vector Implementation --- */
+/*   --- Platform Specific Implementations --- {{{   */
+#  if !defined(BASE_PLATFORM_WIN)
+WARN_UNUSED errno_t memcpy_s(void *dest, size_t destSize, const void *src, size_t count) {
+  if (dest == NULL) {
+    return EINVAL;
+  }
+
+  if (src == NULL || destSize < count) {
+    memset(dest, 0, destSize);
+    return EINVAL;
+  }
+
+  memcpy(dest, src, count);
+  return 0;
+}
+#  endif
+
+/*   }}} --- Vector Implementations --- {{{   */
 int32_t __base_vec_partition(void **data, size_t element_size, CompareFunc compare, int32_t low, int32_t high) {
   void *pivot = (char *)(*data) + (high * element_size);
   int32_t i = low - 1;
@@ -604,60 +653,9 @@ void __base_vec_free(void **data, size_t *length, size_t *capacity) {
   *capacity = 0;
 }
 
-/* --- Time and Platforms Implementation --- */
-
-#  if !defined(PLATFORM_WIN)
-WARN_UNUSED errno_t memcpy_s(void *dest, size_t destSize, const void *src, size_t count);
-
-#    if !defined(EINVAL)
-#      define EINVAL 22 // Invalid argument
-#    endif
-
-#    if !defined(ERANGE)
-#      define ERANGE 34 // Result too large
-#    endif
-
-WARN_UNUSED errno_t memcpy_s(void *dest, size_t destSize, const void *src, size_t count) {
-  if (dest == NULL) {
-    return EINVAL;
-  }
-
-  if (src == NULL || destSize < count) {
-    memset(dest, 0, destSize);
-    return EINVAL;
-  }
-
-  memcpy(dest, src, count);
-  return 0;
-}
-#  endif
-
-CompilerFamily GetCompilerFamily(void) {
-#  if defined(COMPILER_CLANG)
-  return CLANG;
-#  elif defined(COMPILER_GCC)
-  return GCC;
-#  elif defined(COMPILER_TCC)
-  return TCC;
-#  elif defined(COMPILER_MSVC)
-  return MSVC;
-#  endif
-}
-
-OS GetOS(void) {
-#  if defined(PLATFORM_WIN)
-  return OS_WINDOWS;
-#  elif defined(PLATFORM_LINUX)
-  return OS_LINUX;
-#  elif defined(PLATFORM_MACOS)
-  return OS_MACOS;
-#  elif defined(PLATFORM_FREEBSD)
-  return OS_FREEBSD;
-#  endif
-}
-
+/*   }}} --- Time and Platforms Implementations --- {{{   */
 int64_t TimeNow(void) {
-#  if defined(PLATFORM_WIN)
+#  if defined(BASE_PLATFORM_WIN)
   FILETIME ft;
   GetSystemTimeAsFileTime(&ft);
   LARGE_INTEGER li;
@@ -676,7 +674,7 @@ int64_t TimeNow(void) {
 }
 
 void WaitTime(int64_t ms) {
-#  if defined(PLATFORM_WIN)
+#  if defined(BASE_PLATFORM_WIN)
   sleep(ms);
 #  else
   struct timespec ts;
@@ -686,8 +684,120 @@ void WaitTime(int64_t ms) {
 #  endif
 }
 
+OS GetOS(void) {
+#  if defined(BASE_PLATFORM_WIN)
+  return OS_WINDOWS;
+#  elif defined(BASE_PLATFORM_ANDROID)
+  return OS_ANDROID;
+#  elif defined(BASE_PLATFORM_LINUX)
+  return OS_LINUX;
+#  elif defined(BASE_PLATFORM_MACOS)
+  return OS_MACOS;
+#  elif defined(BASE_PLATFORM_FREEBSD)
+  return OS_FREEBSD;
+#  elif defined(BASE_PLATFORM_EMSCRIPTEN)
+  return OS_EMSCRIPTEN;
+#  else
+#    error "base.h: Unsupported platform"
+#  endif
+}
+
+char *GetOSStr(void) {
+#  if defined(BASE_PLATFORM_WIN)
+  return "windows";
+#  elif defined(BASE_PLATFORM_ANDROID)
+  return "android";
+#  elif defined(BASE_PLATFORM_LINUX)
+  return "linux";
+#  elif defined(BASE_PLATFORM_MACOS)
+  return "macos";
+#  elif defined(BASE_PLATFORM_FREEBSD)
+  return "freebsd";
+#  elif defined(BASE_PLATFORM_EMSCRIPTEN)
+  return "emscripten";
+#  else
+#    error "base.h: Unsupported platform"
+#  endif
+}
+
+Arch GetArch(void) {
+#  if defined(BASE_ARCH_X64)
+  return ARCH_X64;
+#  elif defined(BASE_ARCH_ARM64)
+  return ARCH_ARM64;
+#  elif defined(BASE_ARCH_X86)
+  return ARCH_X86;
+#  elif defined(BASE_ARCH_ARM32)
+  return ARCH_ARM32;
+#  elif defined(BASE_ARCH_RISCV64)
+  return ARCH_RISCV64;
+#  elif defined(BASE_ARCH_PPC64)
+  return ARCH_PPC64;
+#  elif defined(BASE_ARCH_S390X)
+  return ARCH_S390X;
+#  elif defined(BASE_ARCH_WASM32)
+  return ARCH_WASM32;
+#  else
+#    error "base.h: Unsupported arch"
+#  endif
+}
+
+char *GetArchStr(void) {
+#  if defined(BASE_ARCH_X64)
+  return "x86_64";
+#  elif defined(BASE_ARCH_ARM64)
+  return "aarch64";
+#  elif defined(BASE_ARCH_X86)
+  return "x86";
+#  elif defined(BASE_ARCH_ARM32)
+  return "arm";
+#  elif defined(BASE_ARCH_RISCV64)
+  return "riscv64";
+#  elif defined(BASE_ARCH_PPC64)
+  return "ppc64";
+#  elif defined(BASE_ARCH_S390X)
+  return "s390x";
+#  elif defined(BASE_ARCH_WASM32)
+  return "wasm32";
+#  else
+#    error "base.h: Unsupported arch"
+#  endif
+}
+
+CompilerFamily GetCompilerFamily(void) {
+#  if defined(BASE_COMPILER_CLANG)
+  return COMPILER_CLANG;
+#  elif defined(BASE_COMPILER_GCC)
+  return COMPILER_GCC;
+#  elif defined(BASE_COMPILER_MSVC)
+  return COMPILER_MSVC;
+#  elif defined(BASE_COMPILER_TCC)
+  return COMPILER_TCC;
+#  else
+#    error "base.h: Unsupported compiler"
+#  endif
+}
+
+char *GetCompilerStr(void) {
+#  if defined(BASE_COMPILER_CLANG)
+#    if defined(BASE_COMPILER_FILC)
+  return "filc";
+#    else
+  return "clang";
+#    endif
+#  elif defined(BASE_COMPILER_GCC)
+  return "gcc";
+#  elif defined(BASE_COMPILER_MSVC)
+  return "cl.exe";
+#  elif defined(BASE_COMPILER_TCC)
+  return "tcc";
+#  else
+#    error "base.h: Unsupported compiler"
+#  endif
+}
+
 /* --- Error Implementation --- */
-#  if defined(PLATFORM_WIN)
+#  if defined(BASE_PLATFORM_WIN)
 Error ErrnoMatch(errno_t err) {
   switch (err) {
     case ERROR_FILE_NOT_FOUND:
@@ -767,7 +877,7 @@ static void _custom_unreachable(const char *file, unsigned line, const char *for
   abort();
 }
 
-/* --- Arena Implementation --- */
+/*   }}} --- Arena Implementations --- {{{   */
 // Allocate or iterate to next chunk that can fit `bytes`
 static void __ArenaNextChunk(Arena *arena, size_t bytes) {
   __ArenaChunk *next = arena->current ? arena->current->next : NULL;
@@ -846,7 +956,7 @@ Arena *ArenaCreate(size_t chunk_size) {
   return res;
 }
 
-/* --- Memory Allocations --- */
+/*   }}} --- Memory Allocation Implementations --- {{{   */
 void *Malloc(size_t size) {
   Assert(size != 0, "Malloc: size cant be zero");
   void *address = malloc(size);
@@ -865,7 +975,7 @@ void Free(void *address) {
   free(address);
 }
 
-/* --- String Implementation --- */
+/*   }}} --- String Implementations --- {{{   */
 static size_t max_string_size = 10000;
 String s(char *msg) {
   if (msg == NULL) {
@@ -1281,7 +1391,7 @@ void SBAddF(StringBuilder *builder, char *fmt, ...) {
     va_end(args);
 }
 
-/* --- Random Implemenation --- */
+/*   }}} --- Random Implementations --- {{{   */
 static uint64_t seed = 0;
 
 uint64_t RandomGetSeed(void) {
@@ -1318,8 +1428,8 @@ float32_t RandomFloat(float32_t min, float32_t max) {
   return min + normalized * (max - min);
 }
 
-/* --- File System Implementation --- */
-#  if defined(PLATFORM_WIN)
+/*   }}} --- File System Implementations --- {{{   */
+#  if defined(BASE_PLATFORM_WIN)
 static char curr_path[MAX_PATH];
 GetCwdResult GetCwd(void) {
   GetCwdResult result = {0};
@@ -1701,9 +1811,9 @@ Error FileCopy(String sourcePath, String destPath) {
 }
 #  endif
 
-/* --- Logger Implemenation --- */
+/*   }}} --- Logger Implementations --- {{{   */
 void LogInit(void) {
-#  if defined(PLATFORM_WIN)
+#  if defined(BASE_PLATFORM_WIN)
   HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
   DWORD dwMode = 0;
   GetConsoleMode(hOut, &dwMode);
@@ -1754,7 +1864,7 @@ void logErrorV(const char *format, va_list args) {
   printf("%s\n", _RESET);
 }
 
-/* --- INI Parser Implementation --- */
+/*   }}} --- INI Parser Implementations --- {{{   */
 IniParseResult IniParse(String path) {
   IniParseResult result = {0};
   FileStatsResult stats = FileStats(path);
@@ -1929,26 +2039,11 @@ bool IniGetBool(IniFile *ini_file, String key) {
   return StrEq(value, S("true"));
 }
 #endif
-// --- BASE.H END ---
+/*   }}}   */
+/*}}} --- BASE.H END --- {{{*/
 
-// --- MATE.H START ---
-/* MIT License
-   mate.h - Mate Definitions start here
-   Guide on the `README.md`
-*/
-
-/* --- Type Definitions --- */
-typedef enum {
-  ARCH_X64 = 1,
-  ARCH_X86,
-  ARCH_ARM64,
-  ARCH_ARM32,
-  ARCH_RISCV64,
-  ARCH_PPC64,
-  ARCH_S390X,
-  ARCH_WASM32,
-} Arch;
-
+/*}}} --- MATE.H START --- {{{*/
+/*    --- Type Definitions --- {{{   */
 typedef struct {
   OS os;
   Arch arch;
@@ -2153,7 +2248,7 @@ typedef enum { NONE = 0, NEEDED, WEAK } LinkFrameworkOptions;
 
 typedef StringBuilder FlagBuilder;
 
-/* --- Build System --- */
+/*   }}} --- Build System Definitions --- {{{   */
 void CreateConfig(MateOptions options);
 
 void StartBuild(void);
@@ -2234,7 +2329,7 @@ static void mate_add_files(StringVector *sources, char **source, size_t size);
 #define RemoveFile(_target, _source) mate_remove_file(&(_target).sources, s(_source));
 static bool mate_remove_file(StringVector *sources, String source);
 
-/* --- Flag Builder --- */
+/*   }}} --- Flag Builder Definitions --- {{{   */
 StringBuilder FlagBuilderCreate(void);
 FlagBuilder FlagBuilderReserve(size_t count);
 
@@ -2242,7 +2337,7 @@ FlagBuilder FlagBuilderReserve(size_t count);
 static void mate_flag_builder_add_string(Target t, FlagBuilder *builder, char *flag);
 static void mate_flag_builder_add_list(Target t, FlagBuilder *fb, char **flags);
 
-/* --- Path Utils --- */
+/*   }}} --- Path Utils Definitions --- {{{   */
 static String mate_path_with_platform_ext(Target t, Arena *arena, String path, String unix_ext, String win_ext, String macos_ext);
 
 String PathJoin(String base, String tail);
@@ -2262,12 +2357,11 @@ String AbsoluteNormPath(String str);
 String AbsoluteNormPathExe(Target t, String str);
 String AbsoluteNormPathStaticLib(Target t, String str);
 
-/* --- Utils --- */
+/*   }}} --- Utils Definitions --- {{{   */
 WARN_UNUSED errno_t RunCommand(String command);
 #define RunCommandF(_format, ...) RunCommand(F(mate_state.arena, _format, __VA_ARGS__))
 
 char *GetAr(Target t);
-char *GetScriptCompiler(void);
 
 Target HostTarget(void);
 Target CreateTarget(Target t);
@@ -2287,7 +2381,7 @@ bool isTCC(Target t);
 bool isMSVC(Target t);
 
 // clang-format off
-// --- SAMURAI START ---
+/*   }}} --- SAMURAI START --- {{{   */
 /* This code comes from Samurai (https://github.com/michaelforney/samurai)
 *  Copyright © 2017-2021 Michael Forney
 *  Licensed under ISC license, with portions under Apache License 2.0 and MIT licenses.
@@ -5200,17 +5294,17 @@ bool isMSVC(Target t);
             "  }\n"\
             "}\n"\
             ""
-// --- SAMURAI END ---
+/*   }}} --- SAMURAI END ---    */
 // clang-format on
 
-/* MIT License
-   mate.h - Mate Implementations start here
-   Guide on the `README.md`
+/*}}} --- MIT License --- {{{
+  mate.h - Implementation of mate.h
+  https://github.com/TomasBorquez/mate.h
 */
-#ifdef MATE_IMPLEMENTATION
+#if defined(MATE_IMPLEMENTATION)
 static MateConfig mate_state = {0};
 
-/* --- Build System Implementation --- */
+/*   --- Build System Implementations --- {{{   */
 static void mate_set_default_state(void) {
   {
     mate_state.arena = ArenaCreate(20000 * sizeof(String));
@@ -5255,11 +5349,11 @@ static void mate_read_cache(void) {
     mate_state.mate_cache.first_build = true;
     mate_state.mate_cache.last_build = TimeNow() / 1000;
 
-    String modify_time = F(mate_state.arena, FMT_I64, mate_state.mate_cache.last_build);
+    String modify_time = F(mate_state.arena, I64, mate_state.mate_cache.last_build);
     IniSet(&mate_state.cache, S("modify-time"), modify_time);
   }
 
-#if defined(PLATFORM_WIN)
+#if defined(BASE_PLATFORM_WIN)
   if (mate_state.mate_cache.first_build) {
     errno_t ninjaCheck = RunCommand(S("ninja --version > nul 2> nul"));
     Assert(ninjaCheck == SUCCESS, "MateReadCache: Ninja build system not found. Please install Ninja and add it to your PATH.");
@@ -5300,7 +5394,7 @@ static bool mate_need_rebuild(void) {
   }
 
   String mate_cache_path = PathJoin(mate_state.build_directory, S("mate-cache.ini"));
-  String modify_time = F(mate_state.arena, FMT_I64, stats.modifyTime);
+  String modify_time = F(mate_state.arena, I64, stats.modifyTime);
   IniSet(&mate_state.cache, S("modify-time"), modify_time);
 
   Error write_error = IniWrite(mate_cache_path, &mate_state.cache);
@@ -5380,7 +5474,7 @@ static void mate_apply_warning_flags(Target t, FlagBuilder *fb, FlagWarnings w) 
       [FLAG_WARNINGS] = {"W4", NULL},
       [FLAG_WARNINGS_VERBOSE] = {"Wall", NULL},
   };
-  mate_flag_builder_add_list(t, fb, c == MSVC ? msvc[w] : general[w]);
+  mate_flag_builder_add_list(t, fb, c == COMPILER_MSVC ? msvc[w] : general[w]);
 }
 
 static void mate_apply_debug_flags(Target t, FlagBuilder *fb, FlagDebug d) {
@@ -5396,7 +5490,7 @@ static void mate_apply_debug_flags(Target t, FlagBuilder *fb, FlagDebug d) {
       [FLAG_DEBUG_MEDIUM] =  {"Z7", NULL},
       [FLAG_DEBUG] =         {"Z7", NULL},
   };
-  mate_flag_builder_add_list(t, fb, c == MSVC ? msvc[d] : general[d]);
+  mate_flag_builder_add_list(t, fb, c == COMPILER_MSVC ? msvc[d] : general[d]);
 }
 
 static void mate_apply_optimization_flags(Target t, FlagBuilder *fb, FlagOptimization o) {
@@ -5416,7 +5510,7 @@ static void mate_apply_optimization_flags(Target t, FlagBuilder *fb, FlagOptimiz
       [FLAG_OPTIMIZATION_SIZE] = {"O1", NULL},
       [FLAG_OPTIMIZATION_AGGRESSIVE] = {"Ox", NULL},
   };
-  mate_flag_builder_add_list(t, fb, c == MSVC ? msvc[o] : general[o]);
+  mate_flag_builder_add_list(t, fb, c == COMPILER_MSVC ? msvc[o] : general[o]);
 }
 
 static void mate_apply_std_flags(Target t, FlagBuilder *fb, FlagSTD std) {
@@ -5436,7 +5530,7 @@ static void mate_apply_std_flags(Target t, FlagBuilder *fb, FlagSTD std) {
       [FLAG_STD_C23] = {"std:clatest", NULL},
       [FLAG_STD_C2X] = {"std:clatest", NULL},
   };
-  mate_flag_builder_add_list(t, fb, c == MSVC ? msvc[std] : general[std]);
+  mate_flag_builder_add_list(t, fb, c == COMPILER_MSVC ? msvc[std] : general[std]);
 }
 
 static void mate_apply_sanitizer_flags(Target t, FlagBuilder *fb, FlagSanitizer s) {
@@ -5453,7 +5547,7 @@ static void mate_apply_sanitizer_flags(Target t, FlagBuilder *fb, FlagSanitizer 
       [FLAG_SANITIZER_UB] = {NULL},
       [FLAG_SANITIZER] = {"fsanitize=address", NULL},
   };
-  mate_flag_builder_add_list(t, fb, c == MSVC ? msvc[s] : general[s]);
+  mate_flag_builder_add_list(t, fb, c == COMPILER_MSVC ? msvc[s] : general[s]);
 }
 
 static void mate_apply_error_flags(Target t, FlagBuilder *fb, FlagErrorFormat e) {
@@ -5471,7 +5565,7 @@ static void mate_apply_error_flags(Target t, FlagBuilder *fb, FlagErrorFormat e)
       [FLAG_ERROR] = {"nologo", NULL},
       [FLAG_ERROR_MAX] = {"nologo", "diagnostics:caret", NULL},
   };
-  char **row = c == MSVC ? msvc[e] : c == CLANG ? clang[e] : general[e];
+  char **row = c == COMPILER_MSVC ? msvc[e] : c == COMPILER_CLANG ? clang[e] : general[e];
   mate_flag_builder_add_list(t, fb, row);
 }
 
@@ -5742,7 +5836,7 @@ static CreateCompileCommandsError mate_create_compile_commands(String ninja_buil
   String compile_commands_path = NormPath(PathJoin(mate_state.build_directory, S("compile_commands.json")));
 
   FILE *output_file = NULL;
-#  if defined(PLATFORM_WIN)
+#  if defined(BASE_PLATFORM_WIN)
   errno_t err = fopen_s(&output_file, compile_commands_path.data, "w");
   Assert(err == SUCCESS, "CreateCompileCommands: failed to fopen_s path %s", compile_commands_path.data);
 #  else
@@ -5997,7 +6091,7 @@ static void mate_install_executable(Executable *executable) {
   }
 
   errno_t run_error = RunCommand(build_command);
-  Assert(run_error == SUCCESS, "InstallExecutable: Ninja file compilation failed with code: " FMT_I32, run_error);
+  Assert(run_error == SUCCESS, "InstallExecutable: Ninja file compilation failed with code: " I32, run_error);
 
   mate_state.total_time = TimeNow() - mate_state.start_time;
   executable->outputPath = PathJoin(mate_state.build_directory, executable->output);
@@ -6107,7 +6201,7 @@ static void mate_install_static_lib(StaticLib *static_lib) {
   }
 
   errno_t run_error = RunCommand(build_command);
-  Assert(run_error == SUCCESS, "InstallStaticLib: Ninja file compilation failed with code: " FMT_I32, run_error);
+  Assert(run_error == SUCCESS, "InstallStaticLib: Ninja file compilation failed with code: " I32, run_error);
 
   mate_state.total_time = TimeNow() - mate_state.start_time;
   static_lib->outputPath = PathJoin(mate_state.build_directory, static_lib->output);
@@ -6248,7 +6342,7 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
   }
 
   errno_t run_error = RunCommand(build_command);
-  Assert(run_error == SUCCESS, "InstallSharedLib: Ninja file compilation failed with code: " FMT_I32, run_error);
+  Assert(run_error == SUCCESS, "InstallSharedLib: Ninja file compilation failed with code: " I32, run_error);
 
   mate_state.total_time = TimeNow() - mate_state.start_time;
   shared_lib->outputPath = PathJoin(mate_state.build_directory, shared_lib->output);
@@ -6425,11 +6519,11 @@ static void mate_add_framework_paths(Target t, String *target_includes, char **f
 }
 
 void EndBuild(void) {
-  LogInfo("Build took: " FMT_I64 "ms", mate_state.total_time);
+  LogInfo("Build took: " I64 "ms", mate_state.total_time);
   ArenaFree(mate_state.arena);
 }
 
-/* --- Flag Builder Implementation --- */
+/*   }}} --- Flag Builder Implementations --- {{{   */
 FlagBuilder FlagBuilderCreate(void) {
   return SBCreate(mate_state.arena);
 }
@@ -6460,7 +6554,7 @@ static void mate_flag_builder_add_list(Target t, FlagBuilder *fb, char **flags) 
   }
 }
 
-/* --- Path Utils Implementation --- */
+/*   }}} --- Path Utils Implementation --- {{{   */
 static String mate_path_strip_dot_slash(String path) {
   if (path.length >= 2 && path.data[0] == '.' && (path.data[1] == '/' || path.data[1] == '\\')) {
     return (String){ .data = path.data + 2, .length = path.length - 2 };
@@ -6484,7 +6578,7 @@ static String mate_path_strip_ext(String path) {
 }
 
 static String mate_path_fix_slashes(String path) {
-#  if defined(PLATFORM_WIN)
+#  if defined(BASE_PLATFORM_WIN)
   for (size_t i = 0; i < path.length; i++) {
     if (path.data[i] == '/') {
       path.data[i] = '\\';
@@ -6532,7 +6626,7 @@ static String mate_path_with_platform_ext(Target t, Arena *arena, String path, S
 }
 
 String PathJoin(String base, String tail) {
-#if defined(PLATFORM_WIN)
+#if defined(BASE_PLATFORM_WIN)
   return F(mate_state.arena, "%s\\%s", base.data, tail.data);
 #else
   return F(mate_state.arena, "%s/%s", base.data, tail.data);
@@ -6585,7 +6679,7 @@ String NormPathSharedLib(Target t, String str) {
 }
 
 String NormPathNinja(String str) {
-#if defined(PLATFORM_WIN)
+#if defined(BASE_PLATFORM_WIN)
   String copy = StrNewSize(mate_state.arena, str.data, str.length + 1);
   memmove(&copy.data[2], &copy.data[1], str.length - 1);
   copy.data[1] = '$';
@@ -6615,9 +6709,9 @@ String AbsoluteNormPathStaticLib(Target t, String str) {
   return PathJoin(mate_state.cwd, NormPathStaticLib(t, str));
 }
 
-/* --- Utils Implementation --- */
+/*   }}} --- Utils Implementations --- {{{   */
 errno_t RunCommand(String command) {
-#if defined(PLATFORM_LINUX) | defined(PLATFORM_MACOS) | defined(PLATFORM_FREEBSD)
+#if defined(BASE_PLATFORM_LINUX) | defined(BASE_PLATFORM_MACOS) | defined(BASE_PLATFORM_FREEBSD)
   // https://stackoverflow.com/questions/36007390/why-to-shift-bits-8-when-using-perl-system-function-to-execute-command
   return system(command.data) >> 8;
 #else
@@ -6626,7 +6720,7 @@ errno_t RunCommand(String command) {
 }
 
 static bool mate_program_exists(char *program) {
-#if defined(PLATFORM_WIN)
+#if defined(BASE_PLATFORM_WIN)
   String command = F(mate_state.arena, "where %s >nul 2>&1", program);
 #else
   String command = F(mate_state.arena, "command -v %s >/dev/null 2>&1", program);
@@ -6686,67 +6780,13 @@ char *GetAr(Target t) {
   return "ar";
 }
 
-char *GetScriptCompiler(void) {
-  switch (GetCompilerFamily()) {
-  case GCC:
-    return "gcc";
-  case CLANG:
-    return "clang";
-  case TCC:
-    return "tcc";
-  case MSVC:
-    return "cl.exe";
-  default:
-    Unreachable("GetScriptCompiler: should never get here, compiler does not exist");
-    return "";
-  }
-}
-
 Target HostTarget(void) {
-  Target t = {0};
-
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
-  t.os = OS_WINDOWS;
-#else
-#  if defined(__ANDROID__)
-  t.os = OS_ANDROID;
-#  elif defined(__linux__) || defined(__gnu_linux__)
-  t.os = OS_LINUX;
-#  elif defined(__APPLE__) || defined(__MACH__)
-  t.os = OS_MACOS;
-#  elif defined(__FreeBSD__)
-  t.os = OS_FREEBSD;
-#  elif defined(__EMSCRIPTEN__)
-  t.os = OS_EMSCRIPTEN;
-#  else
-#    error "The codebase only supports linux, macos, FreeBSD, windows, android and emscripten"
-#  endif
-#endif
-
-#if defined(__x86_64__) || defined(_M_X64)
-  t.arch = ARCH_X64;
-#elif defined(__aarch64__) || defined(_M_ARM64)
-  t.arch = ARCH_ARM64;
-#elif defined(__i386__) || defined(_M_IX86)
-  t.arch = ARCH_X86;
-#elif defined(__arm__) || defined(_M_ARM)
-  t.arch = ARCH_ARM32;
-#elif defined(__riscv) && (__riscv_xlen == 64)
-  t.arch = ARCH_RISCV64;
-#elif defined(__powerpc64__) || defined(__ppc64__)
-  t.arch = ARCH_PPC64;
-#elif defined(__s390x__)
-  t.arch = ARCH_S390X;
-#elif defined(__wasm32__)
-  t.arch = ARCH_WASM32;
-#else
-#  error "The codebase only supports x64, x86, arm64, arm32, riscv64, ppc64, s390x and wasm32"
-#endif
-
-  t.compiler = GetScriptCompiler();
-  t.compilerFamily = GetCompilerFamily();
-
-  return t;
+  return (Target) {
+    .os             = GetOS(),
+    .arch           = GetArch(),
+    .compiler       = GetCompilerStr(),
+    .compilerFamily = GetCompilerFamily(),
+  };
 }
 
 Target CreateTarget(Target t) {
@@ -6833,19 +6873,20 @@ bool isFreeBSD(Target t) {
 }
 
 bool isGCC(Target t) {
-  return t.compilerFamily == GCC;
+  return t.compilerFamily == COMPILER_GCC;
 }
 
 bool isClang(Target t) {
-  return t.compilerFamily == CLANG;
+  return t.compilerFamily == COMPILER_CLANG;
 }
 
 bool isTCC(Target t) {
-  return t.compilerFamily == TCC;
+  return t.compilerFamily == COMPILER_TCC;
 }
 
 bool isMSVC(Target t) {
-  return t.compilerFamily == MSVC;
+  return t.compilerFamily == COMPILER_MSVC;
 }
 #endif
-// --- MATE.H END ---
+/*   }}}   */
+/*}}} --- MATE.H END --- {{{*/
