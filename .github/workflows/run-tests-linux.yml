@@ -34,6 +34,11 @@ jobs:
       run: |
         sudo apt-get install -y tcc
 
+    - name: Install Clang cross tools
+      if: matrix.compiler == 'clang'
+      run: |
+        sudo apt-get install -y --no-install-recommends llvm lld
+
     - name: Run tests
       run: |
         tests=(

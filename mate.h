@@ -5354,6 +5354,7 @@ static void mate_read_cache(void) {
   }
 
 #if defined(BASE_PLATFORM_WIN)
+  // TODO: Move to mate_program_exists()
   if (mate_state.mate_cache.first_build) {
     errno_t ninjaCheck = RunCommand(S("ninja --version > nul 2> nul"));
     Assert(ninjaCheck == SUCCESS, "MateReadCache: Ninja build system not found. Please install Ninja and add it to your PATH.");
@@ -5968,14 +5969,67 @@ static bool mate_remove_file(StringVector *sources, String source) {
   return false;
 }
 
+static String mate_clang_triple(Target t) {
+  String nil_str = {0};
+
+  switch (t.os) {
+  case OS_LINUX:
+    switch (t.arch) {
+    case ARCH_X64:     return S("x86_64-linux-gnu");
+    case ARCH_ARM64:   return S("aarch64-linux-gnu");
+    case ARCH_X86:     return S("i686-linux-gnu");
+    case ARCH_ARM32:   return S("armv7-linux-gnueabihf");
+    case ARCH_RISCV64: return S("riscv64-linux-gnu");
+    case ARCH_PPC64:   return S("powerpc64le-linux-gnu");
+    case ARCH_S390X:   return S("s390x-linux-gnu");
+    default:           return nil_str;
+    }
+  case OS_WINDOWS:
+    switch (t.arch) {
+    case ARCH_X64:   return S("x86_64-w64-mingw32");
+    case ARCH_ARM64: return S("aarch64-w64-mingw32");
+    case ARCH_X86:   return S("i686-w64-mingw32");
+    default:         return nil_str;
+    }
+  case OS_MACOS:
+    switch (t.arch) {
+    case ARCH_X64:   return S("x86_64-apple-darwin");
+    case ARCH_ARM64: return S("arm64-apple-darwin");
+    default:         return nil_str;
+    }
+  case OS_FREEBSD:
+    switch (t.arch) {
+    case ARCH_X64:     return S("x86_64-unknown-freebsd");
+    case ARCH_ARM64:   return S("aarch64-unknown-freebsd");
+    case ARCH_X86:     return S("i686-unknown-freebsd");
+    case ARCH_RISCV64: return S("riscv64-unknown-freebsd");
+    default:           return nil_str;
+    }
+  default: return nil_str;
+  }
+}
+
 static void mate_install_executable(Executable *executable) {
   Assert(executable->sources.length != 0, "InstallExecutable: Executable has zero sources, add at least one with AddFile(\"./main.c\")");
 
   Target t = executable->target;
   StringBuilder builder = SBReserve(mate_state.arena, 1024);
 
+  String cross_triple = {0};
+  if (isClang(t) && !isTargetHost(t) && !StrIncludes(executable->flags, S("--target"))) {
+    cross_triple = mate_clang_triple(t);
+    if (StrIsNull(cross_triple)) {
+      LogWarn("InstallExecutable: cross target detected but could not derive a clang triple "
+              "from os/arch, pass it yourself with:\n"
+              "\n"
+              "(Executable){.flags = \"--target=<your-triple>\"}");
+    }
+  }
+
   { // Variables
     SBAddF(&builder, "cc = %s\n", t.compiler);
+
+    if (!StrIsNull(cross_triple))           SBAddF(&builder, "cross_target = --target=%S\n", cross_triple);
     if (executable->linkerFlags.length > 0) SBAddF(&builder, "linker_flags = %S\n", executable->linkerFlags);
     if (executable->flags.length > 0)       SBAddF(&builder, "flags = %S\n", executable->flags);
     if (executable->includes.length > 0)    SBAddF(&builder, "includes = %S\n", executable->includes);
@@ -5991,6 +6045,7 @@ static void mate_install_executable(Executable *executable) {
   { // Link command
     SBAddS(&builder, "rule link\n"
                      "  command = $cc");
+    if (!StrIsNull(cross_triple))     SBAddS(&builder, " $cross_target");
     if (executable->flags.length > 0) SBAddS(&builder, " $flags");
 
     if (isMSVC(t)) {
@@ -6023,6 +6078,7 @@ static void mate_install_executable(Executable *executable) {
     SBAddS(&builder, "rule compile\n"
                      "  command = $cc");
     if (isMSVC(t))                       SBAddS(&builder, " /nologo /showIncludes");
+    if (!StrIsNull(cross_triple))        SBAddS(&builder, " $cross_target");
     if (executable->flags.length > 0)    SBAddS(&builder, " $flags");
     if (executable->includes.length > 0) SBAddS(&builder, " $includes");
 
@@ -6054,6 +6110,7 @@ static void mate_install_executable(Executable *executable) {
         dep_file.data[dep_file.length - 1] = 'd';
         SBAddF(&builder, "  depfile = $builddir/%S\n", dep_file);
       }
+      SBAddS(&builder, "\n");
 
       bool is_empty = output_builder.buffer.length == 0;
       if (is_empty) SBAddF(&output_builder, "$builddir/%S", output_file);
@@ -6108,10 +6165,22 @@ static void mate_install_static_lib(StaticLib *static_lib) {
   Target t = static_lib->target;
   StringBuilder builder = SBReserve(mate_state.arena, 1024);
 
+  String cross_triple = {0};
+  if (isClang(t) && !isTargetHost(t) && !StrIncludes(static_lib->flags, S("--target"))) {
+    cross_triple = mate_clang_triple(t);
+    if (StrIsNull(cross_triple)) {
+      LogWarn("InstallStaticLib: cross target detected but could not derive a clang triple "
+              "from os/arch, pass it yourself with:\n"
+              "\n"
+              "(StaticLib){.flags = \"--target=<your-triple>\"}");
+    }
+  }
+
   { // Variables
     SBAddF(&builder, "cc = %s\n", t.compiler);
     SBAddF(&builder, "ar = %s\n", t.ar);
 
+    if (!StrIsNull(cross_triple))        SBAddF(&builder, "cross_target = --target=%S\n", cross_triple);
     if (static_lib->flags.length > 0)    SBAddF(&builder, "flags = %S\n", static_lib->flags);
     if (static_lib->arFlags.length > 0)  SBAddF(&builder, "ar_flags = %S\n", static_lib->arFlags);
     if (static_lib->includes.length > 0) SBAddF(&builder, "includes = %S\n", static_lib->includes);
@@ -6139,9 +6208,11 @@ static void mate_install_static_lib(StaticLib *static_lib) {
   { // Compile command
     SBAddS(&builder, "rule compile\n"
                      "  command = $cc");
+
     if (isMSVC(t))                       SBAddS(&builder, " /nologo /showIncludes");
     // INFO: static libs are always PIC to be able to link with shared libs
     if (!isWindows(t))                   SBAddS(&builder, " -fPIC");
+    if (!StrIsNull(cross_triple))        SBAddS(&builder, " $cross_target");
     if (static_lib->flags.length > 0)    SBAddS(&builder, " $flags");
     if (static_lib->includes.length > 0) SBAddS(&builder, " $includes");
 
@@ -6174,13 +6245,11 @@ static void mate_install_static_lib(StaticLib *static_lib) {
         dep_file.data[dep_file.length - 1] = 'd';
         SBAddF(&builder, "  depfile = $builddir/%S\n", dep_file);
       }
+      SBAddS(&builder, "\n");
 
-      if (output_builder.buffer.length == 0) {
-        SBAddF(&output_builder, "$builddir/%S", output_file);
-        continue;
-      }
-
-      SBAddF(&output_builder, " $builddir/%S", output_file);
+      bool is_empty = output_builder.buffer.length == 0;
+      if (is_empty) SBAddF(&output_builder, "$builddir/%S", output_file);
+      else          SBAddF(&output_builder, " $builddir/%S", output_file);
     }
 
     SBAddF(&builder, "build $target: archive %S\n\n",output_builder.buffer);
@@ -6216,8 +6285,21 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
   Target t = shared_lib->target;
   StringBuilder builder = SBReserve(mate_state.arena, 1024);
 
+  String cross_triple = {0};
+  if (isClang(t) && !isTargetHost(t) && !StrIncludes(shared_lib->flags, S("--target"))) {
+    cross_triple = mate_clang_triple(t);
+    if (StrIsNull(cross_triple)) {
+      LogWarn("InstallSharedLib: cross target detected but could not derive a clang triple "
+              "from os/arch, pass it yourself with:\n"
+              "\n"
+              "(SharedLib){.flags = \"--target=<your-triple>\"}");
+    }
+  }
+
   { // Variables
     SBAddF(&builder, "cc = %s\n", t.compiler);
+
+    if (!StrIsNull(cross_triple))           SBAddF(&builder, "cross_target = --target=%S\n", cross_triple);
     if (shared_lib->linkerFlags.length > 0) SBAddF(&builder, "linker_flags = %S\n", shared_lib->linkerFlags);
     if (shared_lib->flags.length > 0)       SBAddF(&builder, "flags = %S\n", shared_lib->flags);
     if (shared_lib->includes.length > 0)    SBAddF(&builder, "includes = %S\n", shared_lib->includes);
@@ -6233,13 +6315,14 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
   { // Link command
     SBAddS(&builder, "rule link\n"
                      "  command = $cc");
-    if (isMSVC(t))       SBAddS(&builder, " /nologo /LD");
-    else if (isMacOS(t)) SBAddS(&builder, " -dynamiclib");
-    else                 SBAddS(&builder, " -shared");
+    if (isMSVC(t))                SBAddS(&builder, " /nologo /LD");
+    else if (isMacOS(t))          SBAddS(&builder, " -dynamiclib");
+    else                          SBAddS(&builder, " -shared");
 
     if (isMacOS(t))         SBAddF(&builder, " -install_name @rpath/%S", shared_lib->output);
     else if (!isWindows(t)) SBAddF(&builder, " '-Wl,-soname,%S'", shared_lib->output);
 
+    if (!StrIsNull(cross_triple)) SBAddS(&builder, " $cross_target");
     if (shared_lib->flags.length > 0) SBAddS(&builder, " $flags");
 
     if (isMSVC(t)) {
@@ -6266,8 +6349,10 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
   { // Compile command
     SBAddS(&builder, "rule compile\n"
                      "  command = $cc");
+
     if (isMSVC(t))                       SBAddS(&builder, " /nologo /showIncludes");
     if (!isWindows(t))                   SBAddS(&builder, " -fPIC");
+    if (!StrIsNull(cross_triple))        SBAddS(&builder, " $cross_target");
     if (shared_lib->flags.length > 0)    SBAddS(&builder, " $flags");
     if (shared_lib->includes.length > 0) SBAddS(&builder, " $includes");
 
@@ -6299,6 +6384,7 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
         dep_file.data[dep_file.length - 1] = 'd';
         SBAddF(&builder, "  depfile = $builddir/%S\n", dep_file);
       }
+      SBAddS(&builder, "\n");
 
       bool is_empty = output_builder.buffer.length == 0;
       if (is_empty) SBAddF(&output_builder, "$builddir/%S", output_file);
@@ -6733,8 +6819,7 @@ char *GetAr(Target t) {
     return t.ar;
   }
 
-  Target host = HostTarget();
-  if (t.arch == host.arch && t.os == host.os) {
+  if (isTargetHost(t)) {
     if (isMSVC(t)) {
       return "lib.exe";
     }
@@ -6825,9 +6910,6 @@ Target CreateTarget(Target t) {
 
   result.ar = GetAr(result);
 
-  // TODO: when compilerFamily == CLANG && !isTargetHost(result), derive and
-  // append `--target=<triple>` from result.os/result.arch instead of requiring
-  // a separate cross-compiler binary (clang cross-compiles with one binary)
   Assert(result.os != 0 && result.arch != 0 && result.compiler != NULL && result.compilerFamily != 0,
          "CreateTarget: incomplete target after merge, this is a bug in mate.h, please make an issue at github.com/TomasBorquez/mate.h");
 
@@ -6840,12 +6922,7 @@ bool isTargetSet(Target t) {
 
 bool isTargetHost(Target t) {
   Target host = HostTarget();
-  bool os_eq = host.os == t.os;
-  bool arch_eq = host.arch == t.arch;
-  bool compiler_eq = t.compiler != NULL && strcmp(host.compiler, t.compiler) == 0;
-  bool family_eq = host.compilerFamily == t.compilerFamily;
-
-  return os_eq && arch_eq && compiler_eq && family_eq;
+  return host.os == t.os && host.arch == t.arch;
 }
 
 bool isLinux(Target t) {
