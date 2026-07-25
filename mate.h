@@ -384,6 +384,7 @@ void StrToUpper(String string1);
 void StrToLower(String string1);
 
 bool StrIsNull(String string);
+bool StrIsEmpty(String string);
 void StrTrim(String *string);
 
 String StrSlice(Arena *arena, String str, size_t start, ssize_t end);
@@ -1049,8 +1050,13 @@ String StrNewSize(Arena *arena, char *str, size_t len) {
 
 void StrCopy(String *destination, String source) {
   Assert(!StrIsNull(*destination), "StrCopy: destination should never be NULL");
-  Assert(!StrIsNull(source), "StrCopy: source should never be NULL");
   Assert(destination->length >= source.length, "destination length should never smaller than source length");
+
+  if (StrIsEmpty(source)) {
+    destination->length = 0;
+    add_null_terminator(destination->data, 0);
+    return;
+  }
 
   errno_t err = memcpy_s(destination->data, destination->length + 1, source.data, source.length);
   Assert(err == SUCCESS, "StrCopy: memcpy_s failed, err: %d", err);
@@ -1110,14 +1116,15 @@ String StrConcat(Arena *arena, String string1, String string2) {
 }
 
 StringVector StrSplit(Arena *arena, String str, String delimiter) {
-  Assert(!StrIsNull(str), "StrSplit: str should never be NULL");
-  Assert(!StrIsNull(delimiter), "StrSplit: delimiter should never be NULL");
+  StringVector result = {0};
+  if (StrIsEmpty(str)) {
+    return result;
+  }
 
   char *start = str.data;
   char *end = str.data + str.length;
   char *curr = start;
-  StringVector result = {0};
-  if (delimiter.length == 0) {
+  if (StrIsEmpty(delimiter)) {
     for (size_t i = 0; i < str.length; i++) {
       String curr_str = StrNewSize(arena, str.data + i, 1);
       VecPush(result, curr_str);
@@ -1168,12 +1175,16 @@ bool StrIsNull(String str) {
   return str.data == NULL;
 }
 
+bool StrIsEmpty(String str) {
+  return str.length == 0;
+}
+
 static bool is_space(char character) {
   return character == ' ' || character == '\n' || character == '\t' || character == '\r';
 }
 
 void StrTrim(String *str) {
-  if (str->length == 0) {
+  if (StrIsEmpty(*str)) {
     return;
   }
 
@@ -1215,10 +1226,7 @@ String StrSlice(Arena *arena, String str, size_t start, ssize_t end) {
 }
 
 bool StrIncludes(String source, String sub_str) {
-  Assert(!StrIsNull(source), "StrIncludes: source should never be NULL");
-  Assert(!StrIsNull(sub_str), "StrIncludes: sub_str should never be NULL");
-
-  if (source.length == 0 || sub_str.length == 0 || sub_str.length > source.length) {
+  if (StrIsEmpty(source) || StrIsEmpty(sub_str) || sub_str.length > source.length) {
     return false;
   }
 
@@ -1984,7 +1992,7 @@ String IniSet(IniFile *ini_file, String key, String value) {
 
 int32_t IniGetInt(IniFile *ini_file, String key) {
   String value = IniGet(ini_file, key);
-  if (StrIsNull(value)) {
+  if (StrIsEmpty(value)) {
     return 0;
   }
 
@@ -2000,7 +2008,7 @@ int32_t IniGetInt(IniFile *ini_file, String key) {
 
 int64_t IniGetLong(IniFile *ini_file, String key) {
   String value = IniGet(ini_file, key);
-  if (StrIsNull(value)) {
+  if (StrIsEmpty(value)) {
     return 0;
   }
 
@@ -2016,7 +2024,7 @@ int64_t IniGetLong(IniFile *ini_file, String key) {
 
 float64_t IniGetDouble(IniFile *ini_file, String key) {
   String value = IniGet(ini_file, key);
-  if (StrIsNull(value)) {
+  if (StrIsEmpty(value)) {
     return 0.0;
   }
 
@@ -2032,7 +2040,7 @@ float64_t IniGetDouble(IniFile *ini_file, String key) {
 
 bool IniGetBool(IniFile *ini_file, String key) {
   String value = IniGet(ini_file, key);
-  if (StrIsNull(value)) {
+  if (StrIsEmpty(value)) {
     return false;
   }
 
@@ -5571,6 +5579,10 @@ static void mate_apply_error_flags(Target t, FlagBuilder *fb, FlagErrorFormat e)
 }
 
 static bool mate_is_valid_output(String output) {
+  if (StrIsEmpty(output)) {
+    return false;
+  }
+
   if (output.data[0] == '.') {
     return false;
   }
@@ -5609,8 +5621,8 @@ Executable CreateExecutable(ExecutableOptions opts) {
          "  // ...\n"
          "}\n"
          "EndBuild();\n");
-  Assert(opts.output != NULL,
-         "CreateExecutable: failed, ExecutableOptions.output should never be null, please define the output name like this: \n"
+  Assert(opts.output != NULL && !StrIsEmpty(s(opts.output)),
+         "CreateExecutable: failed, ExecutableOptions.output should never be null or empty, please define the output name like this: \n"
          "\n"
          "CreateExecutable((ExecutableOptions) { .output = \"main\"});");
   Assert(mate_is_valid_output(s(opts.output)),
@@ -5660,9 +5672,9 @@ Executable CreateExecutable(ExecutableOptions opts) {
   if (opts.sanitizer != 0)    mate_apply_sanitizer_flags(t, &fb, opts.sanitizer);
 
   mate_apply_error_flags(t, &fb, opts.error);
-  if (!StrIsNull(fb.buffer)) result.flags = fb.buffer;
+  if (!StrIsEmpty(fb.buffer)) result.flags = fb.buffer;
 
-  if (isMSVC(t) && !result.debug && result.flags.length > 0 && StrIncludes(result.flags, S("/Z7"))) {
+  if (isMSVC(t) && !result.debug && !StrIsEmpty(result.flags) && StrIncludes(result.flags, S("/Z7"))) {
     LogWarn("CreateExecutable: /Z7 found in flags but .debug is not set.\n"
             "Objects will carry debug info, but without /DEBUG at link time no PDB is produced"
             " and the info is discarded. Set .debug = FLAG_DEBUG to get a usable PDB.\n");
@@ -5690,8 +5702,8 @@ StaticLib CreateStaticLib(StaticLibOptions opts) {
          "  // ...\n"
          "}\n"
          "EndBuild();");
-  Assert(opts.output != NULL,
-      "CreateStaticLib: failed, StaticLibOptions.output should never be null, please define the output name like this: \n"
+  Assert(opts.output != NULL && !StrIsEmpty(s(opts.output)),
+      "CreateStaticLib: failed, StaticLibOptions.output should never be null or empty, please define the output name like this: \n"
       "\n"
       "CreateStaticLib((StaticLibOptions) {.output = \"example\"});");
 
@@ -5725,7 +5737,7 @@ StaticLib CreateStaticLib(StaticLibOptions opts) {
   if (opts.sanitizer != 0)    mate_apply_sanitizer_flags(t, &fb, opts.sanitizer);
 
   mate_apply_error_flags(t, &fb, opts.error);
-  if (!StrIsNull(fb.buffer)) result.flags = fb.buffer;
+  if (!StrIsEmpty(fb.buffer)) result.flags = fb.buffer;
 
   if (opts.includes != NULL) result.includes = s(opts.includes);
   if (opts.arFlags != NULL) result.arFlags = s(opts.arFlags);
@@ -5746,8 +5758,8 @@ SharedLib CreateSharedLib(SharedLibOptions opts) {
          "  // ...\n"
          "}\n"
          "EndBuild();");
-  Assert(opts.output != NULL,
-      "CreateSharedLib: failed, SharedLibOptions.output should never be null, please define the output name like this: \n"
+  Assert(opts.output != NULL && !StrIsEmpty(s(opts.output)),
+      "CreateSharedLib: failed, SharedLibOptions.output should never be null or empty, please define the output name like this: \n"
       "\n"
       "CreateSharedLib((SharedLibOptions) { .output = \"main\"});");
   Assert(mate_is_valid_output(s(opts.output)),
@@ -5800,9 +5812,9 @@ SharedLib CreateSharedLib(SharedLibOptions opts) {
   if (opts.sanitizer != 0)    mate_apply_sanitizer_flags(t, &fb, opts.sanitizer);
 
   mate_apply_error_flags(t, &fb, opts.error);
-  if (!StrIsNull(fb.buffer)) result.flags = fb.buffer;
+  if (!StrIsEmpty(fb.buffer)) result.flags = fb.buffer;
 
-  if (isMSVC(t) && !result.debug && result.flags.length > 0 && StrIncludes(result.flags, S("/Z7"))) {
+  if (isMSVC(t) && !result.debug && !StrIsEmpty(result.flags) && StrIncludes(result.flags, S("/Z7"))) {
     LogWarn("CreateSharedLib: /Z7 found in flags but .debug is not set.\n"
             "Objects will carry debug info, but without /DEBUG at link time no PDB is produced"
             " and the info is discarded. Set .debug = FLAG_DEBUG to get a usable PDB.\n");
@@ -6018,7 +6030,7 @@ static void mate_install_executable(Executable *executable) {
   String cross_triple = {0};
   if (isClang(t) && !isTargetHost(t) && !StrIncludes(executable->flags, S("--target"))) {
     cross_triple = mate_clang_triple(t);
-    if (StrIsNull(cross_triple)) {
+    if (StrIsEmpty(cross_triple)) {
       LogWarn("InstallExecutable: cross target detected but could not derive a clang triple "
               "from os/arch, pass it yourself with:\n"
               "\n"
@@ -6029,13 +6041,13 @@ static void mate_install_executable(Executable *executable) {
   { // Variables
     SBAddF(&builder, "cc = %s\n", t.compiler);
 
-    if (!StrIsNull(cross_triple))           SBAddF(&builder, "cross_target = --target=%S\n", cross_triple);
-    if (executable->linkerFlags.length > 0) SBAddF(&builder, "linker_flags = %S\n", executable->linkerFlags);
-    if (executable->flags.length > 0)       SBAddF(&builder, "flags = %S\n", executable->flags);
-    if (executable->includes.length > 0)    SBAddF(&builder, "includes = %S\n", executable->includes);
-    if (executable->libPaths.length > 0)    SBAddF(&builder, "lib_paths = %S\n", executable->libPaths);
-    if (executable->libs.length > 0)        SBAddF(&builder, "libs = %S\n", executable->libs);
-    if (executable->frameworks.length > 0)  SBAddF(&builder, "frameworks = %S\n", executable->frameworks);
+    if (!StrIsEmpty(cross_triple))            SBAddF(&builder, "cross_target = --target=%S\n", cross_triple);
+    if (!StrIsEmpty(executable->linkerFlags)) SBAddF(&builder, "linker_flags = %S\n", executable->linkerFlags);
+    if (!StrIsEmpty(executable->flags))       SBAddF(&builder, "flags = %S\n", executable->flags);
+    if (!StrIsEmpty(executable->includes))    SBAddF(&builder, "includes = %S\n", executable->includes);
+    if (!StrIsEmpty(executable->libPaths))    SBAddF(&builder, "lib_paths = %S\n", executable->libPaths);
+    if (!StrIsEmpty(executable->libs))        SBAddF(&builder, "libs = %S\n", executable->libs);
+    if (!StrIsEmpty(executable->frameworks))  SBAddF(&builder, "frameworks = %S\n", executable->frameworks);
 
     SBAddF(&builder, "cwd = %S\n", NormPathNinja(mate_state.cwd));
     SBAddF(&builder, "builddir = %S\n", NormPathNinja(mate_state.build_directory));
@@ -6045,20 +6057,20 @@ static void mate_install_executable(Executable *executable) {
   { // Link command
     SBAddS(&builder, "rule link\n"
                      "  command = $cc");
-    if (!StrIsNull(cross_triple))     SBAddS(&builder, " $cross_target");
-    if (executable->flags.length > 0) SBAddS(&builder, " $flags");
+    if (!StrIsEmpty(cross_triple))      SBAddS(&builder, " $cross_target");
+    if (!StrIsEmpty(executable->flags)) SBAddS(&builder, " $flags");
 
     if (isMSVC(t)) {
       SBAddS(&builder, " /nologo /Fe:$out $in");
-      if (executable->libs.length > 0) SBAddS(&builder, " $libs");
+      if (!StrIsEmpty(executable->libs)) SBAddS(&builder, " $libs");
 
-      bool has_link_opts = executable->libPaths.length > 0 || executable->linkerFlags.length > 0 || executable->debug;
-      if (has_link_opts)                      SBAddS(&builder, " /link");
-      if (executable->debug)                  SBAddS(&builder, " /DEBUG");
-      if (executable->libPaths.length > 0)    SBAddS(&builder, " $lib_paths");
-      if (executable->linkerFlags.length > 0) SBAddS(&builder, " $linker_flags");
+      bool has_link_opts = !StrIsEmpty(executable->libPaths) || !StrIsEmpty(executable->linkerFlags) || executable->debug;
+      if (has_link_opts)                        SBAddS(&builder, " /link");
+      if (executable->debug)                    SBAddS(&builder, " /DEBUG");
+      if (!StrIsEmpty(executable->libPaths))    SBAddS(&builder, " $lib_paths");
+      if (!StrIsEmpty(executable->linkerFlags)) SBAddS(&builder, " $linker_flags");
     } else {
-      if (executable->linkerFlags.length > 0) SBAddS(&builder, " $linker_flags");
+      if (!StrIsEmpty(executable->linkerFlags)) SBAddS(&builder, " $linker_flags");
 
       if (executable->sharedLibOutputs.length > 0) {
         if (isMacOS(t))         SBAddS(&builder, " '-Wl,-rpath,@loader_path'");
@@ -6066,9 +6078,9 @@ static void mate_install_executable(Executable *executable) {
       }
 
       SBAddS(&builder, " -o $out $in");
-      if (executable->libPaths.length > 0)    SBAddS(&builder, " $lib_paths");
-      if (executable->libs.length > 0)        SBAddS(&builder, " $libs");
-      if (executable->frameworks.length > 0)  SBAddS(&builder, " $frameworks");
+      if (!StrIsEmpty(executable->libPaths))   SBAddS(&builder, " $lib_paths");
+      if (!StrIsEmpty(executable->libs))       SBAddS(&builder, " $libs");
+      if (!StrIsEmpty(executable->frameworks)) SBAddS(&builder, " $frameworks");
     }
     SBAddS(&builder, "\n");
     SBAddS(&builder, "  description = Linking C executable $target\n\n");
@@ -6077,10 +6089,10 @@ static void mate_install_executable(Executable *executable) {
   { // Compile command
     SBAddS(&builder, "rule compile\n"
                      "  command = $cc");
-    if (isMSVC(t))                       SBAddS(&builder, " /nologo /showIncludes");
-    if (!StrIsNull(cross_triple))        SBAddS(&builder, " $cross_target");
-    if (executable->flags.length > 0)    SBAddS(&builder, " $flags");
-    if (executable->includes.length > 0) SBAddS(&builder, " $includes");
+    if (isMSVC(t))                         SBAddS(&builder, " /nologo /showIncludes");
+    if (!StrIsEmpty(cross_triple))         SBAddS(&builder, " $cross_target");
+    if (!StrIsEmpty(executable->flags))    SBAddS(&builder, " $flags");
+    if (!StrIsEmpty(executable->includes)) SBAddS(&builder, " $includes");
 
     if (isMSVC(t)) {
       SBAddS(&builder, " /c \"$cwd/$in\" /Fo$out\n");
@@ -6099,7 +6111,7 @@ static void mate_install_executable(Executable *executable) {
     StringBuilder output_builder = SBCreate(mate_state.arena);
     for (size_t i = 0; i < executable->sources.length; i++) {
       String curr_source = VecAt(executable->sources, i);
-      if (StrIsNull(curr_source)) continue;
+      if (StrIsEmpty(curr_source)) continue;
 
       String output_file = NormPathOutput(t, curr_source);
       String source_file = NormPathStart(curr_source);
@@ -6112,7 +6124,7 @@ static void mate_install_executable(Executable *executable) {
       }
       SBAddS(&builder, "\n");
 
-      bool is_empty = output_builder.buffer.length == 0;
+      bool is_empty = StrIsEmpty(output_builder.buffer);
       if (is_empty) SBAddF(&output_builder, "$builddir/%S", output_file);
       else          SBAddF(&output_builder, " $builddir/%S", output_file);
     }
@@ -6168,7 +6180,7 @@ static void mate_install_static_lib(StaticLib *static_lib) {
   String cross_triple = {0};
   if (isClang(t) && !isTargetHost(t) && !StrIncludes(static_lib->flags, S("--target"))) {
     cross_triple = mate_clang_triple(t);
-    if (StrIsNull(cross_triple)) {
+    if (StrIsEmpty(cross_triple)) {
       LogWarn("InstallStaticLib: cross target detected but could not derive a clang triple "
               "from os/arch, pass it yourself with:\n"
               "\n"
@@ -6180,10 +6192,10 @@ static void mate_install_static_lib(StaticLib *static_lib) {
     SBAddF(&builder, "cc = %s\n", t.compiler);
     SBAddF(&builder, "ar = %s\n", t.ar);
 
-    if (!StrIsNull(cross_triple))        SBAddF(&builder, "cross_target = --target=%S\n", cross_triple);
-    if (static_lib->flags.length > 0)    SBAddF(&builder, "flags = %S\n", static_lib->flags);
-    if (static_lib->arFlags.length > 0)  SBAddF(&builder, "ar_flags = %S\n", static_lib->arFlags);
-    if (static_lib->includes.length > 0) SBAddF(&builder, "includes = %S\n", static_lib->includes);
+    if (!StrIsEmpty(cross_triple))         SBAddF(&builder, "cross_target = --target=%S\n", cross_triple);
+    if (!StrIsEmpty(static_lib->flags))    SBAddF(&builder, "flags = %S\n", static_lib->flags);
+    if (!StrIsEmpty(static_lib->arFlags))  SBAddF(&builder, "ar_flags = %S\n", static_lib->arFlags);
+    if (!StrIsEmpty(static_lib->includes)) SBAddF(&builder, "includes = %S\n", static_lib->includes);
 
     SBAddF(&builder, "cwd = %S\n", NormPathNinja(mate_state.cwd));
     SBAddF(&builder, "builddir = %S\n", NormPathNinja(mate_state.build_directory));
@@ -6192,7 +6204,7 @@ static void mate_install_static_lib(StaticLib *static_lib) {
 
   { // Archive command
     SBAddS(&builder, "rule archive\n");
-    bool has_ar_flags = static_lib->arFlags.length > 0;
+    bool has_ar_flags = !StrIsEmpty(static_lib->arFlags);
 
     if (!isMSVC(t)) {
       if (has_ar_flags) SBAddS(&builder, "  command = $ar $ar_flags $out $in\n");
@@ -6209,12 +6221,12 @@ static void mate_install_static_lib(StaticLib *static_lib) {
     SBAddS(&builder, "rule compile\n"
                      "  command = $cc");
 
-    if (isMSVC(t))                       SBAddS(&builder, " /nologo /showIncludes");
+    if (isMSVC(t))                         SBAddS(&builder, " /nologo /showIncludes");
     // INFO: static libs are always PIC to be able to link with shared libs
-    if (!isWindows(t))                   SBAddS(&builder, " -fPIC");
-    if (!StrIsNull(cross_triple))        SBAddS(&builder, " $cross_target");
-    if (static_lib->flags.length > 0)    SBAddS(&builder, " $flags");
-    if (static_lib->includes.length > 0) SBAddS(&builder, " $includes");
+    if (!isWindows(t))                     SBAddS(&builder, " -fPIC");
+    if (!StrIsEmpty(cross_triple))         SBAddS(&builder, " $cross_target");
+    if (!StrIsEmpty(static_lib->flags))    SBAddS(&builder, " $flags");
+    if (!StrIsEmpty(static_lib->includes)) SBAddS(&builder, " $includes");
 
     if (isMSVC(t)) {
       SBAddS(&builder, " /c \"$cwd/$in\" /Fo$out\n");
@@ -6233,7 +6245,7 @@ static void mate_install_static_lib(StaticLib *static_lib) {
     StringBuilder output_builder = SBCreate(mate_state.arena);
     for (size_t i = 0; i < static_lib->sources.length; i++) {
       String curr_source_file = VecAt(static_lib->sources, i);
-      if (StrIsNull(curr_source_file)) continue;
+      if (StrIsEmpty(curr_source_file)) continue;
 
       String output_file = NormPathOutput(t, curr_source_file);
       String source_file = NormPathStart(curr_source_file);
@@ -6247,7 +6259,7 @@ static void mate_install_static_lib(StaticLib *static_lib) {
       }
       SBAddS(&builder, "\n");
 
-      bool is_empty = output_builder.buffer.length == 0;
+      bool is_empty = StrIsEmpty(output_builder.buffer);
       if (is_empty) SBAddF(&output_builder, "$builddir/%S", output_file);
       else          SBAddF(&output_builder, " $builddir/%S", output_file);
     }
@@ -6288,7 +6300,7 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
   String cross_triple = {0};
   if (isClang(t) && !isTargetHost(t) && !StrIncludes(shared_lib->flags, S("--target"))) {
     cross_triple = mate_clang_triple(t);
-    if (StrIsNull(cross_triple)) {
+    if (StrIsEmpty(cross_triple)) {
       LogWarn("InstallSharedLib: cross target detected but could not derive a clang triple "
               "from os/arch, pass it yourself with:\n"
               "\n"
@@ -6299,13 +6311,13 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
   { // Variables
     SBAddF(&builder, "cc = %s\n", t.compiler);
 
-    if (!StrIsNull(cross_triple))           SBAddF(&builder, "cross_target = --target=%S\n", cross_triple);
-    if (shared_lib->linkerFlags.length > 0) SBAddF(&builder, "linker_flags = %S\n", shared_lib->linkerFlags);
-    if (shared_lib->flags.length > 0)       SBAddF(&builder, "flags = %S\n", shared_lib->flags);
-    if (shared_lib->includes.length > 0)    SBAddF(&builder, "includes = %S\n", shared_lib->includes);
-    if (shared_lib->libPaths.length > 0)    SBAddF(&builder, "lib_paths = %S\n", shared_lib->libPaths);
-    if (shared_lib->libs.length > 0)        SBAddF(&builder, "libs = %S\n", shared_lib->libs);
-    if (shared_lib->frameworks.length > 0)  SBAddF(&builder, "frameworks = %S\n", shared_lib->frameworks);
+    if (!StrIsEmpty(cross_triple))            SBAddF(&builder, "cross_target = --target=%S\n", cross_triple);
+    if (!StrIsEmpty(shared_lib->linkerFlags)) SBAddF(&builder, "linker_flags = %S\n", shared_lib->linkerFlags);
+    if (!StrIsEmpty(shared_lib->flags))       SBAddF(&builder, "flags = %S\n", shared_lib->flags);
+    if (!StrIsEmpty(shared_lib->includes))    SBAddF(&builder, "includes = %S\n", shared_lib->includes);
+    if (!StrIsEmpty(shared_lib->libPaths))    SBAddF(&builder, "lib_paths = %S\n", shared_lib->libPaths);
+    if (!StrIsEmpty(shared_lib->libs))        SBAddF(&builder, "libs = %S\n", shared_lib->libs);
+    if (!StrIsEmpty(shared_lib->frameworks))  SBAddF(&builder, "frameworks = %S\n", shared_lib->frameworks);
 
     SBAddF(&builder, "cwd = %S\n", NormPathNinja(mate_state.cwd));
     SBAddF(&builder, "builddir = %S\n", NormPathNinja(mate_state.build_directory));
@@ -6322,24 +6334,24 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
     if (isMacOS(t))         SBAddF(&builder, " -install_name @rpath/%S", shared_lib->output);
     else if (!isWindows(t)) SBAddF(&builder, " '-Wl,-soname,%S'", shared_lib->output);
 
-    if (!StrIsNull(cross_triple)) SBAddS(&builder, " $cross_target");
-    if (shared_lib->flags.length > 0) SBAddS(&builder, " $flags");
+    if (!StrIsEmpty(cross_triple))      SBAddS(&builder, " $cross_target");
+    if (!StrIsEmpty(shared_lib->flags)) SBAddS(&builder, " $flags");
 
     if (isMSVC(t)) {
       SBAddS(&builder, " /Fe:$out $in");
-      if (shared_lib->libs.length > 0) SBAddS(&builder, " $libs");
+      if (!StrIsEmpty(shared_lib->libs)) SBAddS(&builder, " $libs");
 
-      bool has_link_opts = shared_lib->libPaths.length > 0 || shared_lib->linkerFlags.length > 0 || shared_lib->debug;
-      if (has_link_opts)                      SBAddS(&builder, " /link");
-      if (shared_lib->debug)                  SBAddS(&builder, " /DEBUG");
-      if (shared_lib->libPaths.length > 0)    SBAddS(&builder, " $lib_paths");
-      if (shared_lib->linkerFlags.length > 0) SBAddS(&builder, " $linker_flags");
+      bool has_link_opts = !StrIsEmpty(shared_lib->libPaths) || !StrIsEmpty(shared_lib->linkerFlags) || shared_lib->debug;
+      if (has_link_opts)                        SBAddS(&builder, " /link");
+      if (shared_lib->debug)                    SBAddS(&builder, " /DEBUG");
+      if (!StrIsEmpty(shared_lib->libPaths))    SBAddS(&builder, " $lib_paths");
+      if (!StrIsEmpty(shared_lib->linkerFlags)) SBAddS(&builder, " $linker_flags");
     } else {
-      if (shared_lib->linkerFlags.length > 0) SBAddS(&builder, " $linker_flags");
+      if (!StrIsEmpty(shared_lib->linkerFlags)) SBAddS(&builder, " $linker_flags");
       SBAddS(&builder, " -o $out $in");
-      if (shared_lib->libPaths.length > 0)    SBAddS(&builder, " $lib_paths");
-      if (shared_lib->libs.length > 0)        SBAddS(&builder, " $libs");
-      if (shared_lib->frameworks.length > 0)  SBAddS(&builder, " $frameworks");
+      if (!StrIsEmpty(shared_lib->libPaths))    SBAddS(&builder, " $lib_paths");
+      if (!StrIsEmpty(shared_lib->libs))        SBAddS(&builder, " $libs");
+      if (!StrIsEmpty(shared_lib->frameworks))  SBAddS(&builder, " $frameworks");
     }
 
     SBAddS(&builder, "\n");
@@ -6350,11 +6362,11 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
     SBAddS(&builder, "rule compile\n"
                      "  command = $cc");
 
-    if (isMSVC(t))                       SBAddS(&builder, " /nologo /showIncludes");
-    if (!isWindows(t))                   SBAddS(&builder, " -fPIC");
-    if (!StrIsNull(cross_triple))        SBAddS(&builder, " $cross_target");
-    if (shared_lib->flags.length > 0)    SBAddS(&builder, " $flags");
-    if (shared_lib->includes.length > 0) SBAddS(&builder, " $includes");
+    if (isMSVC(t))                         SBAddS(&builder, " /nologo /showIncludes");
+    if (!isWindows(t))                     SBAddS(&builder, " -fPIC");
+    if (!StrIsEmpty(cross_triple))         SBAddS(&builder, " $cross_target");
+    if (!StrIsEmpty(shared_lib->flags))    SBAddS(&builder, " $flags");
+    if (!StrIsEmpty(shared_lib->includes)) SBAddS(&builder, " $includes");
 
     if (isMSVC(t)) {
       SBAddS(&builder, " /c \"$cwd/$in\" /Fo$out\n");
@@ -6373,7 +6385,7 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
     StringBuilder output_builder = SBCreate(mate_state.arena);
     for (size_t i = 0; i < shared_lib->sources.length; i++) {
       String curr_source = VecAt(shared_lib->sources, i);
-      if (StrIsNull(curr_source)) continue;
+      if (StrIsEmpty(curr_source)) continue;
 
       String output_file = NormPathOutput(t, curr_source);
       String source_file = NormPathStart(curr_source);
@@ -6386,7 +6398,7 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
       }
       SBAddS(&builder, "\n");
 
-      bool is_empty = output_builder.buffer.length == 0;
+      bool is_empty = StrIsEmpty(output_builder.buffer);
       if (is_empty) SBAddF(&output_builder, "$builddir/%S", output_file);
       else          SBAddF(&output_builder, " $builddir/%S", output_file);
     }
@@ -6477,18 +6489,18 @@ static void mate_link_shared_lib(StringVector *shared_lib_outputs, SharedLib *sh
 
 static void mate_link_system_libraries(Target t, String *targetLibs, char **libs, size_t libs_size) {
   StringBuilder builder = SBCreate(mate_state.arena);
-  if (targetLibs->length) SBAdd(&builder, *targetLibs);
+  if (!StrIsEmpty(*targetLibs)) SBAdd(&builder, *targetLibs);
 
   if (isMSVC(t)) {
     // MSVC format: library.lib
     for (size_t i = 0; i < libs_size; i++) {
-      if (builder.buffer.length == 0) SBAddF(&builder, "%s.lib", libs[i]);
+      if (StrIsEmpty(builder.buffer)) SBAddF(&builder, "%s.lib", libs[i]);
       else                            SBAddF(&builder, " %s.lib", libs[i]);
     }
   } else {
     // GCC/Clang format: -llib
     for (size_t i = 0; i < libs_size; i++) {
-      if (builder.buffer.length == 0) SBAddF(&builder, "-l%s", libs[i]);
+      if (StrIsEmpty(builder.buffer)) SBAddF(&builder, "-l%s", libs[i]);
       else                            SBAddF(&builder, " -l%s", libs[i]);
     }
   }
@@ -6515,10 +6527,10 @@ static void mate_link_frameworks_with_options(Target t, String *targetFrameworks
   }
 
   StringBuilder builder = SBCreate(mate_state.arena);
-  if (targetFrameworks->length) SBAdd(&builder, *targetFrameworks);
+  if (!StrIsEmpty(*targetFrameworks)) SBAdd(&builder, *targetFrameworks);
 
   for (size_t i = 0; i < frameworks_size; i++) {
-    if (builder.buffer.length == 0) SBAddF(&builder, "%s %s", framework_flag, frameworks[i]);
+    if (StrIsEmpty(builder.buffer)) SBAddF(&builder, "%s %s", framework_flag, frameworks[i]);
     else                            SBAddF(&builder, " %s %s", framework_flag, frameworks[i]);
   }
 
@@ -6531,18 +6543,18 @@ static void mate_link_frameworks(Target t, String *targetFrameworks, char **fram
 
 static void mate_add_library_paths(Target t, String *targetLibPaths, char **libs, size_t libs_size) {
   StringBuilder builder = SBCreate(mate_state.arena);
-  if (targetLibPaths->length) SBAdd(&builder, *targetLibPaths);
+  if (!StrIsEmpty(*targetLibPaths)) SBAdd(&builder, *targetLibPaths);
 
   if (isMSVC(t)) {
     // MSVC format: /LIBPATH:"path"
     for (size_t i = 0; i < libs_size; i++) {
-      if (builder.buffer.length == 0) SBAddF(&builder, "/LIBPATH:\"%s\"", libs[i]);
+      if (StrIsEmpty(builder.buffer)) SBAddF(&builder, "/LIBPATH:\"%s\"", libs[i]);
       else                            SBAddF(&builder, " /LIBPATH:\"%s\"", libs[i]);
     }
   } else {
     // GCC/Clang format: -L"path"
     for (size_t i = 0; i < libs_size; i++) {
-      if (builder.buffer.length == 0) SBAddF(&builder, "-L\"%s\"", libs[i]);
+      if (StrIsEmpty(builder.buffer)) SBAddF(&builder, "-L\"%s\"", libs[i]);
       else                            SBAddF(&builder, " -L\"%s\"", libs[i]);
     }
   }
@@ -6553,7 +6565,7 @@ static void mate_add_library_paths(Target t, String *targetLibPaths, char **libs
 static void mate_add_include_paths(Target t, String *target_includes, char **includes, size_t includes_size) {
   StringBuilder builder = SBCreate(mate_state.arena);
 
-  if (target_includes->length) {
+  if (!StrIsEmpty(*target_includes)) {
     SBAdd(&builder, *target_includes);
   }
 
@@ -6561,7 +6573,7 @@ static void mate_add_include_paths(Target t, String *target_includes, char **inc
     // MSVC format: /I"path"
     for (size_t i = 0; i < includes_size; i++) {
       char *curr_include = includes[i];
-      if (builder.buffer.length == 0) {
+      if (StrIsEmpty(builder.buffer)) {
         SBAddF(&builder, "/I\"%s\"", curr_include);
         continue;
       }
@@ -6571,7 +6583,7 @@ static void mate_add_include_paths(Target t, String *target_includes, char **inc
     // GCC/Clang format: -I"path"
     for (size_t i = 0; i < includes_size; i++) {
       char *curr_include = includes[i];
-      if (builder.buffer.length == 0) {
+      if (StrIsEmpty(builder.buffer)) {
         SBAddF(&builder, "-I\"%s\"", curr_include);
         continue;
       }
@@ -6587,14 +6599,14 @@ static void mate_add_framework_paths(Target t, String *target_includes, char **f
 
   StringBuilder builder = SBCreate(mate_state.arena);
 
-  if (target_includes->length) {
+  if (!StrIsEmpty(*target_includes)) {
     SBAdd(&builder, *target_includes);
   }
 
   // GCC/Clang format: -F"path"
   for (size_t i = 0; i < frameworks_size; i++) {
     char *curr_include = frameworks[i];
-    if (builder.buffer.length == 0) {
+    if (StrIsEmpty(builder.buffer)) {
       SBAddF(&builder, "-F\"%s\"", curr_include);
       continue;
     }
@@ -6619,7 +6631,7 @@ FlagBuilder FlagBuilderReserve(size_t count) {
 }
 
 static void mate_flag_builder_add_string(Target t, FlagBuilder *builder, char *flag) {
-  bool is_empty = builder->buffer.length == 0;
+  bool is_empty = StrIsEmpty(builder->buffer);
   if (isMSVC(t)) {
     Assert(flag[0] != '/', "FlagBuilderAdd: flag should not contain '/'. Your flag:\n%s \n\ne.g usage FlagBuilderAdd(\"W4\")", flag);
     Assert(!(strcmp(flag, "Zi") == 0 || strcmp(flag, "ZI") == 0),
@@ -6681,7 +6693,7 @@ static String mate_path_fix_slashes(String path) {
 }
 
 static bool mate_is_platform_ext(String ext) {
-  if (ext.length == 0) return false;
+  if (StrIsEmpty(ext)) return false;
   return StrEq(ext, S(".exe")) || StrEq(ext, S(".a")) || StrEq(ext, S(".lib")) ||
          StrEq(ext, S(".so"))  || StrEq(ext, S(".dll")) || StrEq(ext, S(".dylib"));
 }
@@ -6779,7 +6791,7 @@ String NormPathNinja(String str) {
 String NormPathOutput(Target t, String str) {
   String ext = isMSVC(t) ? S(".obj") : S(".o");
   String stem = PathStem(str);
-  Assert(stem.length > 0, "NormPathOutput: failed to get stem from %s", str.data);
+  Assert(!StrIsEmpty(stem), "NormPathOutput: failed to get stem from %s", str.data);
   return StrConcat(mate_state.arena, stem, ext);
 }
 

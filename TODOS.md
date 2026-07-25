@@ -6,6 +6,7 @@
 - [x] Test rebuilding scripts (just a second run).
 - [x] Clang `--target` test
 - [ ] Test that asserts fail
+- [ ] Add back script-name for running tests
 - [ ] Parallel running tests
 - [ ] Create a documentation page
 
@@ -18,7 +19,15 @@
 - [ ] `--start-group` and `--end-group` for transitive deps
 - [ ] flags dedupping
 
-## v0.5
+### v0.5
+- [ ] Cleanup:
+    - [ ] Assertions should follow some structure, utility functions for repeating asserts
+    - [ ] Abstract functions repeated more than 3 times (2 if too long)
+    - [ ] Proper implementation/definition group
+    - [ ] Proper public/private functions
+    - [ ] Consistent variable names and follow private/public rules
+    - [ ] Consistent formatting and line length, add a `.clang-format`
+    - [ ] Update CONTRIBUTING.md
 - [ ] SubProjects:
     - [ ] Mate cache should save installed targets
     - [ ] Get transitive dependencies through `mate-cache.ini`
@@ -29,25 +38,21 @@
 - [ ] `FindSystemPackage(exe, "sdl3")`
 - [ ] `FetchDependency(url, hash)`
 - [ ] We should own all `char *` or pointers user gives
-- [ ] Make `samurai` windows compatible
-- [ ] `mate_program_exists` cache
+- [ ] `mate_program_exists` cache if already on machine
 
-## v0.4
-- [ ] Cleanup:
-    - [ ] Assertions should follow some structure, utility functions for repeating asserts
-    - [ ] Abstract functions repeated more than 3 times (2 if too long)
-    - [ ] Proper implementation/definition group
-    - [ ] Proper implementation/definition order
-    - [ ] Consistent variable names and follow private/public rules
-    - [ ] Flag dedup, if default flag is x, and uses passes x, remove users and warn
-    - [ ] Cleaner output on ninja description
-    - [ ] `/nologo`, `/showIncludes`, `-fPIC`, ... should be part of ninja variables instead
-    - [ ] Consistent formatting and line length, add a `.clang-format`
-    - [ ] Minify samurai file
-    - [ ] Update CONTRIBUTING.md
-- [ ] Custom build step
+### v0.4
+- [ ] Replace samurai with our own backend
+    - [ ] Add deps for gcc/clang
+    - [ ] Add deps for msvc
+    - [ ] Generate our own `compile_commands.json`
 - [ ] `RunExec` for running executable
 - [ ] Move to `exec` && `CreateProcess` for executables
+- [ ] Custom build step
+- [ ] Add test abstraction
+- [ ] Cleanup:
+    - [ ] Proper implementation/definition order
+    - [ ] Flag dedup, if default flag is x, and uses passes x, remove users and warn
+    - [ ] `/nologo`, `/showIncludes`, `-fPIC`, ... should be part of default variables instead
 
 ## v0.3
 - [x] `LinkStaticLib()` for linking another `StaticLib`
@@ -67,10 +72,8 @@
 - [x] Better compiler naming, code nagivation, move arch to base.h
 - [x] On comments add `Implementation/Definition` per feature
 - [x] Add cross-compile target for clang with `--target=<triple>`
-- [ ] `StrIsEmpty` instead of `StrIsNull`
+- [x] `StrIsEmpty` instead of `StrIsNull`
 - [ ] Build output on folder depending on platform/arch
-- [ ] Add `args` parser
-- [ ] base.h - Generic HashMap
 
 ## v0.2
 - [x] Samurai does not generate `compile_commands.json`?
