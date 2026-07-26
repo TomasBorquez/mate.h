@@ -1,7 +1,7 @@
 /* MIT License
 
   mate.h - A single-header library for compiling your C code in C
-  Version - 2026-07-16 (0.3.1):
+  Version - 2026-07-16 (0.4.0):
   https://github.com/TomasBorquez/mate.h
 
   Guide on the `README.md`
