@@ -6,6 +6,17 @@ int main(void) {
 
   StartBuild();
   {
+    // shared lib linked by another shared lib:
+    SharedLib vecutil = CreateSharedLib((SharedLibOptions){
+        .output = "vecutil",
+        .flags = "-DVECUTIL_BUILD",
+        .debug = FLAG_DEBUG,
+    });
+
+    AddFile(vecutil, "./src/vecutil.c");
+
+    InstallSharedLib(vecutil);
+
     // shared lib:
     SharedLib mathlib = CreateSharedLib((SharedLibOptions){
         .output = "mathlib",
@@ -14,6 +25,8 @@ int main(void) {
     });
 
     AddFile(mathlib, "./src/mathlib.c");
+
+    LinkSharedLib(mathlib, vecutil);
 
     InstallSharedLib(mathlib);
 
@@ -33,8 +46,10 @@ int main(void) {
     InstallExecutable(exe);
 
     if (isMSVC(t)) {
-      Assert(FileStats(S("./build/mathlib.pdb")).error == SUCCESS, "expected mathlib.pdb next to the DLL, /DEBUG pipeline broken");
-      Assert(FileStats(S("./build/main.pdb")).error == SUCCESS, "expected main.pdb next to the exe, /DEBUG pipeline broken");
+      String mathlibPdb = PathJoin(mathlib.outputDir, S("mathlib.pdb"));
+      String mainPdb = PathJoin(exe.outputDir, S("main.pdb"));
+      Assert(FileStats(mathlibPdb).error == SUCCESS, "expected mathlib.pdb next to the DLL at %s, /DEBUG pipeline broken", mathlibPdb.data);
+      Assert(FileStats(mainPdb).error == SUCCESS, "expected main.pdb next to the exe at %s, /DEBUG pipeline broken", mainPdb.data);
     }
 
     errno_t errExe = RunCommand(exe.outputPath);
