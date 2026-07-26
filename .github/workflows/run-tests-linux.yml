@@ -52,6 +52,7 @@ jobs:
           "08-custom-compiler"
           "09-shared-lib"
           "10-cross-compile"
+          "11-output-paths"
         )
 
         for test in "${tests[@]}"; do
