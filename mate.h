@@ -862,6 +862,7 @@ static void _custom_assert(const char *expr, const char *file, unsigned line, co
     va_end(args);
   }
 
+  fflush(stdout);
   abort();
 }
 
@@ -875,6 +876,7 @@ static void _custom_unreachable(const char *file, unsigned line, const char *for
     va_end(args);
   }
 
+  fflush(stdout);
   abort();
 }
 
@@ -2178,6 +2180,8 @@ typedef struct {
   Target script_compiler;
 
   String build_directory;
+  String ninja_directory;
+  String samurai_path;
   String mate_source;
   String mate_exe;
   String rebuild_flags;
@@ -2196,6 +2200,8 @@ typedef struct {
 typedef struct {
   String output;
   String outputPath;
+  String outputDir;
+  String objectDir;
   String ninjaBuildPath;
 
   Target target;
@@ -2218,6 +2224,8 @@ typedef struct {
 typedef struct {
   String output;
   String outputPath;
+  String outputDir;
+  String objectDir;
   String ninjaBuildPath;
 
   Target target;
@@ -2233,6 +2241,9 @@ typedef struct {
 typedef struct {
   String output;
   String outputPath;
+  String linkPath;
+  String outputDir;
+  String objectDir;
   String ninjaBuildPath;
 
   Target target;
@@ -2346,7 +2357,15 @@ static void mate_flag_builder_add_string(Target t, FlagBuilder *builder, char *f
 static void mate_flag_builder_add_list(Target t, FlagBuilder *fb, char **flags);
 
 /*   }}} --- Path Utils Definitions --- {{{   */
+static String mate_path_strip_ext(String path);
 static String mate_path_with_platform_ext(Target t, Arena *arena, String path, String unix_ext, String win_ext, String macos_ext);
+
+static String mate_target_dir(Target t);
+static String mate_bin_dir(Target t);
+static String mate_lib_dir(Target t);
+static String mate_obj_dir(Target t, String stem);
+static String mate_rpath_to_lib(Target t);
+static void mate_apply_shared_lib_flags(Target t, StringBuilder *builder, String rpath_from_origin);
 
 String PathJoin(String base, String tail);
 String PathStem(String path);
@@ -5313,6 +5332,12 @@ bool isMSVC(Target t);
 static MateConfig mate_state = {0};
 
 /*   --- Build System Implementations --- {{{   */
+static void mate_set_build_directory(String path) {
+  mate_state.build_directory = path;
+  mate_state.ninja_directory = PathJoin(path, S("ninja"));
+  mate_state.samurai_path = PathJoin(mate_state.ninja_directory, S("samurai"));
+}
+
 static void mate_set_default_state(void) {
   {
     mate_state.arena = ArenaCreate(20000 * sizeof(String));
@@ -5324,7 +5349,7 @@ static void mate_set_default_state(void) {
 
     mate_state.mate_exe = AbsoluteNormPathExe(mate_state.script_compiler, S("./mate"));
     mate_state.mate_source = AbsoluteNormPath(S("./mate.c"));
-    mate_state.build_directory = AbsoluteNormPath(S("./build"));
+    mate_set_build_directory(AbsoluteNormPath(S("./build")));
 		mate_state.rebuild_flags = S("");
   }
 
@@ -5333,7 +5358,7 @@ static void mate_set_default_state(void) {
 
 void CreateConfig(MateOptions opts) {
   mate_set_default_state();
-  if (opts.buildDirectory != NULL) mate_state.build_directory = AbsoluteNormPath(s(opts.buildDirectory));
+  if (opts.buildDirectory != NULL) mate_set_build_directory(AbsoluteNormPath(s(opts.buildDirectory)));
   if (opts.rebuildFlags != NULL)   mate_state.rebuild_flags = s(opts.rebuildFlags);
   if (isTargetSet(opts.scriptCompiler)) {
     Target t = CreateTarget(opts.scriptCompiler);
@@ -5373,11 +5398,11 @@ static void mate_read_cache(void) {
     Assert(mate_state.mate_cache.first_build, "MateCache: This is not the first build and samurai is not compiled, could be a cache error, delete `./build` folder and rebuild `./mate.c`");
 
     String samurai_amalgam = s(SAMURAI_AMALGAM);
-    String source_path = PathJoin(mate_state.build_directory, S("samurai.c"));
+    String source_path = PathJoin(mate_state.ninja_directory, S("samurai.c"));
     Error err_file_write = FileWrite(source_path, samurai_amalgam);
     Assert(err_file_write == SUCCESS, "MateReadCache: failed writing samurai source code to path %s", source_path.data);
 
-    String output_path = PathJoin(mate_state.build_directory, S("samurai"));
+    String output_path = mate_state.samurai_path;
     String compile_command = F(mate_state.arena, "%s \"%s\" -o \"%s\" -std=c99", mate_state.script_compiler.compiler, source_path.data, output_path.data);
 
     errno_t run_error = RunCommand(compile_command);
@@ -5464,6 +5489,8 @@ void StartBuildEx(int argc, char **argv) {
   mate_state.start_time = TimeNow();
 
   Assert(Mkdir(mate_state.build_directory) == SUCCESS, "StartBuild: mkdir failed on making path %s", mate_state.build_directory.data);
+  Assert(Mkdir(mate_state.ninja_directory) == SUCCESS, "StartBuild: mkdir failed on making path %s", mate_state.ninja_directory.data);
+
   mate_read_cache();
   mate_rebuild(argc, argv);
 }
@@ -5687,7 +5714,11 @@ Executable CreateExecutable(ExecutableOptions opts) {
   if (opts.linkerFlags != NULL) result.linkerFlags = s(opts.linkerFlags);
 
   String build_file_name = F(mate_state.arena, "exe-%s.ninja", PathStem(result.output).data);
-  result.ninjaBuildPath = PathJoin(mate_state.build_directory, build_file_name);
+  result.ninjaBuildPath = PathJoin(mate_state.ninja_directory, build_file_name);
+
+  result.outputDir = mate_bin_dir(t);
+  result.outputPath = PathJoin(result.outputDir, result.output);
+  result.objectDir = mate_obj_dir(t, PathStem(result.output));
   return result;
 }
 
@@ -5743,7 +5774,11 @@ StaticLib CreateStaticLib(StaticLibOptions opts) {
   if (opts.arFlags != NULL) result.arFlags = s(opts.arFlags);
 
   String build_file_name = F(mate_state.arena, "static-lib-%s.ninja", PathStem(result.output).data);
-  result.ninjaBuildPath = PathJoin(mate_state.build_directory, build_file_name);
+  result.ninjaBuildPath = PathJoin(mate_state.ninja_directory, build_file_name);
+
+  result.outputDir = mate_lib_dir(t);
+  result.outputPath = PathJoin(result.outputDir, result.output);
+  result.objectDir = mate_obj_dir(t, PathStem(result.output));
   return result;
 }
 
@@ -5827,7 +5862,18 @@ SharedLib CreateSharedLib(SharedLibOptions opts) {
   if (opts.linkerFlags != NULL) result.linkerFlags = s(opts.linkerFlags);
 
   String build_file_name = F(mate_state.arena, "shared-lib-%s.ninja", PathStem(result.output).data);
-  result.ninjaBuildPath = PathJoin(mate_state.build_directory, build_file_name);
+  result.ninjaBuildPath = PathJoin(mate_state.ninja_directory, build_file_name);
+
+  // INFO: dlls go next to the executables since windows has no rpath, the rest are linkables
+  result.outputDir = isWindows(t) ? mate_bin_dir(t) : mate_lib_dir(t);
+  result.outputPath = PathJoin(result.outputDir, result.output);
+  result.objectDir = mate_obj_dir(t, PathStem(result.output));
+
+  result.linkPath = result.outputPath;
+  if (isMSVC(t)) {
+    String import_lib = StrConcat(mate_state.arena, PathStem(result.output), S(".lib"));
+    result.linkPath = PathJoin(mate_lib_dir(t), import_lib);
+  }
   return result;
 }
 
@@ -5838,7 +5884,7 @@ static CreateCompileCommandsError mate_create_compile_commands(String ninja_buil
 
   String compdb_cmd = {0};
   if (mate_state.mate_cache.samurai_build == true) {
-    String samurai_output_path = PathJoin(mate_state.build_directory, S("samurai"));
+    String samurai_output_path = mate_state.samurai_path;
     compdb_cmd = NormPath(F(mate_state.arena, "%s -f %s -t compdb compile", samurai_output_path.data, ninja_build_path.data));
   }
 
@@ -6050,8 +6096,10 @@ static void mate_install_executable(Executable *executable) {
     if (!StrIsEmpty(executable->frameworks))  SBAddF(&builder, "frameworks = %S\n", executable->frameworks);
 
     SBAddF(&builder, "cwd = %S\n", NormPathNinja(mate_state.cwd));
-    SBAddF(&builder, "builddir = %S\n", NormPathNinja(mate_state.build_directory));
-    SBAddF(&builder, "target = $builddir/%S\n\n", executable->output);
+    SBAddF(&builder, "builddir = %S\n", NormPathNinja(mate_state.ninja_directory));
+    SBAddF(&builder, "bindir = %S\n", NormPathNinja(executable->outputDir));
+    SBAddF(&builder, "objdir = %S\n", NormPathNinja(executable->objectDir));
+    SBAddF(&builder, "target = $bindir/%S\n\n", executable->output);
   }
 
   { // Link command
@@ -6071,11 +6119,7 @@ static void mate_install_executable(Executable *executable) {
       if (!StrIsEmpty(executable->linkerFlags)) SBAddS(&builder, " $linker_flags");
     } else {
       if (!StrIsEmpty(executable->linkerFlags)) SBAddS(&builder, " $linker_flags");
-
-      if (executable->sharedLibOutputs.length > 0) {
-        if (isMacOS(t))         SBAddS(&builder, " '-Wl,-rpath,@loader_path'");
-        else if (!isWindows(t)) SBAddS(&builder, " '-Wl,-rpath,$$ORIGIN'");
-      }
+      if (executable->sharedLibOutputs.length > 0) mate_apply_shared_lib_flags(t, &builder, mate_rpath_to_lib(t));
 
       SBAddS(&builder, " -o $out $in");
       if (!StrIsEmpty(executable->libPaths))   SBAddS(&builder, " $lib_paths");
@@ -6100,7 +6144,7 @@ static void mate_install_executable(Executable *executable) {
     } else if (isGCC(t) || isClang(t)) {
       SBAddS(&builder, " -c \"$cwd/$in\" -o $out -MMD -MF $depfile\n");
       SBAddS(&builder, "  depfile = $depfile\n");
-      SBAddS(&builder, "  deps = gcc\n"); // INFO: clang replicates this
+      SBAddS(&builder, "  deps = gcc\n");
     } else {
       SBAddS(&builder, " -c \"$cwd/$in\" -o $out\n");
     }
@@ -6115,31 +6159,26 @@ static void mate_install_executable(Executable *executable) {
 
       String output_file = NormPathOutput(t, curr_source);
       String source_file = NormPathStart(curr_source);
-      SBAddF(&builder, "build $builddir/%S: compile %S\n", output_file, source_file);
+      SBAddF(&builder, "build $objdir/%S: compile %S\n", output_file, source_file);
 
       if (isGCC(t) || isClang(t)) {
         String dep_file = StrNewSize(mate_state.arena, output_file.data, output_file.length);
         dep_file.data[dep_file.length - 1] = 'd';
-        SBAddF(&builder, "  depfile = $builddir/%S\n", dep_file);
+        SBAddF(&builder, "  depfile = $objdir/%S\n", dep_file);
       }
       SBAddS(&builder, "\n");
 
       bool is_empty = StrIsEmpty(output_builder.buffer);
-      if (is_empty) SBAddF(&output_builder, "$builddir/%S", output_file);
-      else          SBAddF(&output_builder, " $builddir/%S", output_file);
+      if (is_empty) SBAddF(&output_builder, "$objdir/%S", output_file);
+      else          SBAddF(&output_builder, " $objdir/%S", output_file);
     }
 
     SBAddF(&builder, "build $target: link %S", output_builder.buffer);
     for (size_t i = 0; i < executable->staticLibOutputs.length; i++) {
-      SBAddF(&builder, " $builddir/%S", executable->staticLibOutputs.data[i]);
+      SBAddF(&builder, " %S", NormPathNinja(executable->staticLibOutputs.data[i]));
     }
     for (size_t i = 0; i < executable->sharedLibOutputs.length; i++) {
-      String dep = executable->sharedLibOutputs.data[i];
-      if (isMSVC(t)) {
-        String stem = PathStem(dep);
-        dep = StrConcat(mate_state.arena, stem, S(".lib"));
-      }
-      SBAddF(&builder, " $builddir/%S", dep);
+      SBAddF(&builder, " %S", NormPathNinja(executable->sharedLibOutputs.data[i]));
     }
     SBAddS(&builder, "\n\n");
   }
@@ -6153,7 +6192,7 @@ static void mate_install_executable(Executable *executable) {
 
   String build_command;
   if (mate_state.mate_cache.samurai_build) {
-    String samurai_output_path = PathJoin(mate_state.build_directory, S("samurai"));
+    String samurai_output_path = mate_state.samurai_path;
     build_command = F(mate_state.arena, "%s -f %s", samurai_output_path.data, ninja_build_path.data);
   } else {
     build_command = F(mate_state.arena, "ninja -f %s", ninja_build_path.data);
@@ -6163,7 +6202,6 @@ static void mate_install_executable(Executable *executable) {
   Assert(run_error == SUCCESS, "InstallExecutable: Ninja file compilation failed with code: " I32, run_error);
 
   mate_state.total_time = TimeNow() - mate_state.start_time;
-  executable->outputPath = PathJoin(mate_state.build_directory, executable->output);
 
   VecFree(executable->sources);
   VecFree(executable->staticLibOutputs);
@@ -6198,8 +6236,10 @@ static void mate_install_static_lib(StaticLib *static_lib) {
     if (!StrIsEmpty(static_lib->includes)) SBAddF(&builder, "includes = %S\n", static_lib->includes);
 
     SBAddF(&builder, "cwd = %S\n", NormPathNinja(mate_state.cwd));
-    SBAddF(&builder, "builddir = %S\n", NormPathNinja(mate_state.build_directory));
-    SBAddF(&builder, "target = $builddir/%S\n\n", static_lib->output);
+    SBAddF(&builder, "builddir = %S\n", NormPathNinja(mate_state.ninja_directory));
+    SBAddF(&builder, "libdir = %S\n", NormPathNinja(static_lib->outputDir));
+    SBAddF(&builder, "objdir = %S\n", NormPathNinja(static_lib->objectDir));
+    SBAddF(&builder, "target = $libdir/%S\n\n", static_lib->output);
   }
 
   { // Archive command
@@ -6234,7 +6274,7 @@ static void mate_install_static_lib(StaticLib *static_lib) {
     } else if (isGCC(t) || isClang(t)) {
       SBAddS(&builder, " -c \"$cwd/$in\" -o $out -MMD -MF $depfile\n");
       SBAddS(&builder, "  depfile = $depfile\n");
-      SBAddS(&builder, "  deps = gcc\n"); // INFO: clang replicates this
+      SBAddS(&builder, "  deps = gcc\n");
     } else {
       SBAddS(&builder, " -c \"$cwd/$in\" -o $out\n");
     }
@@ -6250,18 +6290,18 @@ static void mate_install_static_lib(StaticLib *static_lib) {
       String output_file = NormPathOutput(t, curr_source_file);
       String source_file = NormPathStart(curr_source_file);
 
-      SBAddF(&builder, "build $builddir/%S: compile %S\n", output_file, source_file);
+      SBAddF(&builder, "build $objdir/%S: compile %S\n", output_file, source_file);
 
       if (isGCC(t) || isClang(t)) {
         String dep_file = StrNewSize(mate_state.arena, output_file.data, output_file.length);
         dep_file.data[dep_file.length - 1] = 'd';
-        SBAddF(&builder, "  depfile = $builddir/%S\n", dep_file);
+        SBAddF(&builder, "  depfile = $objdir/%S\n", dep_file);
       }
       SBAddS(&builder, "\n");
 
       bool is_empty = StrIsEmpty(output_builder.buffer);
-      if (is_empty) SBAddF(&output_builder, "$builddir/%S", output_file);
-      else          SBAddF(&output_builder, " $builddir/%S", output_file);
+      if (is_empty) SBAddF(&output_builder, "$objdir/%S", output_file);
+      else          SBAddF(&output_builder, " $objdir/%S", output_file);
     }
 
     SBAddF(&builder, "build $target: archive %S\n\n",output_builder.buffer);
@@ -6275,7 +6315,7 @@ static void mate_install_static_lib(StaticLib *static_lib) {
 
   String build_command;
   if (mate_state.mate_cache.samurai_build) {
-    String samurai_output_path = PathJoin(mate_state.build_directory, S("samurai"));
+    String samurai_output_path = mate_state.samurai_path;
     build_command = F(mate_state.arena, "%s -f %s", samurai_output_path.data, ninja_build_path.data);
   } else {
     build_command = F(mate_state.arena, "ninja -f %s", ninja_build_path.data);
@@ -6285,7 +6325,6 @@ static void mate_install_static_lib(StaticLib *static_lib) {
   Assert(run_error == SUCCESS, "InstallStaticLib: Ninja file compilation failed with code: " I32, run_error);
 
   mate_state.total_time = TimeNow() - mate_state.start_time;
-  static_lib->outputPath = PathJoin(mate_state.build_directory, static_lib->output);
 
   VecFree(static_lib->sources);
   static_lib->installed = true;
@@ -6320,8 +6359,12 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
     if (!StrIsEmpty(shared_lib->frameworks))  SBAddF(&builder, "frameworks = %S\n", shared_lib->frameworks);
 
     SBAddF(&builder, "cwd = %S\n", NormPathNinja(mate_state.cwd));
-    SBAddF(&builder, "builddir = %S\n", NormPathNinja(mate_state.build_directory));
-    SBAddF(&builder, "target = $builddir/%S\n\n", shared_lib->output);
+    SBAddF(&builder, "builddir = %S\n", NormPathNinja(mate_state.ninja_directory));
+    SBAddF(&builder, "outdir = %S\n", NormPathNinja(shared_lib->outputDir));
+    SBAddF(&builder, "objdir = %S\n", NormPathNinja(shared_lib->objectDir));
+
+    if (isMSVC(t)) SBAddF(&builder, "implib = %S\n", NormPathNinja(shared_lib->linkPath));
+    SBAddF(&builder, "target = $outdir/%S\n\n", shared_lib->output);
   }
 
   { // Link command
@@ -6341,13 +6384,14 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
       SBAddS(&builder, " /Fe:$out $in");
       if (!StrIsEmpty(shared_lib->libs)) SBAddS(&builder, " $libs");
 
-      bool has_link_opts = !StrIsEmpty(shared_lib->libPaths) || !StrIsEmpty(shared_lib->linkerFlags) || shared_lib->debug;
-      if (has_link_opts)                        SBAddS(&builder, " /link");
+      SBAddS(&builder, " /link /IMPLIB:$implib");
       if (shared_lib->debug)                    SBAddS(&builder, " /DEBUG");
       if (!StrIsEmpty(shared_lib->libPaths))    SBAddS(&builder, " $lib_paths");
       if (!StrIsEmpty(shared_lib->linkerFlags)) SBAddS(&builder, " $linker_flags");
     } else {
       if (!StrIsEmpty(shared_lib->linkerFlags)) SBAddS(&builder, " $linker_flags");
+      if (shared_lib->sharedLibOutputs.length > 0) mate_apply_shared_lib_flags(t, &builder, S(""));
+
       SBAddS(&builder, " -o $out $in");
       if (!StrIsEmpty(shared_lib->libPaths))    SBAddS(&builder, " $lib_paths");
       if (!StrIsEmpty(shared_lib->libs))        SBAddS(&builder, " $libs");
@@ -6374,7 +6418,7 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
     } else if (isGCC(t) || isClang(t)) {
       SBAddS(&builder, " -c \"$cwd/$in\" -o $out -MMD -MF $depfile\n");
       SBAddS(&builder, "  depfile = $depfile\n");
-      SBAddS(&builder, "  deps = gcc\n"); // INFO: clang replicates this
+      SBAddS(&builder, "  deps = gcc\n");
     } else {
       SBAddS(&builder, " -c \"$cwd/$in\" -o $out\n");
     }
@@ -6389,37 +6433,32 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
 
       String output_file = NormPathOutput(t, curr_source);
       String source_file = NormPathStart(curr_source);
-      SBAddF(&builder, "build $builddir/%S: compile %S\n", output_file, source_file);
+      SBAddF(&builder, "build $objdir/%S: compile %S\n", output_file, source_file);
 
       if (isGCC(t) || isClang(t)) {
         String dep_file = StrNewSize(mate_state.arena, output_file.data, output_file.length);
         dep_file.data[dep_file.length - 1] = 'd';
-        SBAddF(&builder, "  depfile = $builddir/%S\n", dep_file);
+        SBAddF(&builder, "  depfile = $objdir/%S\n", dep_file);
       }
       SBAddS(&builder, "\n");
 
       bool is_empty = StrIsEmpty(output_builder.buffer);
-      if (is_empty) SBAddF(&output_builder, "$builddir/%S", output_file);
-      else          SBAddF(&output_builder, " $builddir/%S", output_file);
+      if (is_empty) SBAddF(&output_builder, "$objdir/%S", output_file);
+      else          SBAddF(&output_builder, " $objdir/%S", output_file);
     }
 
     if (isMSVC(t)) {
-      String stem = PathStem(shared_lib->output);
-      SBAddF(&builder, "build $target | $builddir/%S.lib $builddir/%S.exp: link %S", stem, stem, output_builder.buffer);
+      String exp_file = StrConcat(mate_state.arena, mate_path_strip_ext(shared_lib->linkPath), S(".exp"));
+      SBAddF(&builder, "build $target | $implib %S: link %S", NormPathNinja(exp_file), output_builder.buffer);
     } else {
       SBAddF(&builder, "build $target: link %S", output_builder.buffer);
     }
 
     for (size_t i = 0; i < shared_lib->staticLibOutputs.length; i++) {
-      SBAddF(&builder, " $builddir/%S", shared_lib->staticLibOutputs.data[i]);
+      SBAddF(&builder, " %S", NormPathNinja(shared_lib->staticLibOutputs.data[i]));
     }
     for (size_t i = 0; i < shared_lib->sharedLibOutputs.length; i++) {
-      String dep = shared_lib->sharedLibOutputs.data[i];
-      if (isMSVC(t)) {
-        String stem = PathStem(dep);
-        dep = StrConcat(mate_state.arena, stem, S(".lib"));
-      }
-      SBAddF(&builder, " $builddir/%S", dep);
+      SBAddF(&builder, " %S", NormPathNinja(shared_lib->sharedLibOutputs.data[i]));
     }
     SBAddS(&builder, "\n\n");
   }
@@ -6433,7 +6472,7 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
 
   String build_command;
   if (mate_state.mate_cache.samurai_build) {
-    String samurai_output_path = PathJoin(mate_state.build_directory, S("samurai"));
+    String samurai_output_path = mate_state.samurai_path;
     build_command = F(mate_state.arena, "%s -f %s", samurai_output_path.data, ninja_build_path.data);
   } else {
     build_command = F(mate_state.arena, "ninja -f %s", ninja_build_path.data);
@@ -6443,7 +6482,6 @@ static void mate_install_shared_lib(SharedLib *shared_lib) {
   Assert(run_error == SUCCESS, "InstallSharedLib: Ninja file compilation failed with code: " I32, run_error);
 
   mate_state.total_time = TimeNow() - mate_state.start_time;
-  shared_lib->outputPath = PathJoin(mate_state.build_directory, shared_lib->output);
 
   VecFree(shared_lib->sources);
   VecFree(shared_lib->staticLibOutputs);
@@ -6466,7 +6504,7 @@ static void mate_link_static_lib(StringVector *static_lib_outputs, StaticLib *st
          "}\n"
          "EndBuild();\n",
          static_lib->output.data);
-  VecPush(*static_lib_outputs, static_lib->output);
+  VecPush(*static_lib_outputs, static_lib->outputPath);
 }
 
 static void mate_link_shared_lib(StringVector *shared_lib_outputs, SharedLib *shared_lib) {
@@ -6484,7 +6522,7 @@ static void mate_link_shared_lib(StringVector *shared_lib_outputs, SharedLib *sh
          "}\n"
          "EndBuild();\n",
          shared_lib->output.data);
-  VecPush(*shared_lib_outputs, shared_lib->output);
+  VecPush(*shared_lib_outputs, shared_lib->linkPath);
 }
 
 static void mate_link_system_libraries(Target t, String *targetLibs, char **libs, size_t libs_size) {
@@ -6723,12 +6761,89 @@ static String mate_path_with_platform_ext(Target t, Arena *arena, String path, S
   return mate_path_fix_slashes(result);
 }
 
+static String mate_target_dir(Target t) {
+  String arch = {0};
+  switch (t.arch) {
+    case ARCH_X64:     arch = S("x64");     break;
+    case ARCH_X86:     arch = S("x86");     break;
+    case ARCH_ARM64:   arch = S("arm64");   break;
+    case ARCH_ARM32:   arch = S("arm32");   break;
+    case ARCH_RISCV64: arch = S("riscv64"); break;
+    case ARCH_PPC64:   arch = S("ppc64");   break;
+    case ARCH_S390X:   arch = S("s390x");   break;
+    case ARCH_WASM32:  arch = S("wasm32");  break;
+    default: Unreachable("mate_target_dir: unknown arch, this is a bug in mate.h, please make an issue at github.com/TomasBorquez/mate.h");
+  }
+
+  String os = {0};
+  switch (t.os) {
+    case OS_LINUX:      os = S("linux");      break;
+    case OS_WINDOWS:    os = S("windows");    break;
+    case OS_MACOS:      os = S("macos");      break;
+    case OS_FREEBSD:    os = S("freebsd");    break;
+    case OS_ANDROID:    os = S("android");    break;
+    case OS_EMSCRIPTEN: os = S("emscripten"); break;
+    default: Unreachable("mate_target_dir: unknown os, this is a bug in mate.h, please make an issue at github.com/TomasBorquez/mate.h");
+  }
+
+  String compiler = {0};
+  if (StrIncludes(s(t.compiler), S("filc"))) {
+    compiler = S("filc");
+  } else {
+    switch (t.compilerFamily) {
+      case COMPILER_GCC:   compiler = S("gcc");   break;
+      case COMPILER_CLANG: compiler = S("clang"); break;
+      case COMPILER_TCC:   compiler = S("tcc");   break;
+      case COMPILER_MSVC:  compiler = S("msvc");  break;
+      default: Unreachable("mate_target_dir: unknown compiler family, this is a bug in mate.h, please make an issue at github.com/TomasBorquez/mate.h");
+    }
+  }
+
+  // <arch>-<os>-<compiler> e.g "x64-linux-gcc"
+  return F(mate_state.arena, "%s-%s-%s", arch.data, os.data, compiler.data);
+}
+
 String PathJoin(String base, String tail) {
 #if defined(BASE_PLATFORM_WIN)
   return F(mate_state.arena, "%s\\%s", base.data, tail.data);
 #else
   return F(mate_state.arena, "%s/%s", base.data, tail.data);
 #endif
+}
+
+static String mate_bin_dir(Target t) {
+  String result = PathJoin(mate_state.build_directory, S("bin"));
+  // build/bin/<arch>-<os>-<compiler>
+  return PathJoin(result, mate_target_dir(t));
+}
+
+static String mate_lib_dir(Target t) {
+  String result = PathJoin(mate_state.build_directory, S("lib"));
+  // build/lib/<arch>-<os>-<compiler>
+  return PathJoin(result, mate_target_dir(t));
+}
+
+static String mate_obj_dir(Target t, String stem) {
+  String result = PathJoin(mate_state.build_directory, S("obj"));
+  result = PathJoin(result, mate_target_dir(t));
+  // build/obj/<arch>-<os>-<compiler>/<stem>
+  return PathJoin(result, stem);
+}
+
+static String mate_rpath_to_lib(Target t) {
+  // bin dir -> lib dir, e.g "../../lib/x64-linux-gcc"
+  return F(mate_state.arena, "../../lib/%s", mate_target_dir(t).data);
+}
+
+static void mate_apply_shared_lib_flags(Target t, StringBuilder *builder, String rpath_from_origin) {
+  if (isWindows(t)) return;
+
+  // INFO: tcc resolves a shared lib's own DT_NEEDED at link time and only looks in -L paths
+  SBAddF(builder, " -L\"%S\"", mate_lib_dir(t));
+
+  String origin = isMacOS(t) ? S("@loader_path") : S("$$ORIGIN");
+  if (StrIsEmpty(rpath_from_origin)) SBAddF(builder, " '-Wl,-rpath,%S'", origin);
+  else                               SBAddF(builder, " '-Wl,-rpath,%S/%S'", origin, rpath_from_origin);
 }
 
 String PathStem(String path) {
@@ -6790,9 +6905,9 @@ String NormPathNinja(String str) {
 
 String NormPathOutput(Target t, String str) {
   String ext = isMSVC(t) ? S(".obj") : S(".o");
-  String stem = PathStem(str);
-  Assert(!StrIsEmpty(stem), "NormPathOutput: failed to get stem from %s", str.data);
-  return StrConcat(mate_state.arena, stem, ext);
+  String source = NormPathStart(str);
+  Assert(!StrIsEmpty(source), "NormPathOutput: failed to get source path from %s", str.data);
+  return StrConcat(mate_state.arena, source, ext);
 }
 
 String AbsoluteNormPath(String str) {
@@ -6848,7 +6963,7 @@ char *GetAr(Target t) {
     return "llvm-ar";
   }
 
-  // derive: x86_64-w64-mingw32-gcc -> x86_64-w64-mingw32-ar
+  // x86_64-w64-mingw32-gcc -> x86_64-w64-mingw32-ar
   String compiler = s(t.compiler);
   size_t last_dash = 0;
   bool found = false;

@@ -142,6 +142,8 @@ typedef struct {
   Target script_compiler;
 
   String build_directory;
+  String ninja_directory;
+  String samurai_path;
   String mate_source;
   String mate_exe;
   String rebuild_flags;
@@ -160,6 +162,8 @@ typedef struct {
 typedef struct {
   String output;
   String outputPath;
+  String outputDir;
+  String objectDir;
   String ninjaBuildPath;
 
   Target target;
@@ -182,6 +186,8 @@ typedef struct {
 typedef struct {
   String output;
   String outputPath;
+  String outputDir;
+  String objectDir;
   String ninjaBuildPath;
 
   Target target;
@@ -197,6 +203,9 @@ typedef struct {
 typedef struct {
   String output;
   String outputPath;
+  String linkPath;
+  String outputDir;
+  String objectDir;
   String ninjaBuildPath;
 
   Target target;
@@ -310,7 +319,15 @@ static void mate_flag_builder_add_string(Target t, FlagBuilder *builder, char *f
 static void mate_flag_builder_add_list(Target t, FlagBuilder *fb, char **flags);
 
 /*   }}} --- Path Utils Definitions --- {{{   */
+static String mate_path_strip_ext(String path);
 static String mate_path_with_platform_ext(Target t, Arena *arena, String path, String unix_ext, String win_ext, String macos_ext);
+
+static String mate_target_dir(Target t);
+static String mate_bin_dir(Target t);
+static String mate_lib_dir(Target t);
+static String mate_obj_dir(Target t, String stem);
+static String mate_rpath_to_lib(Target t);
+static void mate_apply_shared_lib_flags(Target t, StringBuilder *builder, String rpath_from_origin);
 
 String PathJoin(String base, String tail);
 String PathStem(String path);

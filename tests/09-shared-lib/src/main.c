@@ -24,6 +24,8 @@ int main(void) {
   ExpectVec3("VectorAdd", VectorAdd(a, b), (Vec3){5.0f, 7.0f, 9.0f});
   ExpectVec3("VectorSub", VectorSub(a, b), (Vec3){-3.0f, -3.0f, -3.0f});
   ExpectVec3("VectorMul", VectorMul(a, b), (Vec3){4.0f, 10.0f, 18.0f});
+  // NOTE: reaches vecutil through mathlib, fails to load without an rpath on the shared lib itself
+  ExpectVec3("VectorScale", VectorScale(a, 2.0f), (Vec3){2.0f, 4.0f, 6.0f});
 
   if (failures != 0) {
     fprintf(stderr, "%d test(s) failed\n", failures);

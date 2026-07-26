@@ -60,8 +60,8 @@ int main(void) {
              "cross-compile test: build.ninja missing derived --target=x86_64-w64-mingw32");
     }
 
-    errno_t err = RunCommand(S("file ./build/main.exe | grep -q 'PE32+'")); // TODO: change to ./build/windows-x64-gcc/main.exe
-    Assert(err == SUCCESS, "cross-compile test: ./build/main.exe is not a Windows executable");
+    errno_t err = RunCommand(F(mate_state.arena, "file %s | grep -q 'PE32+'", executable.outputPath.data));
+    Assert(err == SUCCESS, "cross-compile test: %s is not a Windows executable", executable.outputPath.data);
   }
   EndBuild();
 }

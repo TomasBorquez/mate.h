@@ -5,9 +5,9 @@
 - [x] Remove all examples and create a blog post and guide page.
 - [x] Test rebuilding scripts (just a second run).
 - [x] Clang `--target` test
+- [x] Parallel running tests
 - [ ] Test that asserts fail
 - [ ] Add back script-name for running tests
-- [ ] Parallel running tests
 - [ ] Create a documentation page
 
 ### MSVC
@@ -21,6 +21,7 @@
 
 ### v0.5
 - [ ] Cleanup:
+    - [ ] Proper implementation/definition order
     - [ ] Assertions should follow some structure, utility functions for repeating asserts
     - [ ] Abstract functions repeated more than 3 times (2 if too long)
     - [ ] Proper implementation/definition group
@@ -42,19 +43,17 @@
 
 ### v0.4
 - [ ] Replace samurai with our own backend
+    - [ ] `/nologo`, `/showIncludes`, `-fPIC`, ... should be part of default variables instead
+    - [ ] Flag dedup, if default flag is x, and uses passes x, remove users and warn
     - [ ] Add deps for gcc/clang
     - [ ] Add deps for msvc
     - [ ] Generate our own `compile_commands.json`
-- [ ] `RunExec` for running executable
-- [ ] Move to `exec` && `CreateProcess` for executables
+    - [ ] `RunExec` for running executable
+    - [ ] Move to `exec` && `CreateProcess` for executables
 - [ ] Custom build step
 - [ ] Add test abstraction
-- [ ] Cleanup:
-    - [ ] Proper implementation/definition order
-    - [ ] Flag dedup, if default flag is x, and uses passes x, remove users and warn
-    - [ ] `/nologo`, `/showIncludes`, `-fPIC`, ... should be part of default variables instead
 
-## v0.3
+### v0.3
 - [x] `LinkStaticLib()` for linking another `StaticLib`
 - [x] Shared libraries support
 - [x] `NormPathExe/StaticLib/SharedLib` should assert no extension added
@@ -73,9 +72,9 @@
 - [x] On comments add `Implementation/Definition` per feature
 - [x] Add cross-compile target for clang with `--target=<triple>`
 - [x] `StrIsEmpty` instead of `StrIsNull`
-- [ ] Build output on folder depending on platform/arch
+- [x] Build output on folder depending on platform/arch
 
-## v0.2
+### v0.2
 - [x] Samurai does not generate `compile_commands.json`?
 - [x] Move `AddFile/RemoveFile` to use `s()` for the file names
 - [x] `CreateStaticLib/CreateExecutable` were using includes instead of libs
@@ -116,7 +115,7 @@
     - [x] SBAddS for automatic String
 - [x] Support other compilers like c++
 
-## v0.1
+### v0.1
 - [x] Create `amalgam-script.c` as well as `pre-commit hook`
 - [x] Examples folder that serves as tests
 - [x] Full Linux support

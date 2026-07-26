@@ -17,3 +17,6 @@ typedef struct {
 MATHLIB_API Vec3 VectorAdd(Vec3 a, Vec3 b);
 MATHLIB_API Vec3 VectorSub(Vec3 a, Vec3 b);
 MATHLIB_API Vec3 VectorMul(Vec3 a, Vec3 b);
+
+// NOTE: implemented on top of vecutil, the exe never links vecutil itself
+MATHLIB_API Vec3 VectorScale(Vec3 a, float factor);

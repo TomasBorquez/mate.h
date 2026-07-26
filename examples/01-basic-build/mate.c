@@ -15,7 +15,7 @@ int main(void) {
     // Compiles all files parallely
     InstallExecutable(executable);
 
-    // Runs `./build/main`
+    // Runs `./build/bin/<arch>-<os>-<compiler>/main`
     errno_t err = RunCommand(executable.outputPath);
     Assert(err == SUCCESS, "RunCommand: failed, return from exe should always be SUCCESS"); // Assert that we return SUCCESS == 0
   }
